@@ -5,6 +5,35 @@ app_description = "Dinext Projects P&L"
 app_email = "info@dinext.ru"
 app_license = "mit"
 
+fixtures = [
+    {
+        "doctype": "Accounting Dimension",
+        "filters": [
+            ["disabled", "=", 0]
+        ]
+    },
+    {
+        "doctype": "Custom Field",
+        "filters": [
+            ["module", "in", ["Dinext Projects Pl"]]
+        ]
+    },
+    {
+        "doctype": "Client Script",
+        "filters": [
+            ["module", "in", ["Dinext Projects Pl"]],
+            ["enabled", "=", 1]
+        ]
+    },
+    {
+        "doctype": "Server Script",
+        "filters": [
+            ["module", "in", ["Dinext Projects Pl"]],
+            ["disabled", "=", 0]
+        ]
+    }
+]
+
 # Apps
 # ------------------
 
@@ -43,6 +72,14 @@ app_license = "mit"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
+doctype_js = {"Project": 
+    [
+        "public/js/project_pl_style.js",
+        "public/js/project_pl.js",
+        "public/js/project_pl_calc.js",
+        "public/js/project_pl_dashboard.js"
+    ]
+}
 # doctype_js = {"doctype" : "public/js/doctype.js"}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
