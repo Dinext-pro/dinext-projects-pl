@@ -650,7 +650,10 @@ function get_budget_columns_definition(frm, periodType, unit) {
         sticky: true,
         treeView: true,
         format: (value, row, column, data) => {
-            if (data && data.risk) return "⚠ " + data.risk.title || data.risk.value;
+            if (data && data.risk) {
+                let risk = frm.doc.custom_project_risks;
+                return "⚠ " + ( risk.find(r => r.name == data.risk.value).subject || data.risk.value );
+            }
             if (data && data.account != null) return data.account;
             return value != null ? value : "";
         }
