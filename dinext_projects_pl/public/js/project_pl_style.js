@@ -10,6 +10,7 @@ function applyPLStyle() {
             }
             & .budget-controls {
                 display: inline-flex;
+                align-items: center;
                 width: 100%;
             }
             & .budget-controls .pl-forecast-dropdown-wrapper {
@@ -17,6 +18,7 @@ function applyPLStyle() {
             }
             & .budget-controls .frappe-control {
                 flex: 0 1 150px;
+                margin-bottom: 0px;
             }
             & .budget-group-header {
                 display: flex; 
