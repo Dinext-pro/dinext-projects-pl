@@ -30,8 +30,8 @@ function add_pl_forecast_dropdown(frm, controls) {
 
     const $wrapper = $('<div class="pl-forecast-dropdown-wrapper dropdown"></div>');
     const $btn = $(`
-        <button class="btn btn-default btn-sm dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-            ${__("Рассчитать прогноз")}
+        <button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            ${__("Добавить прогноз")}
         </button>
     `);
     const $menu = $('<ul class="dropdown-menu dropdown-menu-right" role="menu"></ul>');
