@@ -308,10 +308,9 @@ globalThis.updateTaskDimension = (frm, updateRows=false) => {
     if (!frm.aggregatedBudget) return;
     if (frm.aggregatedTasks) {
         updateTaskDimensionOptimized(frm);
-    } else {
-        addRiskDimensionRows(frm);
-    }
-
+    } 
+    
+    addRiskDimensionRows(frm.aggregatedBudget);
     rollup_fact_budget( frm.aggregatedBudget );
 
     let visibleRows;
@@ -869,38 +868,48 @@ $(document).on('click', '.bg-group-actual .editable-forecast', function(e) {
     $input.focus();
 });
 
-function isChildOf( child, account, task ) {
+function isChildOf( child, account, task, risk = null ) {
     let x = ( child.value == account && task && child.task?.parent_task == task );
     let y = ( child.value == account && !task && child.task && !child.task.parent_task );
-    let z = ( child.parent_account == account && !task && !child.task );
-    let w = ( child._parentKey === account + ( task || "" ) );
+    let z = ( child.parent_account == account && !task && !child.task && !child.risk);
+    let w = ( child._parentKey === account + ( task || "" ) ) && !risk;
     return x || y || z || w;
 }
 
 let _sum_cache = {};
 
 /** Ключ строки в aggregatedBudget (для исключения при расчёте лимита родителя). */
+function getBudgetKey(account, task = null, risk = null) {
+    return account + (task ? task : "") + ( risk ? RISK_KEY_SEP + risk: "" ) ;
+}
+
+/** Ключ строки в aggregatedBudget (для исключения при расчёте лимита родителя). */
 function getBudgetRowKey(row) {
-    if (row._parentKey && row.risk) return row._parentKey + "|risk|" + row.risk.value;
-    return row.value + (row.task ? row.task.value : "");
+    return getBudgetKey( row.value, row.task?.value, row.risk?.value );
 }
 
 /* Функция для определения максимального допустимого значения в дочерней статье */
-function get_parent_budget_limit(account, task, dimension, period, aggregatedBudget, currentRowKey) {
-    let origKey = account + ( task ? task : "" );
+function get_parent_budget_limit(account, task, dimension, period, aggregatedBudget, risk = null) {
+    let origKey = getBudgetKey( account, task , risk );
     let forecastKey = `forecast_${period.year}_${period.month}`;
     let currentAccount = aggregatedBudget[ origKey ];
-    let excluded = currentRowKey ? [ currentRowKey ] : [ origKey ];
-    while (currentAccount && ( currentAccount.parent_account || currentAccount.task?.parent_task ) ) {
-        let currentKey = currentAccount.value + ( currentAccount.task ? currentAccount.task.value : "" );
-        let parentKey = currentAccount.task?.parent_task 
-            ? currentAccount.value + currentAccount.task.parent_task 
-            : ( currentAccount.task ? currentAccount.value : currentAccount.parent_account );
+    let excluded = [ origKey ];
 
-        let dim = task
+    dimension = risk
+        ? dimension.filter(item => !( item.doc == "Project Risk" && item.docname == risk ))
+        : task
             ? dimension.filter(item => !( item.doc == "Task" && item.docname == task ))
-            : [...(dimension || [])];
-        if ( currentAccount.task?.parent_task ) {
+            : dimension;
+    
+    while (currentAccount && ( currentAccount.parent_account || currentAccount.task?.parent_task ) ) {
+        let parentKey = currentAccount.risk 
+            ? getBudgetKey( currentAccount.value, currentAccount.task?.value )
+            : currentAccount.task?.parent_task 
+                ? getBudgetKey( currentAccount.value, currentAccount.task.parent_task )
+                : getBudgetKey( currentAccount.task ? currentAccount.value : currentAccount.parent_account );
+
+        let dim = [...(dimension || [])];
+        if ( !currentAccount.risk && currentAccount.task?.parent_task ) {
             dim.push( { doc: "Task", docname: currentAccount.task.parent_task } );
         }
 
@@ -931,6 +940,13 @@ function get_parent_budget_limit(account, task, dimension, period, aggregatedBud
     return null;
 }
 
+$(document).on('keydown', '.bg-edit-input', function(e) {
+    if (event.key === "Enter") {
+        // Trigger the button element with a click
+        $('.bg-edit-input').blur();
+      }
+});
+
 // При потере фокуса input – сохраняем значение
 $(document).on('blur', '.bg-edit-input', function(e) {
     let $input = $(this);
@@ -958,32 +974,36 @@ $(document).on('blur', '.bg-edit-input', function(e) {
         dimension = task ? [ { doc: "Task", docname: task } ] : [];
     }
     
-    // Получаем агрегированные данные
-    let aggregatedBudget = cur_frm.aggregatedBudget || {};
-    
-    const taskId = dimension.find(d => d && d.doc === "Task") ? dimension.find(d => d.doc === "Task").docname : task;
-    const riskDim = dimension.find(d => d && d.doc === "Project Risk");
-    const currentRowKey = riskDim ? (account + (taskId || "") + "|risk|" + riskDim.docname) : null;
+    if ( new_value ) {
+        // Получаем агрегированные данные
+        let aggregatedBudget = cur_frm.aggregatedBudget || {};
+        
+        const taskId = dimension.find(d => d && d.doc === "Task")?.docname || task;
+        const riskDim = dimension.find(d => d && d.doc === "Project Risk")?.docname;
+        //const currentRowKey = account + (taskId || "") + ( riskDim ? ( RISK_KEY_SEP + riskDim.docname) : "" );
 
-    // Определяем, является ли текущая статья родительской (есть ли дочерние статьи)
-    let isParent = Object.values( aggregatedBudget ).some(t => isChildOf( t, account, taskId ) );
+        if ( !riskDim ) {
+            // Определяем, является ли текущая статья родительской (есть ли дочерние статьи)
+            let isParent = Object.values( aggregatedBudget ).some(t => isChildOf( t, account, taskId, riskDim ) );
 
-    if (isParent) {
-        // В родительской статье: новое значение не должно быть меньше суммы прогнозов у дочерних задач
-        let childrenSum = get_child_budget_sum(account, taskId, dimension, period, aggregatedBudget);
-        if (new_value < childrenSum) {
-            frappe.msgprint(__("Значение не может быть меньше суммы по дочерним позициям (" + numberformat( childrenSum ) + ")"));
+            if (isParent) {
+                // В родительской статье: новое значение не должно быть меньше суммы прогнозов у дочерних задач
+                let childrenSum = get_child_budget_sum(account, taskId, dimension, period, aggregatedBudget);
+                if (new_value < childrenSum) {
+                    frappe.msgprint(__("Значение не может быть меньше суммы по дочерним позициям (" + numberformat( childrenSum ) + ")"));
+                    $input.addClass("error");
+                    return;
+                }
+            }
+        }
+        
+        // В дочерней: максимальное значение ограничено так, чтобы у родительской статьи (или ближайшей с заданным прогнозом) сумма всех дочерних не превышала прогноз родителя
+        let parentLimit = get_parent_budget_limit(account, taskId, dimension, period, aggregatedBudget, riskDim);
+        if (parentLimit !== null && (new_value > parentLimit) ) {
+            frappe.msgprint(__("Значение не может превышать " + numberformat( parentLimit ) + " (ограничение родительской статьи)"));
             $input.addClass("error");
             return;
         }
-    }
-    
-    // В дочерней: максимальное значение ограничено так, чтобы у родительской статьи (или ближайшей с заданным прогнозом) сумма всех дочерних не превышала прогноз родителя
-    let parentLimit = get_parent_budget_limit(account, taskId, dimension, period, aggregatedBudget, currentRowKey);
-    if (parentLimit !== null && (new_value > parentLimit) ) {
-        frappe.msgprint(__("Значение не может превышать " + numberformat( parentLimit ) + " (ограничение родительской статьи)"));
-        $input.addClass("error");
-        return;
     }
     
     // Восстанавливаем отображение: заменяем input на span с новым значением

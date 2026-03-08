@@ -114,35 +114,10 @@ function get_child_budget_sum(account, task, dimension = [], period, aggregatedB
         for (const child of candidates) {
             if (processed.has(child)) continue; // уже обработан
             // применяем логику isChildOf (перенесена в быстрые условия)
-            let accepted = false;
-            if (child._parentKey === curAccount + (curTask || "")) {
-                accepted = true;
-            } else if (child.value === curAccount) {
-                if (curTask) {
-                    // требуется совпадение parent_task == curTask
-                    if (child.task && child.task.parent_task === curTask) {
-                        accepted = true;
-                    }
-                } else {
-                    // curTask не задан: допускаем либо child.task отсутствует, либо присутствует, но без parent_task
-                    if ( child.task && !child.task.parent_task) {
-                        accepted = true;
-                    }
-                }
-            } else if (child.parent_account === curAccount && !curTask && !child.task) {
-                accepted = true;
-            }
+            let accepted = isChildOf( child, curAccount, curTask );
 
             if (!accepted) continue;
             processed.add(child);
-
-            // Строки-риски: один bucket, добавляем значение и не обходим детей
-            if (child.risk) {
-                const entry = child.dimension_data && child.dimension_data[0];
-                const val = entry ? (Number(entry[forecastKey]) || 0) : 0;
-                sum += val;
-                continue;
-            }
 
             // формируем измерения для поиска: фильтр по Task если curTask задан (как в оригинале)
             let dimForChild;
@@ -155,6 +130,10 @@ function get_child_budget_sum(account, task, dimension = [], period, aggregatedB
             if (child.task) {
                 // добавляем текущее child.task в измерения
                 dimForChild = dimForChild.concat([{ doc: "Task", docname: child.task.value }]);
+            }
+            if (child.risk) {
+                // добавляем текущее child.task в измерения
+                dimForChild = dimForChild.concat([{ doc: "Project Risk", docname: child.risk.value }]);
             }
 
             const sig = dimSignature(dimForChild);
@@ -397,35 +376,6 @@ function updateTaskDimensionOptimized(frm) {
         return;
     }
 
-    // helper: produce canonical signature for a single dimension object
-    function dimObjSignature(dim) {
-        // Collect keys sorted to make field-order-insensitive signature
-        const keys = Object.keys(dim).sort();
-        // join key:value pairs; convert undefined/null to empty string to be stable
-        const parts = [];
-        for (let i = 0; i < keys.length; i++) {
-            const k = keys[i];
-            let v = dim[k];
-            if (v === undefined || v === null) v = "";
-            // ensure stable primitive representation (objects/arrays unlikely here)
-            parts.push(k + ":" + String(v));
-        }
-        return parts.join("|");
-    }
-
-    // helper: produce canonical signature for array of dimensions (order-insensitive)
-    function dimArraySignature(dimArr) {
-        if (!dimArr || !dimArr.length) return "";
-        const sigs = new Array(dimArr.length);
-        for (let i = 0; i < dimArr.length; i++) {
-            sigs[i] = dimObjSignature(dimArr[i]);
-        }
-        // sort so order of elements doesn't matter
-        sigs.sort();
-        // join with a delimiter that cannot appear in parts (we used | and :)
-        return sigs.join(";;");
-    }
-
     const budgetsWithTasks = Object.create(null);
     const tasksLen = tasksArr.length;
 
@@ -463,7 +413,7 @@ function updateTaskDimensionOptimized(frm) {
             }
 
             // если есть Task — добавляем в sigMap (включая комбинированные dimensions, т.е. нескольких элементов)
-            const sig = dimArraySignature(dims);
+            const sig = dimSignature(dims);
             // push bucket into array for this signature
             const existing = sigToBuckets[sig];
             if (existing) {
@@ -501,7 +451,7 @@ function updateTaskDimensionOptimized(frm) {
 
             // target dims for this task: [{doc:"Task", docname: task.value}]
             const targetDims = [{ doc: "Task", docname: task.value }];
-            const targetSig = dimArraySignature(targetDims);
+            const targetSig = dimSignature(targetDims);
 
             const bucketsForSig = sigToBuckets[targetSig];
             if (bucketsForSig && bucketsForSig.length) {
@@ -520,7 +470,6 @@ function updateTaskDimensionOptimized(frm) {
     // Записываем результат обратно в frm (как в исходном коде)
     frm.aggregatedBudget = budgetsWithTasks;
 
-    addRiskDimensionRows(frm);
     console.timeEnd("updateTaskDimension_opt");
 }
 
@@ -529,9 +478,8 @@ function updateTaskDimensionOptimized(frm) {
  * с измерением Project Risk создаётся дочерняя строка к соответствующей статье/задаче.
  * Вызывается после updateTaskDimensionOptimized и при отсутствии aggregatedTasks (из updateTaskDimension).
  */
-function addRiskDimensionRows(frm) {
-    if (!frm.aggregatedBudget) return;
-    const agg = frm.aggregatedBudget;
+function addRiskDimensionRows( agg ) {
+    if (!agg) return;
     const keys = Object.keys(agg);
     const toAdd = [];
 
@@ -563,13 +511,16 @@ function addRiskDimensionRows(frm) {
                 ...row,
                 value: row.value,
                 indent: (row.indent || 0) + 1,
-                task: undefined,
                 _parentKey: parentKey,
                 risk: { value: risk_docname },
                 dimension_data: [bucket]
             };
             delete riskRow.account;
             toAdd.push([riskRowKey, riskRow]);
+
+            row.dimension_data = dimensionData.filter( 
+                b => !b.dimensions.find( 
+                    d => d.doc == "Project Risk" && d.docname == risk_docname ) );
         }
     }
 
