@@ -948,7 +948,7 @@ function get_parent_budget_limit(account, task, dimension, period, aggregatedBud
                     filteredAgg
                 );
                 let maxAllowed = parentForecast - siblingsSum;
-                return { parent: parent, maxAllowed: maxAllowed };
+                return { parent: parent, maxAllowed: maxAllowed, dim: dim };
             }
         }
         currentAccount = parent;
