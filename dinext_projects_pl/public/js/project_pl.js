@@ -14,6 +14,8 @@ frappe.ui.form.on("Project", {
  *   dinext_projects.project_pl_forecast_menu = dinext_projects.project_pl_forecast_menu || [];
  *   dinext_projects.project_pl_forecast_menu.push({ label: __("Мой прогноз"), action: function(frm) { ... } });
  * Кнопка меню отображается только если добавлен хотя бы один подпункт.
+ * Если меню изменено или дополнено после первичной отрисовки кнопки, вызвать
+ * dinext_projects.refresh_pl_forecast_dropdown(frm) для обновления выпадающего списка.
  */
 frappe.provide("dinext_projects.project_pl_forecast_menu");
 if (!Array.isArray(dinext_projects.project_pl_forecast_menu)) {
@@ -52,6 +54,19 @@ function add_pl_forecast_dropdown(frm, controls) {
     $wrapper.append($btn).append($menu);
     controls.append($wrapper);
 }
+
+function refresh_pl_forecast_dropdown(frm) {
+    const $planning = frm.get_field("custom_planning") && frm.get_field("custom_planning").$wrapper;
+    if (!$planning || !$planning.length) return;
+    const $existing = $planning.find(".pl-forecast-dropdown-wrapper");
+    let $controls = $existing.length ? $existing.parent() : $planning.find(".budget-controls");
+    if (!$controls || !$controls.length) return;
+    if ($existing.length) $existing.remove();
+    add_pl_forecast_dropdown(frm, $controls);
+}
+
+frappe.provide("dinext_projects");
+dinext_projects.refresh_pl_forecast_dropdown = refresh_pl_forecast_dropdown;
 
 function addBudgetViewOptionsControl(frm, controls) {
     frm.budget_view_options = frm.budget_view_options || __("Прогноз и факт");
