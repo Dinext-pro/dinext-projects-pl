@@ -124,6 +124,13 @@ function applyPLStyle() {
             & .new-dimension-select option {
                 width: 100%;
             }
+            & .delete-risk-reserve-btn {
+                padding: 0px !important;
+                border-radius: 50%;
+                box-sizing: border-box;
+                line-height: 0;
+                margin-left: 0.5rem;
+            }
         }
         @media (min-width: 576px) {
             #project-custom_pl .report-summary {
