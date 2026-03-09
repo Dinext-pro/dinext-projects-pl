@@ -1,0 +1,61 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-10-21 15:11:10.971619",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "pba_year",
+  "pba_month",
+  "pba_plan",
+  "pba_expected"
+ ],
+ "fields": [
+  {
+   "fieldname": "pba_year",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Year",
+   "non_negative": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "pba_month",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Month",
+   "non_negative": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "pba_plan",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Plan",
+   "options": "Company:company:default_currency"
+  },
+  {
+   "fieldname": "pba_expected",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Expected",
+   "options": "Company:company:default_currency"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-03-04 02:04:46.323697",
+ "modified_by": "Administrator",
+ "module": "Dinext Projects Pl",
+ "name": "Project Budget Amount",
+ "owner": "iodyshev@dinord.email",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
