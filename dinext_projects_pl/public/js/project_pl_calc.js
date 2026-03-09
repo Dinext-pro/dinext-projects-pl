@@ -438,7 +438,7 @@ function updateTaskDimensionOptimized(frm) {
         }
         if (!allowsTask) continue;
 
-        // для каждой задачи строим target signature и ищем соответствующий bucket
+        // для каждой задачи собираем все бакеты, содержащие эту задачу (в т.ч. Task+Risk)
         for (let ti = 0; ti < tasksLen; ti++) {
             const task = tasksArr[ti];
             // shallow copy базового бюджета и минимальные изменения
@@ -449,17 +449,21 @@ function updateTaskDimensionOptimized(frm) {
                 task: task
             };
 
-            // target dims for this task: [{doc:"Task", docname: task.value}]
             const targetDims = [{ doc: "Task", docname: task.value }];
-            const targetSig = dimSignature(targetDims);
-
-            const bucketsForSig = sigToBuckets[targetSig];
-            if (bucketsForSig && bucketsForSig.length) {
-                // Если несколько bucket'ов совпадают по сигнатуре — используем первый.
-                // При необходимости можно слить несколько bucket'ов, но обычно достаточно одного.
-                taskBudget.dimension_data = [bucketsForSig[0]];
+            const bucketsForTask = [];
+            for (const sig in sigToBuckets) {
+                const buckets = sigToBuckets[sig];
+                for (let bi = 0; bi < buckets.length; bi++) {
+                    const b = buckets[bi];
+                    const dims = b.dimensions || [];
+                    if (dims.some(d => d && d.doc === "Task" && d.docname === task.value)) {
+                        bucketsForTask.push(b);
+                    }
+                }
+            }
+            if (bucketsForTask.length) {
+                taskBudget.dimension_data = bucketsForTask;
             } else {
-                // если нет готового bucket'а — создаём минимальный bucket
                 taskBudget.dimension_data = [{ dimensions: targetDims }];
             }
 
