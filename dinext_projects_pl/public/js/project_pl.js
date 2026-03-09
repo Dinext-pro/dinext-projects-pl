@@ -294,7 +294,7 @@ function get_budget_display_periods(frm, periodType) {
     return periods;
 }
 
-function updateBudgetTable(frm, periodType) {
+function updateBudgetTable(frm, periodType="month") {
     let visibleRows =  frm.budget_dt.bodyRenderer.visibleRowIndices;
     
     refreshBudget( frm, frm.aggregatedBudget, get_budget_columns_definition(frm, periodType) );
@@ -470,6 +470,7 @@ function load_budget_data(frm, periodType, updateRows) {
                         bucket = { dimensions: dimensions };
                         aggregated[acct].dimension_data.push(bucket);
                     }
+                    bucket.pb_docname = doc.name;
 
                     doc.project_budget_amount.forEach(line => {
                         bucket[`plan_${line.pba_year}_${line.pba_month}`] = line.pba_plan;
@@ -651,7 +652,22 @@ function get_budget_columns_definition(frm, periodType, unit) {
         format: (value, row, column, data) => {
             if (data && data.risk) {
                 let risk = frm.doc.custom_project_risks;
-                return "⚠ " + ( risk.find(r => r.name == data.risk.value).subject || data.risk.value );
+                let riskLabel = "⚠ " + ( risk.find(r => r.name == data.risk.value)?.subject || data.risk.value );
+                let bucket = data.dimension_data && data.dimension_data.find(b =>
+                    b.dimensions && b.dimensions.some(d => d.doc === "Project Risk" && d.docname === data.risk.value)
+                );
+                let pb_docname = bucket && bucket.pb_docname;
+                if (pb_docname) {
+                    return `<span class="risk-label">${frappe.utils.escape_html(riskLabel)}</span> ` +
+                        `<button data-pb-name="${frappe.utils.escape_html(pb_docname)}" ` +
+                        `data-row-key="${frappe.utils.escape_html( getBudgetRowKey( data ) )}" ` +
+                        `class="btn delete-risk-reserve-btn btn-default btn-sm filter-x-button" ` +
+                        `title="${__("Удалить резервы на риск")}" type="button">` +
+                        `<span class="filter-icon">` +
+                        `<svg class="es-icon es-line icon-sm" aria-hidden="true">` +
+                        `<use href="#es-small-close"></use></svg></span></button>`;
+                }
+                return riskLabel;
             }
             if (data && data.account != null) return data.account;
             return value != null ? value : "";
@@ -945,6 +961,39 @@ $(document).on('keydown', '.bg-edit-input', function(e) {
         // Trigger the button element with a click
         $('.bg-edit-input').blur();
       }
+});
+
+$(document).on('click', '.delete-risk-reserve-btn', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    let row_key = $(e.currentTarget).data('row-key');
+    let pb_name = $(e.currentTarget).data('pb-name');
+    if (!pb_name) return;
+    frappe.confirm(
+        __("Удалить резервы на риск?"),
+        () => {
+            frappe.call({
+                method: "frappe.client.delete",
+                args: { doctype: "Project Budget", name: pb_name },
+                freeze: true,
+                callback: function(r) {
+                    if (!r.exc && cur_frm) {
+                        frappe.show_alert({
+                            message: __('Данные удалены'),
+                            indicator: 'green'
+                        }, 5);
+                        load_budget_data( cur_frm, "month");                        
+                    }
+                    if (r.exc) {
+                        frappe.msgprint(__("Ошибка при удалении резерва на риск"));
+                    }
+                }
+            });
+        },
+        () => {
+            frappe.show_alert(__("Операция отменена"), 3);
+        }
+    );
 });
 
 // При потере фокуса input – сохраняем значение
