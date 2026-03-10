@@ -258,54 +258,142 @@ function budget_total_cell( period, plan_income, plan_expenses, actual_income, a
  */
 function get_budget_display_periods(frm, periodType) {
     let periods = [];
+    
+    // Если даты не заданы, возвращаем пустой массив
+    if (!frm.doc.expected_start_date || !frm.doc.expected_end_date) {
+        console.warn("Даты проекта не заданы");
+        return periods;
+    }
+    
     let month_start = frappe.datetime.month_start();
-    let start_date = frm.doc.expected_start_date ? frm.doc.expected_start_date : month_start;
-    let start = frappe.datetime.str_to_obj(start_date);
-    let end_date = frm.doc.expected_end_date ? frm.doc.expected_end_date : frappe.datetime.add_months(start, 12);
-    let end = frappe.datetime.str_to_obj(end_date);
-
+    let start = frappe.datetime.str_to_obj(frm.doc.expected_start_date);
+    let end = frappe.datetime.str_to_obj(frm.doc.expected_end_date);
+    
+    // Корректируем начальную дату на ПЕРВЫЙ ЧИСЛО месяца старта
+    // Это ключевое изменение!
+    let current = new Date(start.getFullYear(), start.getMonth(), 1);
+    
+    // Корректируем конечную дату на ПЕРВОЕ ЧИСЛО месяца окончания
+    let last = new Date(end.getFullYear(), end.getMonth(), 1);
+    
     if (periodType === "month") {
-        let current = start;
-        while (frappe.datetime.obj_to_str(current) <= frappe.datetime.obj_to_str(end)) {
+        // Итерируемся по месяцам, пока current <= last
+        while (current <= last) {
             let year = current.getFullYear();
-            let i = current.getMonth(); // getMonth() возвращает 0-11
-            let is_past = ( frm.budget_view_options == __("Прогноз и факт") ) 
-                ? frappe.datetime.obj_to_str(current) < month_start
-                : ( frm.budget_view_options == __("Только факт") );
-            periods.push({ year: year, month: i + 1, is_past: is_past });
-            current = frappe.datetime.str_to_obj( frappe.datetime.add_months(current, 1) );
+            let month = current.getMonth() + 1; // +1 потому что getMonth() возвращает 0-11
+            
+            // Определяем, является ли период прошлым
+            let is_past;
+            if (frm.budget_view_options == __("Только факт")) {
+                is_past = true;
+            } else if (frm.budget_view_options == __("Только прогноз")) {
+                is_past = false;
+            } else { // "Прогноз и факт"
+                let current_date_str = frappe.datetime.obj_to_str(current);
+                is_past = current_date_str < month_start;
+            }
+            
+            periods.push({ 
+                year: year, 
+                month: month, 
+                is_past: is_past 
+            });
+            
+            // Переходим к следующему месяцу
+            current = frappe.datetime.str_to_obj(
+                frappe.datetime.add_months(
+                    frappe.datetime.obj_to_str(current), 
+                    1
+                )
+            );
         }
     }
-        if (periodType === "quarter") {
-        let current = start;
-        let year = 0;
-        let quarter = 0;
-        while (frappe.datetime.obj_to_str(current) <= frappe.datetime.obj_to_str(end)) {
-            const currentYear = current.getFullYear();
-            const currentQuarter =  Math.floor(current.getMonth() / 3) + 1; // 
-            const is_past = frappe.datetime.obj_to_str(current) < month_start;
-            current = frappe.datetime.str_to_obj( frappe.datetime.add_months(current, 1) );
-            if (quarter !== currentQuarter || year !== currentYear) {
-                            periods.push({ year: currentYear, quarter: currentQuarter, is_past: is_past });
-                            year = currentYear;
-                            quarter = currentQuarter;
+    
+    else if (periodType === "quarter") {
+        let lastQuarter = null;
+        let lastYear = null;
+        
+        while (current <= last) {
+            const year = current.getFullYear();
+            const quarter = Math.floor(current.getMonth() / 3) + 1;
+            
+            // Добавляем квартал только если он отличается от предыдущего
+            if (lastQuarter !== quarter || lastYear !== year) {
+                // Для квартала определяем is_past по последнему месяцу квартала
+                let quarterEndMonth = quarter * 3 - 1; // 0-11 формат
+                let quarterEndDate = new Date(year, quarterEndMonth, 1);
+                let quarterEndDateStr = frappe.datetime.obj_to_str(quarterEndDate);
+                
+                let is_past;
+                if (frm.budget_view_options == __("Только факт")) {
+                    is_past = true;
+                } else if (frm.budget_view_options == __("Только прогноз")) {
+                    is_past = false;
+                } else {
+                    is_past = quarterEndDateStr < month_start;
                 }
+                
+                periods.push({ 
+                    year: year, 
+                    quarter: quarter, 
+                    is_past: is_past 
+                });
+                
+                lastQuarter = quarter;
+                lastYear = year;
             }
-        }
-        if (periodType === "year") {
-        let current = start;
-        let year = 0;
-        while (frappe.datetime.obj_to_str(current) <= frappe.datetime.obj_to_str(end)) {
-            const currentYear = current.getFullYear();
-            const is_past = frappe.datetime.obj_to_str(current) < month_start;
-            current = frappe.datetime.str_to_obj( frappe.datetime.add_months(current, 1) );
-            if (year !== currentYear) {
-                            periods.push({ year: currentYear, quarter: 0, is_past: is_past });
-                            year = currentYear;
-            }
+            
+            // Переходим к следующему месяцу
+            current = frappe.datetime.str_to_obj(
+                frappe.datetime.add_months(
+                    frappe.datetime.obj_to_str(current), 
+                    1
+                )
+            );
         }
     }
-    // Реализовать можно и для "quarter" или "year" по аналогии.
+    
+    else if (periodType === "year") {
+        let lastYear = null;
+        
+        while (current <= last) {
+            const year = current.getFullYear();
+            
+            // Добавляем год только если он отличается от предыдущего
+            if (lastYear !== year) {
+                // Для года определяем is_past по декабрю
+                let yearEndDate = new Date(year, 11, 1); // Декабрь
+                let yearEndDateStr = frappe.datetime.obj_to_str(yearEndDate);
+                
+                let is_past;
+                if (frm.budget_view_options == __("Только факт")) {
+                    is_past = true;
+                } else if (frm.budget_view_options == __("Только прогноз")) {
+                    is_past = false;
+                } else {
+                    is_past = yearEndDateStr < month_start;
+                }
+                
+                periods.push({ 
+                    year: year, 
+                    quarter: 0, 
+                    is_past: is_past 
+                });
+                
+                lastYear = year;
+            }
+            
+            // Переходим к следующему месяцу
+            current = frappe.datetime.str_to_obj(
+                frappe.datetime.add_months(
+                    frappe.datetime.obj_to_str(current), 
+                    1
+                )
+            );
+        }
+    }
+    
+    console.log("Сгенерированы периоды:", periods);
     return periods;
 }
 
