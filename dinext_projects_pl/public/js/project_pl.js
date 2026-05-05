@@ -582,49 +582,67 @@ function load_budget_data(frm, periodType, updateRows) {
                 });
                 
                 // 3. Загрузить фактические из GL Entry
-                frappe.db.get_list("GL Entry", {
-                    filters: {
-                        account: ["in", Object.keys(aggregated)],
-                        project: frm.docname,
-                        company: frm.doc.company,
-                        is_cancelled: false
-                    },
-                    fields: ["account", "posting_date", "debit", "credit"]
-                        .concat( "task" ), //Заглушка пока не реализована общая логика работы с Dimesnsions
-                        //.concat( frm.allowed_dimensions.map( dim => frappe.model.scrub( dim ) ) ),
-                    limit: 0
-                }).then(gl => {
-                    gl.forEach(e => {
-                        let acct = e.account;
-                        
-                        let dim = ( frm.allowed_dimensions.filter( dim => e[ frappe.model.scrub( dim )] && 1 )
-                            .map( dim => { return { doc: dim, docname: e[ frappe.model.scrub( dim ) ] }; } ) ) || [];
-                        
-                        let bucket = aggregated[acct].dimension_data
-                            .find( x => dimensionsEqual( x.dimensions, dim) );
+                let account_keys = Object.keys(aggregated);
 
-                        if (!bucket) {
-                            bucket = { dimensions: dim };
-                            aggregated[acct].dimension_data.push(bucket);
+                frappe.call({
+                    method: 'frappe.client.get_list',
+                    args: {
+                        doctype: 'GL Entry',
+                        filters: [
+                            ["account", "in", account_keys.length > 0 ? account_keys : ["~~"]],
+                            ["project", "=", frm.docname],
+                            ["company", "=", frm.doc.company],
+                            ["is_cancelled", "=", false]
+                        ],
+                        fields: ["account", "posting_date", "debit", "credit", "task"],
+                        limit_page_length: 0
+                    },
+                    callback: function(r) {
+                        if (r.message) {
+                            let glEntries = [];
+                            if (Array.isArray(r.message)) {
+                                glEntries = r.message;
+                            } else if (r.message.data && Array.isArray(r.message.data)) {
+                                glEntries = r.message.data;
+                            } else if (r.message.values && Array.isArray(r.message.values)) {
+                                glEntries = r.message.values;
+                            }
+
+                            glEntries.forEach(e => {
+                                let acct = e.account;
+                                if (!aggregated[acct]) return;
+
+                                let dim = ( frm.allowed_dimensions.filter( dim => e[ frappe.model.scrub( dim )] && 1 )
+                                    .map( dim => { return { doc: dim, docname: e[ frappe.model.scrub( dim ) ] }; } ) ) || [];
+
+                                let bucket = aggregated[acct].dimension_data
+                                    .find( x => dimensionsEqual( x.dimensions, dim) );
+
+                                if (!bucket) {
+                                    bucket = { dimensions: dim };
+                                    aggregated[acct].dimension_data.push(bucket);
+                                }
+                                let dt = new Date(e.posting_date);
+                                let y = dt.getFullYear(), m = dt.getMonth() + 1;
+                                let key = `fact_${y}_${m}`;
+                                bucket[key] = (bucket[key] || 0) + Math.abs(e.credit - e.debit);
+                            });
+
+                            console.timeLog("load_budget_data");
+                            frm.aggregatedBudget = aggregated;
+                            updateTaskDimension(frm);
+                            frm.budget_dt.unfreeze();
                         }
-                        let dt = new Date(e.posting_date);
-                        let y = dt.getFullYear(), m = dt.getMonth() + 1;
-                        let key = `fact_${y}_${m}`;
-                        bucket[key] = (bucket[key] || 0) + Math.abs(e.credit - e.debit);
-                    });
-                    console.timeLog("load_budget_data");
-                    // 5. Сохранить и отрисовать
-                    frm.aggregatedBudget = aggregated;
-                    updateTaskDimension(frm);
-                    frm.budget_dt.unfreeze();
-                }).catch(err => {
-                    frappe.msgprint(__("Ошибка при загрузке данных GL Entry"));
-                    console.error(err);
-                }).finally(() => {
+                    },
+                    error: function(err) {
+                        frappe.msgprint(__("Ошибка при загрузке данных GL Entry"));
+                        console.error(err);
+                    }
+                }).then(() => {
                     console.timeEnd("load_budget_data");
                     setBudgetCellStyles();
                     render_revenue_percentage_chart(frm);
-                 });
+                });
             }).catch(err => {
                 frappe.msgprint(__("Ошибка при загрузке данных Project Budget"));
                 console.error(err);
