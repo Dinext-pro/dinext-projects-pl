@@ -1,0 +1,39 @@
+{
+ "add_total_row": 0,
+ "add_translate_data": 0,
+ "columns": [],
+ "creation": "2025-11-21 14:41:00.861094",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "json": "{}",
+ "letter_head": "Test Letter Head",
+ "letterhead": null,
+ "modified": "2025-11-21 14:41:24.553752",
+ "modified_by": "Administrator",
+ "module": "Dinord ERPNext Customization",
+ "name": "Project Budget Plan vs Forecast",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "Project Budget",
+ "report_name": "Project Budget Plan vs Forecast",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Z_Dinord_Project_Manager"
+  },
+  {
+   "role": "Z_Dinord_Team_Lead"
+  },
+  {
+   "role": "Z_Dinord_Financier"
+  }
+ ],
+ "timeout": 0
+}
