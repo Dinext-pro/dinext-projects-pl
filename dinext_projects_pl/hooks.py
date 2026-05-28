@@ -74,7 +74,10 @@ fixtures = [
 # include js in doctype views
 doctype_js = {"Project": 
     [
+        "public/js/dinext_ag_grid_core_bootstrap_loader.js",
+        "public/js/project_pl_ag_grid_bootstrap.js",
         "public/js/project_pl_style.js",
+        "public/js/project_pl_ag_grid_table.js",
         "public/js/project_pl.js",
         "public/js/project_pl_calc.js",
         "public/js/project_pl_dashboard.js"

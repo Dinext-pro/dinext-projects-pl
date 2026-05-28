@@ -68,6 +68,85 @@ function refresh_pl_forecast_dropdown(frm) {
 frappe.provide("dinext_projects");
 dinext_projects.refresh_pl_forecast_dropdown = refresh_pl_forecast_dropdown;
 
+function ensure_pl_ag_grid() {
+    if (!window.__dinext_pl_ag_grid_promise) {
+        let bootstrap = window.__dinext_pl_ag_grid_bootstrap;
+        if (!bootstrap) {
+            const wait = typeof window.ensureDinextAgGridCoreBootstrap === "function"
+                ? window.ensureDinextAgGridCoreBootstrap()
+                : Promise.reject(new Error("DinextAgGrid loader missing for P&L"));
+            bootstrap = wait.then(() => {
+                const boot = window.DinextAgGridCoreBootstrap;
+                return boot.ensureTreeDom().then(() => window.DinextAgGrid.use("budget-tree"));
+            });
+        }
+        window.__dinext_pl_ag_grid_promise = Promise.resolve(bootstrap)
+            .then(() => {
+                if (typeof window.getProjectPLAgGridTableClass !== "function") {
+                    throw new Error("project_pl_ag_grid_table.js must load before Project P&L grid");
+                }
+                return window.getProjectPLAgGridTableClass();
+            });
+    }
+    return window.__dinext_pl_ag_grid_promise;
+}
+
+function renderProjectPLTotalCell(table, params, columnMeta, colIndex) {
+    const renderCell = table && table.options.totalRow && table.options.totalRow.renderCell;
+    if (typeof renderCell !== "function") return "";
+
+    return renderCell(params, {
+        colIndex: colIndex + 2,
+        column: {
+            id: columnMeta.id || columnMeta.field || columnMeta.name
+        },
+        table
+    });
+}
+
+function renderProjectPLAccountCell(table, params, columnMeta, colIndex) {
+    if (params.node && params.node.rowPinned) {
+        return renderProjectPLTotalCell(table, params, columnMeta, colIndex);
+    }
+
+    const row = params.data;
+    if (!row) return "";
+
+    const field = columnMeta.id || columnMeta.field || "account";
+    const value = row[field] != null ? row[field] : params.value;
+    let content = typeof columnMeta.renderHtml === "function"
+        ? columnMeta.renderHtml(value, params.node?.rowIndex, columnMeta, row)
+        : (value == null ? "" : String(value));
+
+    if (!table) return content;
+
+    const treeCell = (window.DinextAgGrid && window.DinextAgGrid.treeCell)
+        || (window.DinextAgGridInternals && window.DinextAgGridInternals.treeCell);
+    if (!treeCell || typeof treeCell.wrapTreeCellContent !== "function") {
+        return content;
+    }
+
+    return treeCell.wrapTreeCellContent(content, row, {
+        table,
+        indentMultiplier: 18,
+        wrapperClass: "project-pl-tree-cell",
+        toggleClass: "project-pl-tree-toggle",
+        contentClass: "project-pl-tree-content",
+        toggleTag: "button"
+    });
+}
+
+function renderProjectPLBudgetCell(table, params, columnMeta, colIndex, formatFn) {
+    if (params.node && params.node.rowPinned) {
+        return renderProjectPLTotalCell(table, params, columnMeta, colIndex);
+    }
+
+    const row = params.data;
+    const field = columnMeta.id || columnMeta.field;
+    const value = row && field ? row[field] : params.value;
+    return formatFn(value, row, columnMeta, row);
+}
+
 function addBudgetViewOptionsControl(frm, controls) {
     frm.budget_view_options = frm.budget_view_options || __("Прогноз и факт");
     const control = frappe.ui.form.make_control({
@@ -100,13 +179,24 @@ function addBudgetViewOptionsControl(frm, controls) {
 /**
  * Отрисовка таблицы «Трудозатраты»
  */
+function destroyBudgetTable(frm) {
+    if (!frm || !frm.budget_dt) return;
+    if (typeof frm.budget_dt.destroy === "function") {
+        frm.budget_dt.destroy();
+    }
+    frm.budget_dt = null;
+}
+
 function render_budget_table(frm) {
     let wrapper = frm.get_field("custom_planning").$wrapper;
-    wrapper.addClass("budget-container").empty();;
+    destroyBudgetTable(frm);
+    wrapper.addClass("budget-container").empty();
 
     // Создаем панель для переключателей (период, единицы измерения) и для таблицы
     let controls = $('<div class="budget-controls"></div>').appendTo(wrapper);
     let table_container = $('<div class="budget-table"></div>').appendTo(wrapper);
+    let table_shell = $('<div class="project-pl-table-shell"></div>').appendTo(table_container);
+    let ag_grid_container = $('<div></div>').appendTo(table_shell);
 
     // Пример переключателей
     controls.append(`
@@ -163,50 +253,44 @@ function render_budget_table(frm) {
 
     // Инициализация таблицы с колонками
     function init_budget_table() {
-        let columns = get_budget_columns_definition(frm, selectedPeriodType);
+        ensure_pl_ag_grid().then(TableClass => {
+            const columnDefs = get_budget_column_defs(frm, selectedPeriodType);
 
-        // Инициализируем frappe‑datatable (параметры можно дорабатывать по необходимости)
-        frm.budget_dt = new StickyDataTable(table_container[0], {
-            stickyColumnsCount: 3,
-            columns: columns,
-            data: [], // данные будут подгружаться динамически
-            inlineFilters: false,
-            layout: "fixed",//fixed, fluid,ratio
-            logs: true,
-            disableReorderColumn: true,
-            serialNoColumn: true,
-            checkboxColumn: true,
-            checkedRowStatus: true,
-            dynamicRowHeight: true,
-            showTotalRow: true,
-            cellHeight: 30, //Для динамической высоты строк
-            treeView: true,
-            freezeMessage: __("Идет загрузка данных.."),
-            hooks: {
-                //Определение значений для итоговой строки
-                columnTotal(columnValues, cell) {
-                    // В первой колонке пишем "Баланс" / "Рентабельность"
-                    if ( cell.colIndex == 2 ) {
-                        this.periods = get_budget_display_periods(frm, selectedPeriodType);
-                        return "<span class='profit'>" + __("Валовая прибыль") + "</span><span class='profitability'>" +  __("Рентабельность") + "</span>";
+            frm.budget_dt = new TableClass(ag_grid_container[0], {
+                columnDefs,
+                rows: [],
+                showTotalRow: true,
+                cellHeight: 30, //Для динамической высоты строк
+                freezeMessage: __("Идет загрузка данных.."),
+                toolbarTarget: table_shell[0],
+                fullscreenShell: table_shell[0],
+                totalRow: {
+                    renderCell(params, context) {
+                        const ctx = context.table.hooksContext;
+                        ctx.periods = ctx.periods || get_budget_display_periods(frm, selectedPeriodType);
+                        if (context.colIndex == 2) {
+                            return "<span class='profit'>" + __("Валовая прибыль") + "</span><span class='profitability'>" + __("Рентабельность") + "</span>";
+                        }
+                        if (context.column.id === "total") {
+                            return budget_total(frm, context, ctx.periods);
+                        }
+                        const m = context.column.id.match(/^group_(\d+)_(\d+)$/);
+                        if (m) {
+                            const year = parseInt(m[1], 10);
+                            const month = parseInt(m[2], 10);
+                            return budget_column_total(frm, context, ctx.periods, { year, month });
+                        }
+                        return "";
                     }
-                    // В последней колонке (total) считаем итог
-                    if (cell.column.id === "total") {
-                        return budget_total(frm, cell, this.periods );
-                    }
-                    // В остальных периодических колонках
-                    let m = cell.column.id.match(/^group_(\d+)_(\d+)$/);
-                    if (m) {
-                        let year = parseInt(m[1]), month = parseInt(m[2]);
-                        return budget_column_total(frm, cell, this.periods, { year, month });
-                    }
-                    return "";
                 }
-             }
-        });
+            });
 
-        // Загружаем данные в таблицу
-        load_budget_data(frm, selectedPeriodType );
+            // Загружаем данные в таблицу
+            load_budget_data(frm, selectedPeriodType );
+        }).catch(error => {
+            console.error(error);
+            frappe.msgprint(__("Не удалось загрузить таблицу P&L"));
+        });
     }
     init_budget_table();
 }
@@ -398,12 +482,12 @@ function get_budget_display_periods(frm, periodType) {
 }
 
 function updateBudgetTable(frm, periodType="month") {
-    let visibleRows =  frm.budget_dt.bodyRenderer.visibleRowIndices;
+    let visibleRows = frm.budget_dt.visibleRowIndices;
     
-    refreshBudget( frm, frm.aggregatedBudget, get_budget_columns_definition(frm, periodType) );
+    refreshBudget( frm, frm.aggregatedBudget, get_budget_column_defs(frm, periodType) );
     
-    frm.budget_dt.rowmanager.collapseAllNodes();
-    frm.budget_dt.rowmanager.showRows(visibleRows);
+    frm.budget_dt.collapseAll();
+    frm.budget_dt.showRows(visibleRows);
     cur_frm.budget_dt.bodyScrollable.dispatchEvent(new CustomEvent('scroll'));
 }
 
@@ -418,16 +502,16 @@ globalThis.updateTaskDimension = (frm, updateRows=false) => {
 
     let visibleRows;
     if (updateRows) {
-        visibleRows =  frm.budget_dt.bodyRenderer.visibleRowIndices;
+        visibleRows = frm.budget_dt.visibleRowIndices;
     }
     //console.timeLog("updateTaskDimension");
     refreshBudget( frm, frm.aggregatedBudget );
-    frm.budget_dt.rowmanager.collapseAllNodes();
+    frm.budget_dt.collapseAll();
 
     if ( visibleRows ) {
-        frm.budget_dt.rowmanager.showRows(visibleRows);
+        frm.budget_dt.showRows(visibleRows);
     } else {
-        frm.budget_dt.rowmanager.setTreeDepth(1);
+        frm.budget_dt.setTreeDepth(1);
     }
     //console.timeEnd("updateTaskDimension");
     render_pl_chart(frm);
@@ -620,6 +704,7 @@ function load_budget_data(frm, periodType, updateRows) {
                 }).catch(err => {
                     frappe.msgprint(__("Ошибка при загрузке данных GL Entry"));
                     console.error(err);
+                    frm.budget_dt.unfreeze();
                 }).finally(() => {
                     console.timeEnd("load_budget_data");
                     setBudgetCellStyles();
@@ -628,10 +713,12 @@ function load_budget_data(frm, periodType, updateRows) {
             }).catch(err => {
                 frappe.msgprint(__("Ошибка при загрузке данных Project Budget"));
                 console.error(err);
+                frm.budget_dt.unfreeze();
             });
         }).catch(err => {
             frappe.msgprint(__("Ошибка при загрузке данных Accounting Dimension Filter"));
             console.error(err);
+            frm.budget_dt.unfreeze();
         })/**/
     });
 }
@@ -733,26 +820,32 @@ function rollup_fact_budget(aggregatedBudget) {
 
 function setBudgetCellStyles() {
     $(".budget-table .datatable .dt-scrollable").addClass("dt-fit-height");
+    $(".budget-table .project-pl-ag-grid .ag-body-viewport").addClass("dt-fit-height");
 };
 
-/**
- * Формирование описания колонок таблицы
- */
-function get_budget_columns_definition(frm, periodType, unit) {
-    let columns = [];
+function projectPlColumnHeader(headerHtml) {
+    const Col = window.DinextAgGrid && window.DinextAgGrid.column;
+    return Col
+        ? Col.htmlHeader(headerHtml, { headerClass: "project-pl-ag-grid-header" })
+        : {
+            headerComponent: "dinextHtmlHeader",
+            headerComponentParams: {
+                html: headerHtml || "",
+                headerClass: "project-pl-ag-grid-header"
+            }
+        };
+}
 
-    // Колонка "Статья" с иерархической структурой.
-    columns.push({
-        name: __("Статья"),
+/**
+ * Формирование AG Grid columnDefs для таблицы бюджета
+ */
+function get_budget_column_defs(frm, periodType, unit) {
+    const columnDefs = [];
+    let colIndex = 0;
+
+    const accountMeta = {
         id: "account",
-        width: 300,
-        sortable: false,
-        dropdown: false,
-        editable: false,
-        focusable: false,
-        sticky: true,
-        treeView: true,
-        format: (value, row, column, data) => {
+        renderHtml(value, rowIndex, column, data) {
             if (data && data.risk) {
                 let risk = frm.doc.custom_project_risks;
                 let riskLabel = "⚠ " + ( risk.find(r => r.name == data.risk.value)?.subject || data.risk.value );
@@ -775,87 +868,107 @@ function get_budget_columns_definition(frm, periodType, unit) {
             if (data && data.account != null) return data.account;
             return value != null ? value : "";
         }
-    });
+    };
 
-    // Колонка "Измерение"
-    /*columns.push({
-        name: "Измерение",
-        id: "dimension",
-        width: 220,
+    columnDefs.push({
+        field: "account",
+        colId: "account",
+        ...projectPlColumnHeader(__("Статья")),
+        width: 300,
+        minWidth: 180,
+        pinned: "left",
+        lockPinned: true,
         sortable: false,
-        editable: false,
-        focusable: false,
-        sticky: true,
-        dropdown: false,
-        format: (value, row, column, data) => {
-            const frm = cur_frm;
-            let html = "";
-
-            if ( data ) { 
-                // buckets — реальные данные dimension_data
-                const buckets = data.dimension_data || [];
-    
-                
-            } else if ( value ) {
-                html = value;
-            }
-
-            return html;
+        resizable: true,
+        suppressMovable: true,
+        cellClass: params => {
+            const classes = ["project-pl-account-cell"];
+            if (params.node && params.node.rowPinned) classes.push("project-pl-total-row-cell");
+            return classes;
+        },
+        cellRenderer: params => {
+            const table = params.context && params.context.dinextTable;
+            return renderProjectPLAccountCell(table, params, accountMeta, colIndex);
         }
-    });/**/
-    
-    /*
-       Вместо вложенных columns формируем одну колонку, внутри которой вручную выводим три значения.
-       Для редактирования (если период текущий или будущий) мы делаем значение "факт/прогноз" кликабельным.
-    */
+    });
+    colIndex += 1;
+
     let periods = get_budget_display_periods(frm, periodType);
     let subcolumn_label;
     periods.forEach(function(period) {
-        // Вычисляем: если период в прошлом – отображаем "факт", иначе "прогноз"
         subcolumn_label = period.is_past ? __("Факт") : __("Прогноз");
-        columns.push({
-            name: `<div style="text-align:center;">
-                    ${period.year} ${period.month}<br/>
-                    <div class="budget-group-header">` +
-                        (cur_frm.bg_hide_plan ? "" : `<span>${__("План")}</span>`) +
-                        `<span>${subcolumn_label}</span>` +
-                        (cur_frm.bg_hide_delta ? "" : `<span>Δ</span>`) +
-                    `</div>
-               </div>`,
-            id: `group_${period.year}_${period.month}`,
-            sortable: false,
+        const field = `group_${period.year}_${period.month}`;
+        const headerHtml = `<div style="text-align:center;">
+                ${period.year} ${period.month}<br/>
+                <div class="budget-group-header">` +
+                    (cur_frm.bg_hide_plan ? "" : `<span>${__("План")}</span>`) +
+                    `<span>${subcolumn_label}</span>` +
+                    (cur_frm.bg_hide_delta ? "" : `<span>Δ</span>`) +
+                `</div>
+           </div>`;
+        const periodColIndex = colIndex;
+        const columnMeta = { id: field };
+
+        columnDefs.push({
+            field,
+            colId: field,
+            ...projectPlColumnHeader(headerHtml),
             get width() {
                 return 210 - (cur_frm.bg_hide_plan ? 70 : 0 ) - (cur_frm.bg_hide_delta ? 50 : 0);
             },
-            dropdown: false,
-            focusable: false,
-            editable: false,
-            format: budget_cell_formatter.bind(null, frm, period)
+            minWidth: 90,
+            sortable: false,
+            resizable: true,
+            suppressMovable: true,
+            cellClass: params => (params.node && params.node.rowPinned ? ["project-pl-total-row-cell"] : []),
+            cellRenderer: params => {
+                const table = params.context && params.context.dinextTable;
+                return renderProjectPLBudgetCell(
+                    table,
+                    params,
+                    columnMeta,
+                    periodColIndex,
+                    budget_cell_formatter.bind(null, frm, period)
+                );
+            }
         });
+        colIndex += 1;
     });
-    
-    // Добавляем колонку "Итого" – суммарные значения по всем периодам
-    columns.push({
-        name: `<div style="text-align:center;">
+
+    const totalColIndex = colIndex;
+    const totalMeta = { id: "total" };
+    columnDefs.push({
+        field: "total",
+        colId: "total",
+        ...projectPlColumnHeader(`<div style="text-align:center;">
                     ${__("Итого")}<br/>
                     <div class="budget-group-header">` +
                         (cur_frm.bg_hide_plan ? "" : `<span>${__("План")}</span>`) +
                         `<span>${ subcolumn_label }</span>` +
                         (cur_frm.bg_hide_delta ? "" : `<span>Δ</span>`) +
                     `</div>
-               </div>`,
-        id: "total",
+               </div>`),
         get width() {
-                return 210 - (cur_frm.bg_hide_plan ? 70 : 0 ) - (cur_frm.bg_hide_delta ? 50 : 0);
-            },
+            return 210 - (cur_frm.bg_hide_plan ? 70 : 0 ) - (cur_frm.bg_hide_delta ? 50 : 0);
+        },
+        minWidth: 90,
         sortable: false,
-        dropdown: false,
-        focusable: false,
-        editable: false,
-        format: budget_cell_formatter_total.bind(null, frm, periods)
-    });/**/
+        resizable: true,
+        suppressMovable: true,
+        cellClass: params => (params.node && params.node.rowPinned ? ["project-pl-total-row-cell"] : []),
+        cellRenderer: params => {
+            const table = params.context && params.context.dinextTable;
+            return renderProjectPLBudgetCell(
+                table,
+                params,
+                totalMeta,
+                totalColIndex,
+                budget_cell_formatter_total.bind(null, frm, periods)
+            );
+        }
+    });
 
-    return columns;
+    return columnDefs;
 }
 
 /**
@@ -971,22 +1084,6 @@ function budget_cell_line_total( frm, periods, bucket, data ) {
     return line;
 }
 
-// При клике по значению "факт/прогноз" (если редактирование разрешено)
-$(document).on('click', '.bg-group-actual .editable-forecast', function(e) {
-    // Если уже в режиме редактирования, не обрабатываем повторный клик
-    if ($(this).find('input').length > 0) return;
-
-    let $span = $(this);
-    let currentValue = $span.text().replaceAll(' ', '');
-
-    let $input = $(`<input min="0" type="number" step="1000" size="8" class="bg-edit-input">`)
-        .val(currentValue)
-        .data('original-value', currentValue);
-
-    $span.html($input);
-    $input.focus();
-});
-
 function isChildOf( child, account, task, risk = null ) {
     let x = ( child.value == account && task && child.task?.parent_task == task );
     let y = ( child.value == account && !task && child.task && !child.task.parent_task );
@@ -1059,13 +1156,6 @@ function get_parent_budget_limit(account, task, dimension, period, aggregatedBud
     return null;
 }
 
-$(document).on('keydown', '.bg-edit-input', function(e) {
-    if (event.key === "Enter") {
-        // Trigger the button element with a click
-        $('.bg-edit-input').blur();
-      }
-});
-
 $(document).on('click', '.delete-risk-reserve-btn', function(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -1100,8 +1190,8 @@ $(document).on('click', '.delete-risk-reserve-btn', function(e) {
 });
 
 // При потере фокуса input – сохраняем значение
-$(document).on('blur', '.bg-edit-input', function(e) {
-    let $input = $(this);
+function saveBudgetForecastInput(input) {
+    let $input = $(input);
     let new_value = parseFloat($input.val());
 
     let original_value = $input.data('original-value');
@@ -1162,7 +1252,7 @@ $(document).on('blur', '.bg-edit-input', function(e) {
     $input.parent().text( numberformat( new_value || 0 ) );
     // Вызываем функцию обновления прогнозного значения на сервере
     updateBudgetValue( cur_frm.doc.name, account, dimension, year, month, new_value );
-});/**/
+}/**/
 
 
 
@@ -1327,13 +1417,13 @@ function updateBudgetDoc(doc, year, month, new_value) {
 
 function save_bg_forecast_as_plan(frm) {
     let periods = get_budget_display_periods(frm, "month");
-    let checkedRows = frm.budget_dt.rowmanager.getCheckedRows();
+    let checkedRows = frm.budget_dt.getCheckedRowIndices();
     
     // Собираем данные как массив объектов
     let data = [];
     
     for (let i = 0; i < checkedRows.length; i++) {
-        let accObj = frm.budget_dt.datamanager.getData(checkedRows[i]);
+        let accObj = frm.budget_dt.getRowAt(checkedRows[i]);
         let account = accObj.value;
         
         if (accObj.dimension_data && Array.isArray(accObj.dimension_data)) {
@@ -1396,8 +1486,9 @@ function save_bg_forecast_as_plan(frm) {
 
 // При двойном клике по значению "факт"
 // https://erp.dinord.ru/app/issue/ISS-2025-01237
-$(document).on('dblclick', '.bg-group-actual:not(.zero):has(.readonly-fact)', function(e) {
-    let $actual = $(this);
+function openBudgetGeneralLedgerFromTarget(target) {
+    let $actual = $(target).closest('.bg-group-actual');
+    if (!$actual.length || $actual.hasClass("zero") || !$actual.find(".readonly-fact").length) return;
 
     let $group = $actual.closest('.budget-group');
     let year = $group.data('year');
@@ -1428,4 +1519,4 @@ $(document).on('dblclick', '.bg-group-actual:not(.zero):has(.readonly-fact)', fu
         }
     	frappe.set_route('query-report', 'General Ledger');
     }
-});
+}
