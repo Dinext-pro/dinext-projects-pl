@@ -790,7 +790,9 @@ function get_budget_columns_definition(frm, periodType, unit) {
                 }
                 return riskLabel;
             }
-            if (data && data.account != null) return data.account;
+            if (data && data.account != null) {
+                return render_budget_row_link(data);
+            }
             return value != null ? value : "";
         }
     });
@@ -929,10 +931,17 @@ function budget_cell( account, task, period, plan, actual, readOnly=false, postf
                  data-account="${account}"
                  data-task="${task ? task: ""}"
                  data-is-past="${period.is_past}"${dimAttr}>
-                 ${cur_frm.bg_hide_plan ? "" : `<div class="bg-group-plan${plan==0?" zero":""} ${clPlan}"><span>${numberformat( plan ) + postfix}</span></div>`}
+                 ${cur_frm.bg_hide_plan ? "" : `<div class="bg-group-plan${plan==0?" zero":""} ${clPlan}"><span class="approved-plan-link">${numberformat( plan ) + postfix}</span></div>`}
                 <div class="bg-group-actual${actual==0?" zero":""}"><span class="${ ( period.is_past || readOnly ) ? "readonly-fact" : "editable-forecast" } ${clActual}">${numberformat( actual ) + postfix}</span></div>
                 ${cur_frm.bg_hide_delta ? "" : `<div class="bg-group-delta${delta==0?" zero":""}"><span>${delta}%</span></div>`}
             </div>`;
+}
+
+function render_budget_row_link(data) {
+    const title = frappe.utils.escape_html(data.account != null ? data.account : data.value || "");
+    const account = frappe.utils.escape_html(data.value || "");
+    const task = frappe.utils.escape_html(data.task?.value || "");
+    return `<span class="budget-row-link" data-account="${account}" data-task="${task}">${title}</span>`;
 }
 
 function numberformat(x) {
@@ -1395,22 +1404,51 @@ function save_bg_forecast_as_plan(frm) {
     }
     
     frappe.call({
-        method: "save_budget_as_plan",
+        method: "dinext_projects_pl.dinext_projects_pl.budget_approval.service.save_budget_plan_for_approval",
         args: {
             project: frm.doc.name,
             data: data
         },
         freeze: true,
-        freeze_message: __("Сохранение данных..."),
+        freeze_message: __("Отправка бюджетов на согласование..."),
         callback: function(r) {
             if (!r.exc) {
-                frappe.show_alert(__("Данные успешно сохранены как план"), 5);
+                frappe.show_alert(__("Бюджеты отправлены на согласование"), 5);
                 load_budget_data(frm, "month", true);
                 load_and_render_project_dashboard(frm);
             }
         }
     });
 }
+
+$(document).on('dblclick', '.budget-row-link', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const account = $(e.currentTarget).data('account');
+    const task = $(e.currentTarget).data('task');
+    if (!account || !cur_frm?.docname) {
+        return;
+    }
+
+    frappe.route_options = {
+        project: cur_frm.docname,
+        dinext_budget_account: account,
+        budget_against: task ? "Task" : "Project",
+    };
+    if (task) {
+        frappe.route_options.task = task;
+    }
+    frappe.set_route('List', 'Budget');
+});
+
+$(document).on('dblclick', '.bg-group-plan:not(.zero)', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const $group = $(e.currentTarget).closest('.budget-group');
+    open_approved_budget_for_group($group);
+});
 
 // При двойном клике по значению "факт"
 // https://erp.dinord.ru/app/issue/ISS-2025-01237
@@ -1447,3 +1485,40 @@ $(document).on('dblclick', '.bg-group-actual:not(.zero):has(.readonly-fact)', fu
     	frappe.set_route('query-report', 'General Ledger');
     }
 });
+
+function open_approved_budget_for_group($group) {
+    const year = $group.data('year');
+    const month = $group.data('month');
+    const account = $group.data('account');
+    const dimRaw = $group.attr('data-dimensions');
+
+    let dimensions = [];
+    try {
+        dimensions = dimRaw ? JSON.parse(decodeURIComponent(dimRaw)) : [];
+    } catch (error) {
+        dimensions = [];
+    }
+
+    frappe.call({
+        method: "dinext_projects_pl.dinext_projects_pl.budget_approval.service.find_approved_budget_for_period",
+        args: {
+            project: cur_frm.docname,
+            account: account,
+            year: year,
+            month: month,
+            dimensions: dimensions,
+        },
+        freeze: true,
+        freeze_message: __("Поиск согласованного бюджета..."),
+        callback: function(r) {
+            if (r.exc) {
+                return;
+            }
+            if (!r.message) {
+                frappe.msgprint(__("Для выбранной ячейки не найден согласованный Budget."));
+                return;
+            }
+            frappe.set_route("Form", "Budget", r.message);
+        }
+    });
+}
