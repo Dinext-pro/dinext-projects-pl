@@ -1,0 +1,755 @@
+# Copyright (c) 2026, Dinext
+"""Add P&L forecast from project work efforts and workload (ISS-2025-03107)."""
+
+import json
+
+import frappe
+
+ENABLE_DETAILED_LOG = False
+
+
+def _debug_log(message):
+    if ENABLE_DETAILED_LOG:
+        frappe.log(message)
+
+
+def _parse_confirm_recalc(value):
+    return value in (True, 1, "1", "true", "True")
+
+
+def _parse_inputs(fd):
+    project = fd.get("project")
+    selected_tasks = fd.get("tasks") or []
+    if isinstance(selected_tasks, str):
+        selected_tasks = json.loads(selected_tasks) if selected_tasks else []
+    forecast_details = fd.get("forecast_details") or {}
+    if isinstance(forecast_details, str):
+        forecast_details = json.loads(forecast_details) if forecast_details else {}
+    confirm_recalc = _parse_confirm_recalc(fd.get("confirm_recalc", False))
+    return project, selected_tasks, forecast_details, confirm_recalc
+
+
+def run_add_forecast_from_work_efforts(fd):
+    """Add P&L forecast from work efforts (PWE/PWA). ISS-2025-03107."""
+    if fd is None:
+        fd = {}
+    if not isinstance(fd, frappe._dict):
+        fd = frappe._dict(fd)
+
+    frappe.has_permission("Project Budget", "write", throw=True)
+    project, selected_tasks, forecast_details, confirm_recalc = _parse_inputs(fd)
+    _debug_log(f"confirm_recalc: {confirm_recalc}")
+    _debug_log(f"project: {project}")
+
+    if not project:
+        frappe.log("ERROR: No project specified")
+        return {
+            'success': False,
+            'error': 'No project specified'
+        }
+    elif not selected_tasks:
+        frappe.log("ERROR: No tasks selected")
+        return {
+            'success': False,
+            'error': 'No tasks selected'
+        }
+    else:
+        _debug_log("STEP 2: Getting project data")
+
+        # ========== 1. ╨Я╨Ю╨Ы╨г╨з╨Р╨Х╨Ь ╨Ф╨Р╨Э╨Э╨л╨Х ╨Я╨а╨Ю╨Х╨Ъ╨в╨Р ==========
+        Project = frappe.qb.DocType('Project')
+        project_query = (
+            frappe.qb.from_(Project)
+            .select(Project.custom_payment_scheme)
+            .where(Project.name == project)
+            .limit(1)
+        )
+        project_result = project_query.run(as_dict=True)
+        payment_scheme = project_result[0].get('custom_payment_scheme') if project_result else None
+        _debug_log(f"  payment_scheme: {payment_scheme}")
+
+        # ========== 2. ╨Я╨Ю╨Ы╨г╨з╨Р╨Х╨Ь ╨б╨в╨Р╨в╨м╨Ш ╨С╨о╨Ф╨Ц╨Х╨в╨Р ==========
+        _debug_log("STEP 2.1: Getting account table from project")
+
+        AccountTable = frappe.qb.DocType('Account Table')
+        account_query = (
+            frappe.qb.from_(AccountTable)
+            .select(
+                AccountTable.ac_valid_from,
+                AccountTable.ac_type,
+                AccountTable.ac_account
+            )
+            .where(AccountTable.parent == project)
+        )
+        account_table = account_query.run(as_dict=True)
+
+        _debug_log(f"  account_table found: {len(account_table)}")
+
+        # ╨б╨╛╤А╤В╨╕╤А╤Г╨╡╨╝ ╤Б╤В╨░╤В╤М╨╕ ╨┐╨╛ ╨┤╨░╤В╨╡ ╨╜╨░╤З╨░╨╗╨░ ╨┤╨╡╨╣╤Б╤В╨▓╨╕╤П
+        account_table.sort(key=lambda x: x.get('ac_valid_from') if x.get('ac_valid_from') else frappe.utils.getdate("1900-01-01"))
+
+        # ========== 3. ╨Я╨Ю╨Ы╨г╨з╨Р╨Х╨Ь PROJECT TEAM DETAILS ==========
+        _debug_log("STEP 3: Getting team details")
+
+        ProjectTeamDetails = frappe.qb.DocType('Project Team Details')
+        team_query = (
+            frappe.qb.from_(ProjectTeamDetails)
+            .select(
+                ProjectTeamDetails.pt_role,
+                ProjectTeamDetails.pt_participant,
+                ProjectTeamDetails.pt_cost_level,
+                ProjectTeamDetails.pt_category
+            )
+            .where(ProjectTeamDetails.parent == project)
+            .where(ProjectTeamDetails.virtual_worker == 0)
+        )
+        team_details = team_query.run(as_dict=True)
+
+        team_details_map = {}
+        for td in team_details:
+            key = (td.get('pt_role'), td.get('pt_participant'))
+            team_details_map[key] = td
+
+        _debug_log(f"  team_details found: {len(team_details)}")
+
+        # ========== 3.1. ╨Я╨Ю╨Ы╨г╨з╨Р╨Х╨Ь ╨Т╨Ш╨а╨в╨г╨Р╨Ы╨м╨Э╨л╨е ╨г╨з╨Р╨б╨в╨Э╨Ш╨Ъ╨Ю╨Т ==========
+        _debug_log("STEP 3.1: Getting virtual team details")
+
+        virtual_query = (
+            frappe.qb.from_(ProjectTeamDetails)
+            .select(
+                ProjectTeamDetails.pt_role,
+                ProjectTeamDetails.pt_cost_level,
+                ProjectTeamDetails.pt_category,
+                ProjectTeamDetails.virtual_worker,
+                ProjectTeamDetails.worker_type
+            )
+            .where(ProjectTeamDetails.parent == project)
+            .where(ProjectTeamDetails.virtual_worker == 1)
+        )
+        virtual_team_details = virtual_query.run(as_dict=True)
+
+        virtual_team_map = {}
+        for vtd in virtual_team_details:
+            virtual_team_map[vtd.get('pt_role')] = vtd
+            _debug_log(f"  Virtual worker for role {vtd.get('pt_role')}: cost_level={vtd.get('pt_cost_level')}, category={vtd.get('pt_category')}")
+
+        # ========== 4. ╨Ю╨Я╨а╨Х╨Ф╨Х╨Ы╨п╨Х╨Ь ╨в╨Ш╨Я ╨Я╨Ю╨Ы╨м╨Ч╨Ю╨Т╨Р╨в╨Х╨Ы╨п ==========
+        _debug_log("STEP 4: Getting worker types")
+
+        user_type_cache = {}
+        Worker = frappe.qb.DocType('Worker')
+
+        for td in team_details:
+            user = td.get('pt_participant')
+            if user and user not in user_type_cache:
+                worker_query = (
+                    frappe.qb.from_(Worker)
+                    .select(Worker.wtype)
+                    .where(Worker.wuser == user)
+                    .limit(1)
+                )
+                worker_result = worker_query.run(as_dict=True)
+
+                if worker_result and worker_result[0].get('wtype'):
+                    user_type_cache[user] = worker_result[0].get('wtype')
+                    _debug_log(f"  User {user} -> {user_type_cache[user]}")
+                else:
+                    # ╨Х╤Б╨╗╨╕ ╤Г Worker ╨╜╨╡╤В ╤В╨╕╨┐╨░ - ╤Н╤В╨╛ ╨╛╤И╨╕╨▒╨║╨░ ╨┤╨░╨╜╨╜╤Л╤Е, ╨┐╤А╨╛╨┐╤Г╤Б╨║╨░╨╡╨╝
+                    _debug_log(f"  WARNING: User {user} has no Worker type, will be skipped")
+                    user_type_cache[user] = None  # ╨п╨▓╨╜╨╛ ╨┐╨╛╨╝╨╡╤З╨░╨╡╨╝ ╨║╨░╨║ ╨┐╤А╨╛╨▒╨╗╨╡╨╝╨╜╨╛╨│╨╛
+
+        # ========== 4.1. ╨Я╨Ю╨Ы╨г╨з╨Р╨Х╨Ь COST LEVELS ╨Ш╨Ч WORKER LEVEL ==========
+        _debug_log("STEP 4.1: Getting cost levels from Worker Level")
+
+        cost_levels_cache = {}
+        WorkerLevel = frappe.qb.DocType('Worker Level')
+
+        for td in team_details:
+            user = td.get('pt_participant')
+            if user and user not in cost_levels_cache:
+                worker_query = (
+                    frappe.qb.from_(Worker)
+                    .select(Worker.name)
+                    .where(Worker.wuser == user)
+                    .limit(1)
+                )
+                worker_result = worker_query.run(as_dict=True)
+
+                if worker_result:
+                    worker_name = worker_result[0].get('name')
+                    wl_query = (
+                        frappe.qb.from_(WorkerLevel)
+                        .select(
+                            WorkerLevel.wl_valid_from,
+                            WorkerLevel.wl_cosl_level.as_('cost_level')
+                        )
+                        .where(WorkerLevel.parent == worker_name)
+                        .orderby(WorkerLevel.wl_valid_from)
+                    )
+                    worker_levels = wl_query.run(as_dict=True)
+
+                    cost_levels_cache[user] = []
+                    for wl in worker_levels:
+                        cost_levels_cache[user].append({
+                            'valid_from': wl.get('wl_valid_from'),
+                            'cost_level': wl.get('cost_level')
+                        })
+                    _debug_log(f"  User {user} cost levels: {len(cost_levels_cache[user])}")
+                else:
+                    cost_levels_cache[user] = []
+                    _debug_log(f"  User {user} has no Worker record")
+
+        # ========== 5. ╨Ю╨Я╨а╨Х╨Ф╨Х╨Ы╨п╨Х╨Ь ╨Ш╨б╨в╨Ю╨з╨Э╨Ш╨Ъ ╨б╨в╨Р╨Т╨Ъ╨Ш ==========
+        if payment_scheme == "Время и затраты (T&M)":
+            rate_source_field = "pt_category"
+            rate_parenttype = "Rate Category"
+        else:
+            rate_source_field = "pt_cost_level"
+            rate_parenttype = "Cost Level"
+
+        _debug_log(f"  rate_source_field: {rate_source_field}, parenttype: {rate_parenttype}")
+
+        # ========== 6. ╨Ч╨Р╨У╨а╨г╨Ц╨Р╨Х╨Ь ╨б╨в╨Р╨Т╨Ъ╨Ш ==========
+        parent_values = set()
+        for td in team_details:
+            if rate_source_field == "pt_category":
+                value = td.get("pt_category")
+                if value:
+                    parent_values.add(value)  # тЖР ╨Ф╨Ю╨С╨Р╨Т╨Ш╨в╨м ╨н╨в╨г ╨б╨в╨а╨Ю╨Ъ╨г!
+            else:
+                value = td.get("pt_cost_level")
+                if not value:
+                    user = td.get('pt_participant')
+                    user_cost_levels = cost_levels_cache.get(user, [])
+                    for cl in user_cost_levels:
+                        if cl.get('cost_level'):
+                            parent_values.add(cl.get('cost_level'))
+                else:
+                    parent_values.add(value)
+
+        _debug_log(f"  parent_values: {parent_values}")
+
+        rates = {}
+        if parent_values:
+            _debug_log("STEP 6: Loading rate records")
+            RateTable = frappe.qb.DocType('Rate Table')
+            rate_query = (
+                frappe.qb.from_(RateTable)
+                .select(
+                    RateTable.parent,
+                    RateTable.rt_valid_from,
+                    RateTable.rt_rate,
+                    RateTable.rt_currency
+                )
+                .where(RateTable.parenttype == rate_parenttype)
+                .where(RateTable.parent.isin(list(parent_values)))
+            )
+            rate_records = rate_query.run(as_dict=True)
+
+            _debug_log(f"  rate_records found: {len(rate_records)}")
+
+            for rate in rate_records:
+                parent = rate.get('parent')
+                if parent not in rates:
+                    rates[parent] = []
+                rates[parent].append({
+                    'valid_from': rate.get('rt_valid_from'),
+                    'rate': float(rate.get('rt_rate') or 0),
+                    'currency': rate.get('rt_currency')
+                })
+
+            for parent in rates:
+                rates[parent].sort(key=lambda x: x['valid_from'] if x['valid_from'] else frappe.utils.getdate("1900-01-01"))
+
+            _debug_log(f"  rates loaded for parents: {list(rates.keys())}")
+
+        # ========== 7. ╨Я╨Ю╨Ы╨г╨з╨Р╨Х╨Ь ╨Ш╨Э╨д╨Ю╨а╨Ь╨Р╨ж╨Ш╨о ╨Ю╨С ╨Ш╨Ч╨Ь╨Х╨а╨Х╨Э╨Ш╨п╨е ==========
+        _debug_log("STEP 7: Getting accounting dimension filters for Task")
+
+        AccountingDimensionFilter = frappe.qb.DocType('Accounting Dimension Filter')
+        ApplicableOnAccount = frappe.qb.DocType('Applicable On Account')
+
+        dim_query = (
+            frappe.qb.from_(AccountingDimensionFilter)
+            .left_join(ApplicableOnAccount)
+            .on(ApplicableOnAccount.parent == AccountingDimensionFilter.name)
+            .select(
+                AccountingDimensionFilter.name,
+                ApplicableOnAccount.applicable_on_account.as_('account')
+            )
+            .where(AccountingDimensionFilter.accounting_dimension == 'Task')
+            .where(AccountingDimensionFilter.disabled == 0)
+        )
+        task_dimension_filters = dim_query.run(as_dict=True)
+
+        accounts_with_task_dimension = set()
+        for row in task_dimension_filters:
+            if row.get('account'):
+                accounts_with_task_dimension.add(row.get('account'))
+
+        _debug_log(f"  Accounts supporting Task dimension: {accounts_with_task_dimension}")
+
+        # ========== 7.5. ╨д╨г╨Э╨Ъ╨ж╨Ш╨п ╨Я╨Х╨а╨Х╨б╨з╨Х╨в╨Р ╨Я╨а╨Ю╨У╨Э╨Ю╨Ч╨Р ==========
+        def recalculate_forecast_and_loads(forecast_hours, users_data):
+            type3_users = []
+            other_users = []
+
+            for u in users_data:
+                if u.get('workload_type') == 'В % от трудоемкости задачи':
+                    type3_users.append(u)
+                else:
+                    other_users.append(u)
+
+            total_type3_load = sum(u.get('original_hours', 0) for u in type3_users)
+            total_other_load = sum(u.get('original_hours', 0) for u in other_users)
+
+            if forecast_hours < total_type3_load:
+                new_forecast = total_type3_load
+            else:
+                new_forecast = forecast_hours
+
+            remaining_forecast = max(0, new_forecast - total_type3_load)
+
+            new_loads = {}
+            for u in type3_users:
+                new_loads[u.get('user')] = u.get('original_hours', 0)
+
+            if total_other_load > 0 and remaining_forecast > 0:
+                for u in other_users:
+                    ratio = u.get('original_hours', 0) / total_other_load
+                    new_loads[u.get('user')] = remaining_forecast * ratio
+            else:
+                for u in other_users:
+                    new_loads[u.get('user')] = 0
+
+            return new_forecast, new_loads
+
+        # ========== 8. ╨а╨Р╨б╨б╨з╨Ш╨в╨л╨Т╨Р╨Х╨Ь ╨б╨г╨Ь╨Ь╨л ╨Ш ╨Ч╨Р╨Я╨Ш╨б╨л╨Т╨Р╨Х╨Ь ╨Т ╨С╨о╨Ф╨Ц╨Х╨в ==========
+        _debug_log("STEP 8: Calculating amounts and saving to budget")
+
+        results = []
+        updated_count = 0
+        should_stop = False
+
+        for task in selected_tasks:
+            _debug_log(f"STEP 8.1: Processing task: {task}")
+            task_details = forecast_details.get(task, {})
+
+            aggregated_by_account_for_task = {}
+
+            for role, periods in task_details.items():
+                _debug_log(f"  Role: {role}")
+
+                # ╨Э╨░╤Е╨╛╨┤╨╕╨╝ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П ╤Б ╤Н╤В╨╛╨╣ ╤А╨╛╨╗╤М╤О (╤В╨╛╨╗╤М╨║╨╛ ╤Б ╨▓╨░╨╗╨╕╨┤╨╜╤Л╨╝ worker type)
+                matching_users = []
+                for (td_role, td_user), td in team_details_map.items():
+                    if td_role == role:
+                        user_type = user_type_cache.get(td_user)
+                        if user_type:
+                            matching_users.append((td_user, td))
+                        else:
+                            _debug_log(f"    Skipping user {td_user} - no valid worker type")
+
+                if not matching_users:
+                    _debug_log(f"    No valid users found for role {role}, skipping")
+                    continue
+
+                for period_key, hours_data in periods.items():
+                    forecast_hours = hours_data.get('forecast_hours', 0)
+                    users_data = hours_data.get('users', {})
+
+                    _debug_log(f"    Period: {period_key}, forecast={forecast_hours}, users={len(users_data)}")
+
+                    # ╨Я╤А╨╛╨┐╤Г╤Б╨║╨░╨╡╨╝ ╤В╨╛╨╗╤М╨║╨╛ ╨╡╤Б╨╗╨╕ ╨╜╨╡╤В ╨┐╤А╨╛╨│╨╜╨╛╨╖╨░
+                    if forecast_hours == 0:
+                        continue
+
+                    # ╨Т╨╝╨╡╤Б╤В╨╛ try-except:
+                    if not period_key or '-' not in period_key:
+                        _debug_log(f"      Invalid period_key format: {period_key}")
+                        continue
+
+                    parts = period_key.split('-')
+                    if len(parts) != 2:
+                        _debug_log(f"      Invalid period_key format: {period_key}")
+                        continue
+
+                    # ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝, ╤З╤В╨╛ ╨╛╨▒╨╡ ╤З╨░╤Б╤В╨╕ - ╤З╨╕╤Б╨╗╨░
+                    if not parts[0].isdigit() or not parts[1].isdigit():
+                        _debug_log(f"      Invalid year/month in period_key: {period_key}")
+                        continue
+
+                    year = int(parts[0])
+                    month = int(parts[1])
+
+                    period_date = frappe.utils.getdate(f"{year}-{month:02d}-01")
+
+                    # ╨б╨╛╨▒╨╕╤А╨░╨╡╨╝ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╨╡╨╣ ╨┤╨╗╤П ╤Н╤В╨╛╨│╨╛ ╨┐╨╡╤А╨╕╨╛╨┤╨░
+                    users_for_period = []
+                    users_forecast_data = {}
+                    for user_email, user_info in users_data.items():
+                        users_forecast_data[user_email] = user_info
+
+                    for user, team_detail in matching_users:
+                        # ╨Ю╨┐╤А╨╡╨┤╨╡╨╗╤П╨╡╨╝ parent ╨┤╨╗╤П ╤Б╤В╨░╨▓╨║╨╕
+                        if rate_source_field == "pt_category":
+                            parent_value = team_detail.get("pt_category")
+                        else:
+                            parent_value = team_detail.get("pt_cost_level")
+                            if not parent_value:
+                                user_cost_levels = cost_levels_cache.get(user, [])
+                                for cl in user_cost_levels:
+                                    valid_from = cl.get('valid_from')
+                                    if not valid_from or valid_from <= period_date:
+                                        parent_value = cl.get('cost_level')
+                                    else:
+                                        break
+                                if parent_value:
+                                    _debug_log(f"      Using base_cost_level from Worker Level: {parent_value}")
+
+                        if not parent_value:
+                            _debug_log(f"      No rate source for user {user}")
+                            continue
+
+                        parent_rates = rates.get(parent_value, [])
+                        if not parent_rates:
+                            _debug_log(f"      No rates found for parent={parent_value}")
+                            continue
+
+                        applicable_rate = None
+                        for rate_info in parent_rates:
+                            valid_from = rate_info.get('valid_from')
+                            if valid_from and valid_from <= period_date:
+                                applicable_rate = rate_info
+                            else:
+                                break
+
+                        if not applicable_rate:
+                            applicable_rate = parent_rates[-1] if parent_rates else None
+
+                        if not applicable_rate:
+                            _debug_log(f"      No applicable rate for user {user}")
+                            continue
+
+                        user_type = user_type_cache.get(user, 'Employee')
+
+                        applicable_account = None
+                        for at in account_table:
+                            valid_from = at.get('ac_valid_from')
+                            if at.get('ac_type') == user_type:
+                                if not valid_from or valid_from <= period_date:
+                                    applicable_account = at.get('ac_account')
+                                    _debug_log(f"      Found account: {applicable_account} (type={user_type})")
+                                    break
+
+                        if not applicable_account:
+                            _debug_log(f"      No account found for user_type={user_type}")
+                            continue
+
+                        user_forecast_info = users_forecast_data.get(user, {})
+                        workload_type = user_forecast_info.get('workload_type', 'В рабочих часах')
+                        percentage = user_forecast_info.get('percentage', 0)
+                        assigned = user_forecast_info.get('assigned_hours', 0)
+
+                        if workload_type == 'В % от трудоемкости задачи':
+                            original_hours = forecast_hours
+                        else:
+                            original_hours = assigned
+
+                        _debug_log(f"      User: {user}, type={workload_type}, hours={original_hours}")
+
+                        users_for_period.append({
+                            'user': user,
+                            'workload_type': workload_type,
+                            'percentage': percentage,
+                            'original_hours': original_hours,
+                            'rate': applicable_rate.get('rate'),
+                            'currency': applicable_rate.get('currency'),
+                            'user_type': user_type,
+                            'applicable_account': applicable_account,
+                            'has_task_dimension': applicable_account in accounts_with_task_dimension,
+                            'team_detail': team_detail
+                        })
+
+                    # ╨Я╤А╨╛╨▓╨╡╤А╨║╨░ ╨┐╨╡╤А╨╡╨│╤А╤Г╨╖╨║╨╕
+                    total_pwa_hours = sum(u.get('original_hours', 0) for u in users_for_period)
+
+                    if total_pwa_hours > forecast_hours + 1:
+                        _debug_log(f"      *** OVERLOAD: PWA={total_pwa_hours} > PWE={forecast_hours} ***")
+
+                        if not confirm_recalc:
+                            return {
+                                'success': False,
+                                'needs_confirmation': True,
+                                'message': f'╨Ю╨▒╨╜╨░╤А╤Г╨╢╨╡╨╜╨░ ╨┐╨╡╤А╨╡╨│╤А╤Г╨╖╨║╨░: ╨╜╨░╨╖╨╜╨░╤З╨╡╨╜╨╜╨░╤П ╨╖╨░╨│╤А╤Г╨╖╨║╨░ ({round(total_pwa_hours, 2)}╤З) ╨┐╤А╨╡╨▓╤Л╤И╨░╨╡╤В ╨┐╤А╨╛╨│╨╜╨╛╨╖╨╜╤Л╨╡ ╤В╤А╤Г╨┤╨╛╨╖╨░╤В╤А╨░╤В╤Л ({forecast_hours}╤З) ╨┐╨╛ ╨╖╨░╨┤╨░╤З╨╡ "{task}", ╤А╨╛╨╗╨╕ "{role}", ╨┐╨╡╤А╨╕╨╛╨┤╤Г {period_key}. ╨Т╤Л╨┐╨╛╨╗╨╜╨╕╤В╤М ╨┐╨╡╤А╨╡╤Б╤З╨╡╤В ╨┐╤А╨╛╨│╨╜╨╛╨╖╨░ ╨╜╨░ ╨╛╤Б╨╜╨╛╨▓╨░╨╜╨╕╨╕ ╤В╨╡╨║╤Г╤Й╨╡╨╣ ╨╖╨░╨│╤А╤Г╨╖╨║╨╕?',
+                                'task': task,
+                                'role': role,
+                                'period': period_key,
+                                'forecast_hours': forecast_hours,
+                                'total_pwa_hours': total_pwa_hours
+                            }
+                            should_stop = True
+                            break
+                        else:
+                            _debug_log(f"      User confirmed, recalculating...")
+                            recalc_result = recalculate_forecast_and_loads(forecast_hours, users_for_period)
+                            new_forecast = recalc_result[0]
+                            new_loads = recalc_result[1]
+
+                            for u in users_for_period:
+                                user_email = u.get('user')
+                                if user_email in new_loads:
+                                    u['original_hours'] = new_loads[user_email]
+                                    _debug_log(f"      Updated hours for {user_email}: {new_loads[user_email]}h")
+
+                    # ╨Я╤А╨╛╨▓╨╡╤А╨║╨░ ╨╜╨╡╨┤╨╛╨│╤А╤Г╨╖╨║╨╕
+                    elif total_pwa_hours < forecast_hours - 1:
+                        _debug_log(f"      *** UNDERLOAD: PWA={total_pwa_hours} < PWE={forecast_hours} ***")
+
+                        virtual = virtual_team_map.get(role)
+
+                        if not virtual:
+                            _debug_log(f"      ERROR: No virtual worker for role {role}")
+                            return {
+                                'success': False,
+                                'error': f'╨Ф╨╗╤П ╤А╨╛╨╗╨╕ "{role}" ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜ ╨▓╨╕╤А╤В╤Г╨░╨╗╤М╨╜╤Л╨╣ ╤Г╤З╨░╤Б╤В╨╜╨╕╨║ ╨▓ ╨║╨╛╨╝╨░╨╜╨┤╨╡ ╨┐╤А╨╛╨╡╨║╤В╨░. ╨Э╨╡╨▓╨╛╨╖╨╝╨╛╨╢╨╜╨╛ ╤А╨░╤Б╨┐╤А╨╡╨┤╨╡╨╗╨╕╤В╤М ╨╛╤Б╤В╨░╤В╨╛╨║ ╨┐╤А╨╛╨│╨╜╨╛╨╖╨╜╤Л╤Е ╤З╨░╤Б╨╛╨▓ ({round(forecast_hours - total_pwa_hours, 2)}╤З).'
+                            }
+                            should_stop = True
+                            break
+
+                        if not confirm_recalc:
+                            return {
+                                'success': False,
+                                'needs_confirmation': True,
+                                'message': f'╨Ю╨▒╨╜╨░╤А╤Г╨╢╨╡╨╜╨░ ╨╜╨╡╨┤╨╛╨│╤А╤Г╨╖╨║╨░: ╨┐╤А╨╛╨│╨╜╨╛╨╖╨╜╤Л╨╡ ╤В╤А╤Г╨┤╨╛╨╖╨░╤В╤А╨░╤В╤Л ({forecast_hours}╤З) ╨┐╤А╨╡╨▓╤Л╤И╨░╤О╤В ╨╜╨░╨╖╨╜╨░╤З╨╡╨╜╨╜╤Г╤О ╨╖╨░╨│╤А╤Г╨╖╨║╤Г ({round(total_pwa_hours, 2)}╤З) ╨┐╨╛ ╨╖╨░╨┤╨░╤З╨╡ "{task}", ╤А╨╛╨╗╨╕ "{role}", ╨┐╨╡╤А╨╕╨╛╨┤╤Г {period_key}. ╨С╤Г╨┤╨╡╤В ╨╕╤Б╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╨╜ ╨▓╨╕╤А╤В╤Г╨░╨╗╤М╨╜╤Л╨╣ ╤Г╤З╨░╤Б╤В╨╜╨╕╨║ ╨┤╨╗╤П ╨┐╨╛╨║╤А╤Л╤В╨╕╤П ╨╛╤Б╤В╨░╤В╨║╨░ ({round(forecast_hours - total_pwa_hours, 2)}╤З). ╨Я╤А╨╛╨┤╨╛╨╗╨╢╨╕╤В╤М?',
+                                'task': task,
+                                'role': role,
+                                'period': period_key,
+                                'forecast_hours': forecast_hours,
+                                'total_pwa_hours': total_pwa_hours
+                            }
+                            should_stop = True
+                            break
+                        else:
+                            _debug_log(f"      User confirmed, adding virtual worker for role {role}")
+
+                            virtual_hours = forecast_hours - total_pwa_hours
+
+                            if rate_source_field == "pt_category":
+                                parent_value = virtual.get("pt_category")
+                            else:
+                                parent_value = virtual.get("pt_cost_level")
+
+                            if not parent_value:
+                                _debug_log(f"      ERROR: No rate source for virtual worker role {role}")
+                                return {
+                                    'success': False,
+                                    'error': f'╨Ф╨╗╤П ╨▓╨╕╤А╤В╤Г╨░╨╗╤М╨╜╨╛╨│╨╛ ╤Г╤З╨░╤Б╤В╨╜╨╕╨║╨░ ╤А╨╛╨╗╨╕ "{role}" ╨╜╨╡ ╨╖╨░╨┐╨╛╨╗╨╜╨╡╨╜╨░ ╤Б╤В╨░╨▓╨║╨░.'
+                                }
+                                should_stop = True
+                                break
+
+                            parent_rates = rates.get(parent_value, [])
+                            if not parent_rates:
+                                _debug_log(f"      No rates found for parent={parent_value}")
+                                continue
+
+                            applicable_rate = None
+                            for rate_info in parent_rates:
+                                valid_from = rate_info.get('valid_from')
+                                if valid_from and valid_from <= period_date:
+                                    applicable_rate = rate_info
+                                else:
+                                    break
+
+                            if not applicable_rate:
+                                applicable_rate = parent_rates[-1] if parent_rates else None
+
+                            if not applicable_rate:
+                                _debug_log(f"      No applicable rate for virtual worker role {role}")
+                                continue
+
+                            user_type = virtual.get("worker_type")
+                            _debug_log(f"      Virtual worker user_type: {user_type}")
+
+                            applicable_account = None
+                            for at in account_table:
+                                valid_from = at.get('ac_valid_from')
+                                if at.get('ac_type') == user_type:
+                                    if not valid_from or valid_from <= period_date:
+                                        applicable_account = at.get('ac_account')
+                                        _debug_log(f"      Found account for virtual worker: {applicable_account} (type={user_type})")
+                                        break
+
+                            if not applicable_account:
+                                _debug_log(f"      No account found for user_type={user_type}")
+                                continue
+
+                            users_for_period.append({
+                                'user': f'VIRTUAL_{role}',
+                                'workload_type': 'Виртуальный участник',
+                                'percentage': 0,
+                                'original_hours': virtual_hours,
+                                'rate': applicable_rate.get('rate'),
+                                'currency': applicable_rate.get('currency'),
+                                'user_type': user_type,
+                                'applicable_account': applicable_account,
+                                'has_task_dimension': applicable_account in accounts_with_task_dimension,
+                                'team_detail': virtual,
+                                'is_virtual': True
+                            })
+
+                            _debug_log(f"      Added virtual worker for {role}: {virtual_hours}h at rate {applicable_rate.get('rate')} {applicable_rate.get('currency')}")
+
+                    # ╨Р╨│╤А╨╡╨│╨╕╤А╤Г╨╡╨╝ ╤Б╤Г╨╝╨╝╤Л ╨┐╨╛ ╤Б╤В╨░╤В╤М╤П╨╝
+                    for u in users_for_period:
+                        amount = u.get('original_hours', 0) * u.get('rate', 0)
+                        applicable_account = u.get('applicable_account')
+                        has_task_dimension = u.get('has_task_dimension', False)
+
+                        _debug_log(f"      User: {u.get('user')}, hours={u.get('original_hours')}, rate={u.get('rate')}, amount={amount}, account={applicable_account}")
+
+                        key = (applicable_account, year, month, has_task_dimension)
+                        if key not in aggregated_by_account_for_task:
+                            aggregated_by_account_for_task[key] = {
+                                'total_amount': 0,
+                                'users': [],
+                                'has_task_dimension': has_task_dimension,
+                                'account': applicable_account,
+                                'year': year,
+                                'month': month
+                            }
+                        aggregated_by_account_for_task[key]['total_amount'] = aggregated_by_account_for_task[key]['total_amount'] + amount
+                        if u.get('user') not in aggregated_by_account_for_task[key]['users']:
+                            aggregated_by_account_for_task[key]['users'].append(u.get('user'))
+
+                if should_stop:
+                    break
+
+            if should_stop:
+                break
+
+            # ╨Ч╨░╨┐╨╕╤Б╤Л╨▓╨░╨╡╨╝ ╨░╨│╤А╨╡╨│╨╕╤А╨╛╨▓╨░╨╜╨╜╤Л╨╡ ╤Б╤Г╨╝╨╝╤Л ╨▓ ╨▒╤О╨┤╨╢╨╡╤В
+            for key, acc_data in aggregated_by_account_for_task.items():
+                total_amount = acc_data['total_amount']
+
+                if total_amount == 0:
+                    _debug_log(f"      Skipping zero amount for account={acc_data['account']}, year={acc_data['year']}, month={acc_data['month']}")
+                    continue
+
+                users_list = ', '.join(set(acc_data['users']))
+                applicable_account = acc_data['account']
+                year = acc_data['year']
+                month = acc_data['month']
+                has_task_dimension = acc_data['has_task_dimension']
+
+                _debug_log(f"      Writing to budget: account={applicable_account}, year={year}, month={month}, total_amount={total_amount}, users=[{users_list}]")
+
+                # ╨Ш╤Й╨╡╨╝ ╤Б╤Г╤Й╨╡╤Б╤В╨▓╤Г╤О╤Й╨╕╨╣ Project Budget
+                ProjectBudget = frappe.qb.DocType('Project Budget')
+                ProjectBudgetDimension = frappe.qb.DocType('Project Budget Dimension')
+
+                if has_task_dimension:
+                    pb_query = (
+                        frappe.qb.from_(ProjectBudget)
+                        .left_join(ProjectBudgetDimension)
+                        .on(ProjectBudgetDimension.parent == ProjectBudget.name)
+                        .select(ProjectBudget.name)
+                        .where(ProjectBudget.pb_project == project)
+                        .where(ProjectBudget.pb_account == applicable_account)
+                        .where(ProjectBudgetDimension.doc == 'Task')
+                        .where(ProjectBudgetDimension.docname == task)
+                        .limit(1)
+                    )
+                    pb_result = pb_query.run(as_dict=True)
+                    pb_name = pb_result[0].get('name') if pb_result else None
+                else:
+                    pb_query = (
+                        frappe.qb.from_(ProjectBudget)
+                        .select(ProjectBudget.name)
+                        .where(ProjectBudget.pb_project == project)
+                        .where(ProjectBudget.pb_account == applicable_account)
+                        .limit(1)
+                    )
+                    pb_result = pb_query.run(as_dict=True)
+                    pb_name = pb_result[0].get('name') if pb_result else None
+
+                if pb_name:
+                    doc = frappe.get_doc("Project Budget", pb_name)
+                    _debug_log(f"      Found existing Project Budget: {pb_name}")
+
+                    if has_task_dimension:
+                        task_dimension_exists = False
+                        for dim in doc.project_budget_dimension:
+                            if dim.doc == "Task" and dim.docname == task:
+                                task_dimension_exists = True
+                                break
+
+                        if not task_dimension_exists:
+                            doc.append("project_budget_dimension", {
+                                "doc": "Task",
+                                "docname": task
+                            })
+                            _debug_log(f"      Added missing Task dimension: {task}")
+                else:
+                    doc = frappe.new_doc("Project Budget")
+                    doc.pb_project = project
+                    doc.pb_account = applicable_account
+
+                    if has_task_dimension:
+                        doc.append("project_budget_dimension", {
+                            "doc": "Task",
+                            "docname": task
+                        })
+                        _debug_log(f"      Added Task dimension: {task}")
+
+                    doc.insert()
+                    _debug_log(f"      Created new Project Budget: {doc.name}")
+
+                # ╨Ю╨▒╨╜╨╛╨▓╨╗╤П╨╡╨╝ ╨┐╤А╨╛╨│╨╜╨╛╨╖ ╨┤╨╗╤П ╨┐╨╡╤А╨╕╨╛╨┤╨░
+                amount_exists = False
+                for amount_row in doc.project_budget_amount:
+                    if int(amount_row.pba_year) == int(year) and int(amount_row.pba_month) == int(month):
+                        old_value = amount_row.pba_expected
+                        amount_row.pba_expected = total_amount
+                        amount_exists = True
+                        _debug_log(f"      >>> UPDATED amount for {year}-{month}: {old_value} -> {total_amount}")
+                        break
+
+                if not amount_exists:
+                    doc.append("project_budget_amount", {
+                        "pba_year": year,
+                        "pba_month": month,
+                        "pba_expected": total_amount
+                    })
+                    _debug_log(f"      Added NEW amount for {year}-{month}: {total_amount}")
+
+                doc.save()
+                updated_count += 1
+                _debug_log(f"      Saved Project Budget: {doc.name}")
+
+                results.append({
+                    'task': task,
+                    'year': year,
+                    'month': month,
+                    'total_amount': total_amount,
+                    'account': applicable_account,
+                    'users': users_list
+                })
+
+        if should_stop:
+            _debug_log("STEP 9: Stopped due to confirmation request")
+        else:
+            _debug_log("STEP 9: Calculations completed")
+            _debug_log(f"  Total results: {len(results)}")
+            _debug_log(f"  Budget records updated: {updated_count}")
+
+            frappe.log(f"Forecast added: {updated_count} budget records updated")
+
+            return {
+                'success': True,
+                'message': f'╨а╨░╤Б╤Б╤З╨╕╤В╨░╨╜╨╛ {len(results)} ╤Б╤Г╨╝╨╝. ╨Ю╨▒╨╜╨╛╨▓╨╗╨╡╨╜╨╛ {updated_count} ╨╖╨░╨┐╨╕╤Б╨╡╨╣ ╨▓ ╨▒╤О╨┤╨╢╨╡╤В╨╡.',
+                'results': results,
+                'updated_count': updated_count
+            }
