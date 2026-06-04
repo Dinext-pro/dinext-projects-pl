@@ -51,14 +51,14 @@ function show_tasks_selection_dialog(frm) {
                     return;
                 }
                 
-                // ╨б╤В╤А╨╛╨╕╨╝ ╨┤╨░╨╜╨╜╤Л╨╡ ╨┤╨╗╤П DataTable ╨▓ ╤Д╨╛╤А╨╝╨░╤В╨╡ ╨┤╨╡╤А╨╡╨▓╨░
+                // Строим данные для DataTable в формате дерева
                 let allTasks = frm.aggregatedTasks ? Object.values(frm.aggregatedTasks) : [];
                 let tasksMap = {};
                 tasks.forEach(task => {
                     tasksMap[task.task] = task;
                 });
                 
-                // ╨Э╨░╤Е╨╛╨┤╨╕╨╝ ╨╖╨░╨┤╨░╤З╨╕ ╤Б ╨┤╨░╨╜╨╜╤Л╨╝╨╕ ╨╕ ╨╕╤Е ╤А╨╛╨┤╨╕╤В╨╡╨╗╨╡╨╣
+                // Находим задачи с данными и их родителей
                 let tasksWithData = new Set();
                 allTasks.forEach(task => {
                     if (tasksMap[task.value] && (tasksMap[task.value].total_forecast > 0 || tasksMap[task.value].total_assigned > 0)) {
@@ -75,7 +75,7 @@ function show_tasks_selection_dialog(frm) {
                     }
                 });
                 
-                // ╨б╤В╤А╨╛╨╕╨╝ table_data ╨┤╨╗╤П DataTable
+                // Строим table_data для DataTable
                 let table_data = [];
                 let processedTasks = new Set();
                 
@@ -110,10 +110,10 @@ function show_tasks_selection_dialog(frm) {
                 rootTasks.sort((a, b) => (a.subject || '').localeCompare(b.subject || ''));
                 rootTasks.forEach(task => addTaskToTable(task.value, null, 0));
                 
-                // ╨а╨░╤Б╤Б╤З╨╕╤В╤Л╨▓╨░╨╡╨╝ ╨▓╤Л╤Б╨╛╤В╤Г ╤В╨░╨▒╨╗╨╕╤Ж╤Л
+                // Рассчитываем высоту таблицы
                 let tableHeight = Math.min(500, Math.max(200, table_data.length * 30 + 40));
                 
-                // ╨б╨╛╨╖╨┤╨░╨╡╨╝ ╨┤╨╕╨░╨╗╨╛╨│
+                // Создаем диалог
                 let dialog = new frappe.ui.Dialog({
                     title: __("Выберите задачи для добавления прогноза в бюджет"),
                     size: "large",
@@ -168,7 +168,7 @@ function show_tasks_selection_dialog(frm) {
                 
                 dialog.show();
                 
-                // ╨б╨╛╨╖╨┤╨░╨╡╨╝ DataTable
+                // Создаем DataTable
                 setTimeout(() => {
                     let container = dialog.$wrapper.find('.tasks-datatable-container');
                     
@@ -220,7 +220,7 @@ function show_tasks_selection_dialog(frm) {
                         cellHeight: 30
                     });
                     
-                    // ╨б╨║╤А╤Л╨▓╨░╨╡╨╝ ╤З╨╡╨║╨▒╨╛╨║╤Б╤Л ╨┤╨╗╤П ╤Б╤В╤А╨╛╨║ ╨▒╨╡╨╖ ╨┤╨░╨╜╨╜╤Л╤Е
+                    // Скрываем чекбоксы для строк без данных
                     setTimeout(() => {
                         container.find('.dt-row').each(function() {
                             let rowIndex = $(this).data('row-index');
@@ -256,7 +256,7 @@ function add_forecast_to_budget(frm, selectedTasks, tasksDetails, confirmRecalc 
         return;
     }
     
-    // ╨д╨╕╨╗╤М╤В╤А╤Г╨╡╨╝ ╨┤╨╡╤В╨░╨╗╨╕╨╖╨░╤Ж╨╕╤О ╤В╨╛╨╗╤М╨║╨╛ ╨┐╨╛ ╨▓╤Л╨▒╤А╨░╨╜╨╜╤Л╨╝ ╨╖╨░╨┤╨░╤З╨░╨╝
+    // Фильтруем детализацию только по выбранным задачам
     let filteredDetails = {};
     selectedTasks.forEach(task => {
         if (tasksDetails[task]) {
@@ -275,7 +275,7 @@ function add_forecast_to_budget(frm, selectedTasks, tasksDetails, confirmRecalc 
             project: frm.doc.name,
             tasks: selectedTasks,
             forecast_details: filteredDetails,
-            confirm_recalc: confirmRecalc  // ╨┤╨╛╨▒╨░╨▓╨╗╤П╨╡╨╝ ╤Д╨╗╨░╨│ ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╤П
+            confirm_recalc: confirmRecalc  // добавляем флаг подтверждения
         },
         freeze: true,
         freeze_message: __("Добавление прогноза в бюджет..."),
@@ -291,11 +291,11 @@ function add_forecast_to_budget(frm, selectedTasks, tasksDetails, confirmRecalc 
                 render_pl_chart(frm);
                 
             } else if (r.message && r.message.needs_confirmation) {
-                // ╨Я╨╛╨║╨░╨╖╤Л╨▓╨░╨╡╨╝ ╨┤╨╕╨░╨╗╨╛╨│ ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╤П ╨┐╨╡╤А╨╡╤Б╤З╨╡╤В╨░
+                // Показываем диалог подтверждения пересчета
                 frappe.confirm(
                     __("Обнаружено превышение загрузки над прогнозом. Желаете выполнить пересчёт прогноза на основе текущей загрузки?"),
                     () => {
-                        // ╨Я╨╛╨▓╤В╨╛╤А╨╜╤Л╨╣ ╨▓╤Л╨╖╨╛╨▓ ╤Б ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╨╡╨╝
+                        // Повторный вызов с подтверждением
                         add_forecast_to_budget(frm, selectedTasks, tasksDetails, true);
                     },
                     () => {
@@ -323,19 +323,19 @@ function clearBudgetCache() {
 }
 
 function add_forecast_from_work_efforts_handler(frm) {
-    // ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝, ╤З╤В╨╛ ╨┤╨░╨╜╨╜╤Л╨╡ ╤В╤А╤Г╨┤╨╛╨╖╨░╤В╤А╨░╤В ╨╖╨░╨│╤А╤Г╨╢╨╡╨╜╤Л
+    // Проверяем, что данные трудозатрат загружены
     if (!frm.aggregatedTasks || Object.keys(frm.aggregatedTasks).length === 0) {
         frappe.msgprint(__("Сначала дождитесь загрузки данных трудозатрат"));
         return;
     }
     
-    // ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝, ╤З╤В╨╛ ╨┤╨░╨╜╨╜╤Л╨╡ ╨▒╤О╨┤╨╢╨╡╤В╨░ ╨╖╨░╨│╤А╤Г╨╢╨╡╨╜╤Л
+    // Проверяем, что данные бюджета загружены
     if (!frm.aggregatedBudget || Object.keys(frm.aggregatedBudget).length === 0) {
         frappe.msgprint(__("Сначала дождитесь загрузки данных бюджета"));
         return;
     }
     
-    // ╨Я╨╛╨║╨░╨╖╤Л╨▓╨░╨╡╨╝ ╨┤╨╕╨░╨╗╨╛╨│ ╤Б ╨┤╨╡╤А╨╡╨▓╨╛╨╝ ╨╖╨░╨┤╨░╤З ╨┤╨╗╤П ╨▓╤Л╨▒╨╛╤А╨░
+    // Показываем диалог с деревом задач для выбора
     show_tasks_selection_dialog(frm);
 }
 
