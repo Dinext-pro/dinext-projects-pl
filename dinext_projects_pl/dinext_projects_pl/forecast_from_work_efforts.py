@@ -357,9 +357,10 @@ def run_add_forecast_from_work_efforts(fd):
 
                 for period_key, hours_data in periods.items():
                     forecast_hours = hours_data.get('forecast_hours', 0)
+                    plan_hours = hours_data.get('plan_hours', 0)
                     users_data = hours_data.get('users', {})
 
-                    _debug_log(f"    Period: {period_key}, forecast={forecast_hours}, users={len(users_data)}")
+                    _debug_log(f"    Period: {period_key}, forecast={forecast_hours}, plan={plan_hours}, users={len(users_data)}")
 
                     # Пропускаем только если нет прогноза
                     if forecast_hours == 0:
@@ -453,11 +454,14 @@ def run_add_forecast_from_work_efforts(fd):
                         assigned = user_forecast_info.get('assigned_hours', 0)
 
                         if workload_type == 'В % от трудоемкости задачи':
-                            original_hours = forecast_hours
+                            # Загрузка «% от трудоёмкости» считается от плана (pwea_plan), не от прогноза
+                            original_hours = assigned
+                            if not original_hours and plan_hours and percentage:
+                                original_hours = plan_hours * percentage / 100
                         else:
                             original_hours = assigned
 
-                        _debug_log(f"      User: {user}, type={workload_type}, hours={original_hours}")
+                        _debug_log(f"      User: {user}, type={workload_type}, hours={original_hours}, plan={plan_hours}")
 
                         users_for_period.append({
                             'user': user,
