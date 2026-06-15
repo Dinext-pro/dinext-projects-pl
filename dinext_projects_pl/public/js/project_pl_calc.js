@@ -205,6 +205,78 @@ function calc_column_total(frm, period, roots, calc_plan = true, calc_fact = fal
 }
 
 /**
+ * Прогнозные затраты по одному периоду (только forecast_*, без fact для прошлых месяцев).
+ */
+function get_period_forecast_expenses(frm, period, roots) {
+    let forecast_expenses = 0;
+
+    for (const child of roots) {
+        if (child.type !== "Expense") {
+            continue;
+        }
+
+        const bucket = Array.isArray(child.dimension_data) && child.dimension_data.length
+            ? child.dimension_data[0]
+            : {};
+        const forecastKey = `forecast_${period.year}_${period.month}`;
+        let forecast = Number(bucket[forecastKey]) || 0;
+
+        if (!forecast) {
+            forecast = get_child_budget_sum(child.value, "", [], period, frm.aggregatedBudget, "forecast");
+        }
+
+        if (!forecast_expenses && forecast) {
+            forecast_expenses = forecast;
+        }
+
+        if (forecast_expenses) {
+            break;
+        }
+    }
+
+    return forecast_expenses;
+}
+
+/**
+ * Сумма всех прогнозных затрат проекта по затратным P&L-счетам (forecast / pba_expected).
+ */
+function get_total_forecast_expenses(frm) {
+    if (!frm || !frm.aggregatedBudget) {
+        return 0;
+    }
+
+    const periods = get_budget_display_periods(frm, "month");
+    const roots = Object.values(frm.aggregatedBudget).filter(b => !b.parent_account && !b.task);
+    let total = 0;
+
+    for (const period of periods) {
+        total += get_period_forecast_expenses(frm, period, roots);
+    }
+
+    return parseFloat(total.toFixed(2));
+}
+
+function is_pl_expense_account(frm, account) {
+    if (!frm || !frm.aggregatedBudget || !account) {
+        return false;
+    }
+
+    const row = Object.values(frm.aggregatedBudget).find(b => b.value === account);
+    return Boolean(row && row.type === "Expense");
+}
+
+/**
+ * Обновляет estimated_costing в форме проекта без сохранения документа.
+ */
+function sync_estimated_costing_from_forecast(frm) {
+    if (!frm) {
+        return;
+    }
+
+    frm.set_value("estimated_costing", get_total_forecast_expenses(frm));
+}
+
+/**
  * Обновляет/создаёт запись dimension_data для конкретного child в frm.aggregatedBudget,
  * а затем точечно инвалидирует кеши, которые могли зависеть от этой записи.
  *
