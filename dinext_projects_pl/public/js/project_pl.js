@@ -1270,6 +1270,9 @@ function updateBudgetValue(project, account, dim, year, month, new_value) {
         // Обновляем UI
         let task = dim?.find(d => d.doc == "Task")?.docname;
         updateBudgetDimensionEntry(cur_frm, account, task, dim, year, month, "forecast", new_value);
+        if (is_pl_expense_account(cur_frm, account)) {
+            sync_estimated_costing_from_forecast(cur_frm);
+        }
         updateBudgetTable(cur_frm, "month");
         render_pl_chart(cur_frm, false);
         
