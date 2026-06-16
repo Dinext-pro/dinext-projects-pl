@@ -185,9 +185,6 @@ def _process_single_forecast_type(project, selected_tasks, forecast_details, con
     if forecast_type == "revenue":
         rate_source_field = "pt_category"
         rate_parenttype = "Rate Category"
-    elif payment_scheme == "Время и затраты (T&M)":
-        rate_source_field = "pt_category"
-        rate_parenttype = "Rate Category"
     else:
         rate_source_field = "pt_cost_level"
         rate_parenttype = "Cost Level"
