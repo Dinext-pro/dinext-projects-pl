@@ -1,7 +1,13 @@
-/* ISS-2025-03107: P&L menu item "На основании прогноза трудозатрат". */
+/* ISS-2025-03107 / ISS-2025-02857: P&L «Добавить прогноз» из прогноза трудозатрат. */
 frappe.provide("dinext_projects");
 
 const DINEXT_PL_FORECAST_FROM_WE_MENU_FLAG = "__dinext_pl_forecast_from_we";
+const DINEXT_PL_FORECAST_COST_LABEL = __("Затрат на основании прогноза трудозатрат");
+const DINEXT_PL_FORECAST_REVENUE_LABEL = __("Выручки на основании прогноза трудозатрат");
+
+function dinext_pl_is_tm_project(frm) {
+    return frm.doc.custom_payment_scheme === "Время и затраты (T&M)";
+}
 
 function dinext_pl_register_forecast_from_we_menu(frm) {
     if (!frm || frm.is_new()) {
@@ -15,16 +21,23 @@ function dinext_pl_register_forecast_from_we_menu(frm) {
         (item) => !item[DINEXT_PL_FORECAST_FROM_WE_MENU_FLAG]
     );
     dinext_projects.project_pl_forecast_menu.push({
-        label: __("На основании прогноза трудозатрат"),
-        action: add_forecast_from_work_efforts_handler,
+        label: DINEXT_PL_FORECAST_COST_LABEL,
+        action: (frm) => add_forecast_from_work_efforts_handler(frm, "cost"),
         [DINEXT_PL_FORECAST_FROM_WE_MENU_FLAG]: true,
     });
+    if (dinext_pl_is_tm_project(frm)) {
+        dinext_projects.project_pl_forecast_menu.push({
+            label: DINEXT_PL_FORECAST_REVENUE_LABEL,
+            action: (frm) => add_forecast_from_work_efforts_handler(frm, "revenue"),
+            [DINEXT_PL_FORECAST_FROM_WE_MENU_FLAG]: true,
+        });
+    }
     if (typeof dinext_projects.refresh_pl_forecast_dropdown === "function") {
         dinext_projects.refresh_pl_forecast_dropdown(frm);
     }
 }
 
-function show_tasks_selection_dialog(frm) {
+function show_tasks_selection_dialog(frm, forecastMode = "cost") {
     let periods = get_budget_display_periods(frm, "month");
     
     frappe.show_alert({
@@ -113,10 +126,9 @@ function show_tasks_selection_dialog(frm) {
                 // Рассчитываем высоту таблицы
                 let tableHeight = Math.min(500, Math.max(200, table_data.length * 30 + 40));
 
-                let is_tm_project = frm.doc.custom_payment_scheme === "Время и затраты (T&M)";
+                const is_revenue = forecastMode === "revenue";
 
                 function open_tasks_selection_dialog(income_accounts) {
-                // Собираем поля динамически
                 let dialog_fields = [
                     {
                         fieldtype: "HTML",
@@ -125,26 +137,13 @@ function show_tasks_selection_dialog(frm) {
                     }
                 ];
 
-                if (is_tm_project) {
-                    dialog_fields.push({
-                        fieldtype: "Select",
-                        fieldname: "forecast_type",
-                        label: __("Тип прогноза"),
-                        options: [
-                            __("Только затраты"),
-                            __("Только выручка"),
-                            __("Выручка и затраты")
-                        ],
-                        default: __("Только затраты")
-                    });
-
+                if (is_revenue) {
                     dialog_fields.push({
                         fieldtype: "Link",
                         fieldname: "income_account",
                         label: __("Счёт доходов"),
                         options: "Account",
-                        hidden: true,
-                        reqd: false,
+                        reqd: true,
                         get_query: function() {
                             let filters = {
                                 company: frm.doc.company,
@@ -161,7 +160,6 @@ function show_tasks_selection_dialog(frm) {
                     });
                 }
 
-                // Информационный блок
                 dialog_fields.push({
                     fieldtype: "HTML",
                     fieldname: "info_html",
@@ -174,7 +172,6 @@ function show_tasks_selection_dialog(frm) {
                     `
                 });
 
-                // Создаём диалог
                 let dialog = new frappe.ui.Dialog({
                     title: __("Выберите задачи для добавления прогноза в бюджет"),
                     size: "large",
@@ -201,18 +198,15 @@ function show_tasks_selection_dialog(frm) {
                             return;
                         }
                         
-                        // Собираем параметры
-                        let forecast_type = is_tm_project ? dialog.get_value("forecast_type") : __("Только затраты");
-                        let income_account = is_tm_project ? dialog.get_value("income_account") : null;
+                        let income_account = is_revenue ? dialog.get_value("income_account") : null;
                         
-                        // Валидация: для выручки нужен счёт
-                        if (is_tm_project && forecast_type !== __("Только затраты") && !income_account) {
+                        if (is_revenue && !income_account) {
                             frappe.msgprint(__("Выберите счёт доходов"));
                             return;
                         }
                         
                         dialog.hide();
-                        add_forecast_to_budget(frm, selectedTasks, tasksDetails, false, forecast_type, income_account);
+                        add_forecast_to_budget(frm, selectedTasks, tasksDetails, false, forecastMode, income_account);
                     },
                     secondary_action_label: __("Отмена"),
                     secondary_action: function() {
@@ -222,25 +216,21 @@ function show_tasks_selection_dialog(frm) {
                 
                 dialog.show();
 
-                if (is_tm_project) {
-                    dialog.fields_dict.forecast_type.$input.on("change", function() {
-                        let val = dialog.get_value("forecast_type");
-                        let show_income = val === __("Только выручка") || val === __("Выручка и затраты");
-                        dialog.set_df_property("income_account", "hidden", !show_income);
-                        dialog.set_df_property("income_account", "reqd", show_income);
-                    });
-
-                    frappe.db.get_value("Company", frm.doc.company, "default_income_account", function(r) {
-                        if (!r || !r.default_income_account) {
-                            return;
-                        }
-                        if (!income_accounts.length || income_accounts.includes(r.default_income_account)) {
-                            dialog.set_value("income_account", r.default_income_account);
-                        }
-                    });
+                if (is_revenue) {
+                    if (income_accounts.length === 1) {
+                        dialog.set_value("income_account", income_accounts[0]);
+                    } else {
+                        frappe.db.get_value("Company", frm.doc.company, "default_income_account", function(r) {
+                            if (!r || !r.default_income_account) {
+                                return;
+                            }
+                            if (!income_accounts.length || income_accounts.includes(r.default_income_account)) {
+                                dialog.set_value("income_account", r.default_income_account);
+                            }
+                        });
+                    }
                 }
                 
-                // Создаем DataTable
                 setTimeout(() => {
                     let container = dialog.$wrapper.find('.tasks-datatable-container');
                     
@@ -292,7 +282,6 @@ function show_tasks_selection_dialog(frm) {
                         cellHeight: 30
                     });
                     
-                    // Скрываем чекбоксы для строк без данных
                     setTimeout(() => {
                         container.find('.dt-row').each(function() {
                             let rowIndex = $(this).data('row-index');
@@ -311,7 +300,7 @@ function show_tasks_selection_dialog(frm) {
 
                 } // open_tasks_selection_dialog
 
-                if (is_tm_project) {
+                if (is_revenue) {
                     frappe.call({
                         method: "frappe.desk.search.search_link",
                         args: {
@@ -346,21 +335,14 @@ function show_tasks_selection_dialog(frm) {
     });
 }
 
-function add_forecast_to_budget(frm, selectedTasks, tasksDetails, confirmRecalc = false, forecastType = null, incomeAccount = null) {
+function add_forecast_to_budget(frm, selectedTasks, tasksDetails, confirmRecalc = false, forecastType = "cost", incomeAccount = null) {
     if (!selectedTasks || selectedTasks.length === 0) {
         frappe.msgprint(__("Не выбрано ни одной задачи"));
         return;
     }
 
-    // Маппинг значений селекта в серверные значения
-    let forecastTypeMap = {
-        "Только затраты": "cost",
-        "Только выручка": "revenue",
-        "Выручка и затраты": "both"
-    };
-    let serverForecastType = forecastTypeMap[forecastType] || "cost";
+    let serverForecastType = forecastType === "revenue" ? "revenue" : "cost";
     
-    // Фильтруем детализацию только по выбранным задачам
     let filteredDetails = {};
     selectedTasks.forEach(task => {
         if (tasksDetails[task]) {
@@ -397,11 +379,9 @@ function add_forecast_to_budget(frm, selectedTasks, tasksDetails, confirmRecalc 
                 render_pl_chart(frm);
                 
             } else if (r.message && r.message.needs_confirmation) {
-                // Показываем диалог подтверждения пересчета
                 frappe.confirm(
                     __("Обнаружено превышение загрузки над прогнозом. Желаете выполнить пересчёт прогноза на основе текущей загрузки?"),
                     () => {
-                        // Повторный вызов с подтверждением
                         add_forecast_to_budget(frm, selectedTasks, tasksDetails, true, forecastType, incomeAccount);
                     },
                     () => {
@@ -428,21 +408,60 @@ function clearBudgetCache() {
     }
 }
 
-function add_forecast_from_work_efforts_handler(frm) {
-    // Проверяем, что данные трудозатрат загружены
-    if (!frm.aggregatedTasks || Object.keys(frm.aggregatedTasks).length === 0) {
-        frappe.msgprint(__("Сначала дождитесь загрузки данных трудозатрат"));
-        return;
-    }
-    
-    // Проверяем, что данные бюджета загружены
+function ensureProjectWorkEffortsTasks(frm) {
+    return new Promise((resolve, reject) => {
+        if (frm.aggregatedTasks && Object.keys(frm.aggregatedTasks).length > 0) {
+            resolve(frm.aggregatedTasks);
+            return;
+        }
+
+        frappe.call({
+            method: "get_work_efforts_consolidated_data",
+            args: {
+                project: frm.doc.name,
+                view_options: frm.view_options || frm.budget_view_options || __("Прогноз и факт"),
+            },
+            freeze: true,
+            freeze_message: __("Загрузка данных трудозатрат..."),
+            callback(r) {
+                if (!r.message) {
+                    frappe.msgprint(__("Не удалось загрузить данные трудозатрат"));
+                    reject();
+                    return;
+                }
+
+                frm.aggregatedTasks = {};
+                (r.message || []).forEach((task) => {
+                    if (task && task.value) {
+                        frm.aggregatedTasks[task.value] = task;
+                    }
+                });
+
+                if (Object.keys(frm.aggregatedTasks).length === 0) {
+                    frappe.msgprint(__("Нет задач с трудозатратами в проекте"));
+                    reject();
+                    return;
+                }
+
+                resolve(frm.aggregatedTasks);
+            },
+            error() {
+                frappe.msgprint(__("Ошибка при загрузке данных трудозатрат"));
+                reject();
+            },
+        });
+    });
+}
+
+function add_forecast_from_work_efforts_handler(frm, forecastMode = "cost") {
     if (!frm.aggregatedBudget || Object.keys(frm.aggregatedBudget).length === 0) {
         frappe.msgprint(__("Сначала дождитесь загрузки данных бюджета"));
         return;
     }
-    
-    // Показываем диалог с деревом задач для выбора
-    show_tasks_selection_dialog(frm);
+
+    ensureProjectWorkEffortsTasks(frm).then(() => {
+        show_tasks_selection_dialog(frm, forecastMode);
+    });
 }
 
 function escape_html(str) {
