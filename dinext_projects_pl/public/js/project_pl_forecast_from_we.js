@@ -112,7 +112,10 @@ function show_tasks_selection_dialog(frm) {
                 
                 // Рассчитываем высоту таблицы
                 let tableHeight = Math.min(500, Math.max(200, table_data.length * 30 + 40));
-                
+
+                let is_tm_project = frm.doc.custom_payment_scheme === "Время и затраты (T&M)";
+
+                function open_tasks_selection_dialog(income_accounts) {
                 // Собираем поля динамически
                 let dialog_fields = [
                     {
@@ -122,20 +125,8 @@ function show_tasks_selection_dialog(frm) {
                     }
                 ];
 
-                // Для T&M проектов добавляем селект типа прогноза и поле счёта доходов
-                let is_tm_project = frm.doc.custom_payment_scheme === "Время и затраты (T&M)";
-                let forecast_type_field = null;
-                let income_account_field = null;
-
                 if (is_tm_project) {
-                    // Загружаем default_income_account компании
-                    frappe.db.get_value("Company", frm.doc.company, "default_income_account", function(r) {
-                        if (r && r.default_income_account && income_account_field) {
-                            income_account_field.set_value(r.default_income_account);
-                        }
-                    });
-
-                    forecast_type_field = {
+                    dialog_fields.push({
                         fieldtype: "Select",
                         fieldname: "forecast_type",
                         label: __("Тип прогноза"),
@@ -145,9 +136,9 @@ function show_tasks_selection_dialog(frm) {
                             __("Выручка и затраты")
                         ],
                         default: __("Только затраты")
-                    };
+                    });
 
-                    income_account_field = {
+                    dialog_fields.push({
                         fieldtype: "Link",
                         fieldname: "income_account",
                         label: __("Счёт доходов"),
@@ -155,18 +146,19 @@ function show_tasks_selection_dialog(frm) {
                         hidden: true,
                         reqd: false,
                         get_query: function() {
-                            return {
-                                filters: {
-                                    company: frm.doc.company,
-                                    root_type: "Income",
-                                    is_group: 0
-                                }
+                            let filters = {
+                                company: frm.doc.company,
+                                root_type: "Income",
+                                is_group: 0
                             };
+                            if (income_accounts.length) {
+                                filters.name = ["in", income_accounts];
+                            } else {
+                                filters.name = ["=", "__no_income_accounts__"];
+                            }
+                            return { filters: filters };
                         }
-                    };
-
-                    dialog_fields.push(forecast_type_field);
-                    dialog_fields.push(income_account_field);
+                    });
                 }
 
                 // Информационный блок
@@ -230,13 +222,21 @@ function show_tasks_selection_dialog(frm) {
                 
                 dialog.show();
 
-                // onchange для селекта (добавить после dialog.show())
                 if (is_tm_project) {
                     dialog.fields_dict.forecast_type.$input.on("change", function() {
                         let val = dialog.get_value("forecast_type");
                         let show_income = val === __("Только выручка") || val === __("Выручка и затраты");
                         dialog.set_df_property("income_account", "hidden", !show_income);
                         dialog.set_df_property("income_account", "reqd", show_income);
+                    });
+
+                    frappe.db.get_value("Company", frm.doc.company, "default_income_account", function(r) {
+                        if (!r || !r.default_income_account) {
+                            return;
+                        }
+                        if (!income_accounts.length || income_accounts.includes(r.default_income_account)) {
+                            dialog.set_value("income_account", r.default_income_account);
+                        }
                     });
                 }
                 
@@ -308,6 +308,30 @@ function show_tasks_selection_dialog(frm) {
                     }, 100);
                     
                 }, 200);
+
+                } // open_tasks_selection_dialog
+
+                if (is_tm_project) {
+                    frappe.call({
+                        method: "frappe.desk.search.search_link",
+                        args: {
+                            doctype: "Account",
+                            txt: "",
+                            query: "dinext_projects_pl.dinext_projects_pl.forecast_utils.get_income_accounts_with_task_dimension",
+                            filters: { company: frm.doc.company },
+                            page_length: 9999
+                        },
+                        callback: function(account_r) {
+                            let income_accounts = (account_r.message || []).map((row) => row.value);
+                            open_tasks_selection_dialog(income_accounts);
+                        },
+                        error: function() {
+                            frappe.msgprint(__("Не удалось загрузить список счетов доходов"));
+                        }
+                    });
+                } else {
+                    open_tasks_selection_dialog([]);
+                }
                 
             } else if (r.message && r.message.error) {
                 frappe.msgprint(__("Ошибка: {0}", [r.message.error]));
