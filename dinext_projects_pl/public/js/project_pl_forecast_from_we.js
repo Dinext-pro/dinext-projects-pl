@@ -113,28 +113,80 @@ function show_tasks_selection_dialog(frm) {
                 // Рассчитываем высоту таблицы
                 let tableHeight = Math.min(500, Math.max(200, table_data.length * 30 + 40));
                 
-                // Создаем диалог
+                // Собираем поля динамически
+                let dialog_fields = [
+                    {
+                        fieldtype: "HTML",
+                        fieldname: "table_container",
+                        options: `<div class="tasks-datatable-container" style="height: ${tableHeight}px; width: 100%; overflow: auto; border: 1px solid #d1d8dd; border-radius: 4px;"></div>`
+                    }
+                ];
+
+                // Для T&M проектов добавляем селект типа прогноза и поле счёта доходов
+                let is_tm_project = frm.doc.custom_payment_scheme === "Время и затраты (T&M)";
+                let forecast_type_field = null;
+                let income_account_field = null;
+
+                if (is_tm_project) {
+                    // Загружаем default_income_account компании
+                    frappe.db.get_value("Company", frm.doc.company, "default_income_account", function(r) {
+                        if (r && r.default_income_account && income_account_field) {
+                            income_account_field.set_value(r.default_income_account);
+                        }
+                    });
+
+                    forecast_type_field = {
+                        fieldtype: "Select",
+                        fieldname: "forecast_type",
+                        label: __("Тип прогноза"),
+                        options: [
+                            __("Только затраты"),
+                            __("Только выручка"),
+                            __("Выручка и затраты")
+                        ],
+                        default: __("Только затраты")
+                    };
+
+                    income_account_field = {
+                        fieldtype: "Link",
+                        fieldname: "income_account",
+                        label: __("Счёт доходов"),
+                        options: "Account",
+                        hidden: true,
+                        reqd: false,
+                        get_query: function() {
+                            return {
+                                filters: {
+                                    company: frm.doc.company,
+                                    root_type: "Income",
+                                    is_group: 0
+                                }
+                            };
+                        }
+                    };
+
+                    dialog_fields.push(forecast_type_field);
+                    dialog_fields.push(income_account_field);
+                }
+
+                // Информационный блок
+                dialog_fields.push({
+                    fieldtype: "HTML",
+                    fieldname: "info_html",
+                    options: `
+                        <div class="text-muted" style="margin-top: 10px; padding: 8px 10px; background: var(--bg-light-gray); border-radius: 4px; font-size: 12px;">
+                            <i class="fa fa-info-circle" style="margin-right: 5px;"></i>
+                            <strong>${__("Отметьте галочками задачи для добавления прогноза")}</strong>
+                            <br><small>${__("В бюджет будут добавлены прогнозные часы по всем ролям")}</small>
+                        </div>
+                    `
+                });
+
+                // Создаём диалог
                 let dialog = new frappe.ui.Dialog({
                     title: __("Выберите задачи для добавления прогноза в бюджет"),
                     size: "large",
-                    fields: [
-                        {
-                            fieldtype: "HTML",
-                            fieldname: "table_container",
-                            options: `<div class="tasks-datatable-container" style="height: ${tableHeight}px; width: 100%; overflow: auto; border: 1px solid #d1d8dd; border-radius: 4px;"></div>`
-                        },
-                        {
-                            fieldtype: "HTML",
-                            fieldname: "info_html",
-                            options: `
-                                <div class="text-muted" style="margin-top: 10px; padding: 8px 10px; background: var(--bg-light-gray); border-radius: 4px; font-size: 12px;">
-                                    <i class="fa fa-info-circle" style="margin-right: 5px;"></i>
-                                    <strong>${__("Отметьте галочками задачи для добавления прогноза")}</strong>
-                                    <br><small>${__("В бюджет будут добавлены прогнозные часы по всем ролям")}</small>
-                                </div>
-                            `
-                        }
-                    ],
+                    fields: dialog_fields,
                     primary_action_label: __("Добавить прогноз"),
                     primary_action: function() {
                         let checkedRows = dialog.datatable.rowmanager.getCheckedRows();
@@ -157,8 +209,18 @@ function show_tasks_selection_dialog(frm) {
                             return;
                         }
                         
+                        // Собираем параметры
+                        let forecast_type = is_tm_project ? dialog.get_value("forecast_type") : __("Только затраты");
+                        let income_account = is_tm_project ? dialog.get_value("income_account") : null;
+                        
+                        // Валидация: для выручки нужен счёт
+                        if (is_tm_project && forecast_type !== __("Только затраты") && !income_account) {
+                            frappe.msgprint(__("Выберите счёт доходов"));
+                            return;
+                        }
+                        
                         dialog.hide();
-                        add_forecast_to_budget(frm, selectedTasks, tasksDetails);
+                        add_forecast_to_budget(frm, selectedTasks, tasksDetails, false, forecast_type, income_account);
                     },
                     secondary_action_label: __("Отмена"),
                     secondary_action: function() {
@@ -167,6 +229,16 @@ function show_tasks_selection_dialog(frm) {
                 });
                 
                 dialog.show();
+
+                // onchange для селекта (добавить после dialog.show())
+                if (is_tm_project) {
+                    dialog.fields_dict.forecast_type.$input.on("change", function() {
+                        let val = dialog.get_value("forecast_type");
+                        let show_income = val === __("Только выручка") || val === __("Выручка и затраты");
+                        dialog.set_df_property("income_account", "hidden", !show_income);
+                        dialog.set_df_property("income_account", "reqd", show_income);
+                    });
+                }
                 
                 // Создаем DataTable
                 setTimeout(() => {
@@ -250,11 +322,19 @@ function show_tasks_selection_dialog(frm) {
     });
 }
 
-function add_forecast_to_budget(frm, selectedTasks, tasksDetails, confirmRecalc = false) {
+function add_forecast_to_budget(frm, selectedTasks, tasksDetails, confirmRecalc = false, forecastType = null, incomeAccount = null) {
     if (!selectedTasks || selectedTasks.length === 0) {
         frappe.msgprint(__("Не выбрано ни одной задачи"));
         return;
     }
+
+    // Маппинг значений селекта в серверные значения
+    let forecastTypeMap = {
+        "Только затраты": "cost",
+        "Только выручка": "revenue",
+        "Выручка и затраты": "both"
+    };
+    let serverForecastType = forecastTypeMap[forecastType] || "cost";
     
     // Фильтруем детализацию только по выбранным задачам
     let filteredDetails = {};
@@ -275,7 +355,9 @@ function add_forecast_to_budget(frm, selectedTasks, tasksDetails, confirmRecalc 
             project: frm.doc.name,
             tasks: selectedTasks,
             forecast_details: filteredDetails,
-            confirm_recalc: confirmRecalc  // добавляем флаг подтверждения
+            confirm_recalc: confirmRecalc,
+            forecast_type: serverForecastType,
+            income_account: incomeAccount || ""
         },
         freeze: true,
         freeze_message: __("Добавление прогноза в бюджет..."),
@@ -296,7 +378,7 @@ function add_forecast_to_budget(frm, selectedTasks, tasksDetails, confirmRecalc 
                     __("Обнаружено превышение загрузки над прогнозом. Желаете выполнить пересчёт прогноза на основе текущей загрузки?"),
                     () => {
                         // Повторный вызов с подтверждением
-                        add_forecast_to_budget(frm, selectedTasks, tasksDetails, true);
+                        add_forecast_to_budget(frm, selectedTasks, tasksDetails, true, forecastType, incomeAccount);
                     },
                     () => {
                         frappe.show_alert(__("Операция отменена"), 3);
