@@ -348,43 +348,9 @@ function reserveDimensionsEqual(dim1, dim2) {
     return reserveDimensionsKey(dim1) === reserveDimensionsKey(dim2);
 }
 
-function applyForecastToAggregated(frm, results) {
-    var aggregated = frm.aggregatedBudget;
-    if (!aggregated || !results || !results.length) return;
-
-    for (var i = 0; i < results.length; i++) {
-        var item = results[i];
-        var account = item.account;
-        var task = item.task;
-        var year = item.year;
-        var month = item.month;
-        var amount = item.total_amount;
-
-        if (!account || !amount) continue;
-
-        var rowKey = getBudgetKey(account, task);
-        var row = aggregated[rowKey];
-        if (!row) {
-            rowKey = getBudgetKey(account);
-            row = aggregated[rowKey];
-        }
-        if (!row || !row.dimension_data) continue;
-
-        var dimensions = task ? [{ doc: 'Task', docname: task }] : [];
-        var bucket = row.dimension_data.find(function(b) {
-            return reserveDimensionsEqual(b.dimensions || [], dimensions);
-        });
-        if (!bucket) {
-            bucket = { dimensions: dimensions };
-            row.dimension_data.push(bucket);
-        }
-
-        var fk = 'forecast_' + year + '_' + month;
-        bucket[fk] = flt((bucket[fk] || 0) + amount, 2);
-    }
-
-    if (typeof clearBudgetIndexCacheFor === 'function') {
-        clearBudgetIndexCacheFor(aggregated);
+function reloadForecastBudgetView(frm) {
+    if (typeof load_budget_data === 'function') {
+        load_budget_data(frm, 'month', true);
     }
 }
 
@@ -429,10 +395,6 @@ function add_forecast_to_budget(frm, selectedTasks, tasksDetails, confirmRecalc 
 
                 // Подъём на родительские уровни (как в buildParentAdjustments для рисков)
                 if (typeof buildParentAdjustments === 'function' && frm.aggregatedBudget && r.message.results) {
-                    // Шаг 1: обновляем aggregatedBudget в памяти новыми суммами
-                    applyForecastToAggregated(frm, r.message.results);
-
-                    // Шаг 2: формируем updates в формате референса
                     var reserveUpdates = r.message.results.map(function(item) {
                         var dimensions = [];
                         if (item.task) {
@@ -460,6 +422,15 @@ function add_forecast_to_budget(frm, selectedTasks, tasksDetails, confirmRecalc 
                             freeze: true,
                             freeze_message: __("Обновление родительских статей..."),
                             callback: function(r2) {
+                                if (r2.exc) {
+                                    frappe.msgprint({
+                                        title: __('Ошибка'),
+                                        message: r2.exc && r2.exc[0] ? r2.exc[0] : __('Ошибка при обновлении родительских статей'),
+                                        indicator: 'red'
+                                    });
+                                    reloadForecastBudgetView(frm);
+                                    return;
+                                }
                                 if (parentResult.adjusted_parents && parentResult.adjusted_parents.length > 0) {
                                     frappe.show_alert({
                                         message: __('Прогноз увеличен для родительских статей: {0}',
@@ -467,18 +438,14 @@ function add_forecast_to_budget(frm, selectedTasks, tasksDetails, confirmRecalc 
                                         indicator: 'yellow'
                                     }, 5);
                                 }
-                                clearBudgetCache();
-                                load_budget_data(frm, "month", true);
-                                render_pl_chart(frm);
+                                reloadForecastBudgetView(frm);
                             }
                         });
                         return;
                     }
                 }
 
-                clearBudgetCache();
-                load_budget_data(frm, "month", true);
-                render_pl_chart(frm);
+                reloadForecastBudgetView(frm);
                 
             } else if (r.message && r.message.needs_confirmation) {
                 frappe.confirm(
