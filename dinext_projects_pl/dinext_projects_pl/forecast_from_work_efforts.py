@@ -5,66 +5,6 @@ import json
 
 import frappe
 
-
-def _dimensions_key(dimensions):
-    if not dimensions:
-        return ""
-    parts = sorted(f"{d.get('doc')}:{d.get('docname')}" for d in dimensions if d.get("doc"))
-    return "|".join(parts)
-
-
-def _find_project_budget(project, account, dimensions):
-    budgets = frappe.get_all(
-        "Project Budget",
-        filters={"pb_project": project, "pb_account": account},
-        fields=["name"],
-    )
-    target_key = _dimensions_key(dimensions)
-    for b in budgets:
-        doc = frappe.get_cached_doc("Project Budget", b.name)
-        dims = doc.get("project_budget_dimension") or []
-        doc_dims = [{"doc": d.get("doc"), "docname": d.get("docname")} for d in dims]
-        if _dimensions_key(doc_dims) == target_key:
-            return doc.name
-    return None
-
-
-def _set_forecast_in_budget(project, account, dimensions, period_amount_map):
-    """Перезаписывает forecast в Project Budget. period_amount_map: {(year, month): amount}."""
-    if not period_amount_map:
-        return None
-
-    existing = _find_project_budget(project, account, dimensions)
-    if existing:
-        doc = frappe.get_doc("Project Budget", existing)
-    else:
-        frappe.has_permission("Project Budget", "create", throw=True)
-        doc = frappe.new_doc("Project Budget")
-        doc.pb_project = project
-        doc.pb_account = account
-        for d in dimensions:
-            doc.append("project_budget_dimension", {"doc": d["doc"], "docname": d["docname"]})
-
-    new_amounts = {}
-    for row in doc.get("project_budget_amount") or []:
-        if row.pba_year is not None:
-            new_amounts[(row.pba_year, row.pba_month)] = float(row.pba_expected or 0)
-
-    for key, value in period_amount_map.items():
-        new_amounts[key] = float(value)
-
-    doc.project_budget_amount = []
-    for (fy, month), value in sorted(new_amounts.items(), key=lambda x: (x[0][0], x[0][1])):
-        doc.append("project_budget_amount", {
-            "pba_year": fy,
-            "pba_month": month,
-            "pba_expected": value
-        })
-
-    doc.save()
-    return doc.name
-
-
 ENABLE_DETAILED_LOG = True
 
 
@@ -811,34 +751,6 @@ def _process_single_forecast_type(project, selected_tasks, forecast_details, con
                 'account': applicable_account,
                 'users': users_list
             })
-
-        # ========== ПОДЪЁМ ПРОГНОЗА НА РОДИТЕЛЬСКИЙ УРОВЕНЬ ==========
-        _debug_log("STEP 8.5: Rolling up forecast to parent level")
-
-        parent_period_map = {}
-        for key, acc_data in aggregated_by_account_for_task.items():
-            if not acc_data.get('has_task_dimension'):
-                continue
-
-            account = acc_data['account']
-            year = acc_data['year']
-            month = acc_data['month']
-
-            if account not in parent_period_map:
-                parent_period_map[account] = {}
-            parent_period_map[account][(year, month)] = (
-                parent_period_map[account].get((year, month), 0) + acc_data['total_amount']
-            )
-
-        for account, period_map in parent_period_map.items():
-            _debug_log(f"      Parent rollup: account={account}, periods={len(period_map)}")
-            _set_forecast_in_budget(
-                project=project,
-                account=account,
-                dimensions=[],
-                period_amount_map=period_map
-            )
-            updated_count += 1
 
     if should_stop:
         _debug_log("STEP 9: Stopped due to confirmation request")

@@ -373,7 +373,52 @@ function add_forecast_to_budget(frm, selectedTasks, tasksDetails, confirmRecalc 
                     message: __("Прогноз успешно добавлен. Обновлено {0} записей.", [r.message.updated_count || 0]),
                     indicator: 'green'
                 }, 5);
-                
+
+                // Подъём на родительские уровни (как в buildParentAdjustments для рисков)
+                if (typeof buildParentAdjustments === 'function' && frm.aggregatedBudget && r.message.results) {
+                    var reserveUpdates = r.message.results.map(function(item) {
+                        var dimensions = [];
+                        if (item.task) {
+                            dimensions.push({ doc: 'Task', docname: item.task });
+                        }
+                        var periodKey = item.year + '_' + item.month;
+                        var periodAmountMap = {};
+                        periodAmountMap[periodKey] = item.total_amount;
+                        return {
+                            account: item.account,
+                            dimensions: dimensions,
+                            period_amount_map: periodAmountMap
+                        };
+                    });
+
+                    var parentResult = buildParentAdjustments(frm, reserveUpdates);
+                    if (parentResult.parent_adjustments && parentResult.parent_adjustments.length > 0) {
+                        frappe.call({
+                            method: 'dinext_risk_management.dinext_risk_management.bulk_save_reserve_budgets',
+                            args: {
+                                project: frm.doc.name,
+                                updates: [],
+                                parent_adjustments: parentResult.parent_adjustments
+                            },
+                            freeze: true,
+                            freeze_message: __("Обновление родительских статей..."),
+                            callback: function(r2) {
+                                if (parentResult.adjusted_parents && parentResult.adjusted_parents.length > 0) {
+                                    frappe.show_alert({
+                                        message: __('Прогноз увеличен для родительских статей: {0}',
+                                            [parentResult.adjusted_parents.map(function(a) { return a.account; }).join(', ')]),
+                                        indicator: 'yellow'
+                                    }, 5);
+                                }
+                                clearBudgetCache();
+                                load_budget_data(frm, "month", true);
+                                render_pl_chart(frm);
+                            }
+                        });
+                        return;
+                    }
+                }
+
                 clearBudgetCache();
                 load_budget_data(frm, "month", true);
                 render_pl_chart(frm);
