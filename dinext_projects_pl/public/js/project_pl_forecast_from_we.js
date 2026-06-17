@@ -335,6 +335,19 @@ function show_tasks_selection_dialog(frm, forecastMode = "cost") {
     });
 }
 
+function reserveDimensionsKey(dimensions) {
+    if (!dimensions || !dimensions.length) return "";
+    return dimensions
+        .filter(function(d) { return d && d.doc; })
+        .map(function(d) { return (d.doc || '') + ':' + (d.docname || ''); })
+        .sort()
+        .join('|');
+}
+
+function reserveDimensionsEqual(dim1, dim2) {
+    return reserveDimensionsKey(dim1) === reserveDimensionsKey(dim2);
+}
+
 function applyForecastToAggregated(frm, results) {
     var aggregated = frm.aggregatedBudget;
     if (!aggregated || !results || !results.length) return;
