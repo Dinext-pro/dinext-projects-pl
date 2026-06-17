@@ -103,7 +103,6 @@ doctype_js = {"Project":
         "public/js/project_pl.js",
         "public/js/project_pl_calc.js",
         "public/js/project_pl_dashboard.js",
-        "public/js/project_pl_forecast_from_we.js",
     ]
 }
 # doctype_js = {"doctype" : "public/js/doctype.js"}
