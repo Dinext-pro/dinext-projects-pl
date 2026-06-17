@@ -335,6 +335,46 @@ function show_tasks_selection_dialog(frm, forecastMode = "cost") {
     });
 }
 
+function applyForecastToAggregated(frm, results) {
+    var aggregated = frm.aggregatedBudget;
+    if (!aggregated || !results || !results.length) return;
+
+    for (var i = 0; i < results.length; i++) {
+        var item = results[i];
+        var account = item.account;
+        var task = item.task;
+        var year = item.year;
+        var month = item.month;
+        var amount = item.total_amount;
+
+        if (!account || !amount) continue;
+
+        var rowKey = getBudgetKey(account, task);
+        var row = aggregated[rowKey];
+        if (!row) {
+            rowKey = getBudgetKey(account);
+            row = aggregated[rowKey];
+        }
+        if (!row || !row.dimension_data) continue;
+
+        var dimensions = task ? [{ doc: 'Task', docname: task }] : [];
+        var bucket = row.dimension_data.find(function(b) {
+            return reserveDimensionsEqual(b.dimensions || [], dimensions);
+        });
+        if (!bucket) {
+            bucket = { dimensions: dimensions };
+            row.dimension_data.push(bucket);
+        }
+
+        var fk = 'forecast_' + year + '_' + month;
+        bucket[fk] = flt((bucket[fk] || 0) + amount, 2);
+    }
+
+    if (typeof clearBudgetIndexCacheFor === 'function') {
+        clearBudgetIndexCacheFor(aggregated);
+    }
+}
+
 function add_forecast_to_budget(frm, selectedTasks, tasksDetails, confirmRecalc = false, forecastType = "cost", incomeAccount = null) {
     if (!selectedTasks || selectedTasks.length === 0) {
         frappe.msgprint(__("Не выбрано ни одной задачи"));
@@ -376,6 +416,10 @@ function add_forecast_to_budget(frm, selectedTasks, tasksDetails, confirmRecalc 
 
                 // Подъём на родительские уровни (как в buildParentAdjustments для рисков)
                 if (typeof buildParentAdjustments === 'function' && frm.aggregatedBudget && r.message.results) {
+                    // Шаг 1: обновляем aggregatedBudget в памяти новыми суммами
+                    applyForecastToAggregated(frm, r.message.results);
+
+                    // Шаг 2: формируем updates в формате референса
                     var reserveUpdates = r.message.results.map(function(item) {
                         var dimensions = [];
                         if (item.task) {
