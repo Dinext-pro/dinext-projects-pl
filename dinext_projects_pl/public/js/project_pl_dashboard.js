@@ -2,12 +2,28 @@
 frappe.ui.form.on('Project', {
 	refresh: function(frm) {
 		if (frm.doc.name && !frm.is_new()) {
+            ensure_financial_metrics_reporting_date(frm);
 		    add_buttons( frm );
             add_project_profit_loss_chart(frm);
             //render_pl_chart(frm);
         }
 	},
+
+    custom_metrics_reporting_date(frm) {
+        ensure_financial_metrics_reporting_date(frm);
+        render_financial_metrics(frm);
+    },
 })
+
+function ensure_financial_metrics_reporting_date(frm) {
+    if (!frm || !frm.get_field || !frm.get_field("custom_metrics_reporting_date")) {
+        return;
+    }
+
+    if (!frm.doc.custom_metrics_reporting_date) {
+        frm.set_value("custom_metrics_reporting_date", frappe.datetime.get_today());
+    }
+}
 
 function add_buttons( frm ) {
     if ( !frm.$open_pl_statements ) {
@@ -171,6 +187,140 @@ function render_summary(frm, data) {
 		frappe.utils.build_summary_item(summary).appendTo(frm.$summary);
 	});
 }
+
+function get_financial_metrics_wrapper(frm) {
+    const field = frm?.get_field && frm.get_field("custom_metrics");
+    if (!field) {
+        console.warn("Project.custom_metrics field is not available");
+        return null;
+    }
+
+    const fieldWrapper = $(field.wrapper || field.$wrapper);
+    if (fieldWrapper.length) {
+        const $inner = fieldWrapper.find("div[data-fieldname='custom_metrics']").first();
+        frm.$financial_metrics = $inner.length ? $inner : fieldWrapper;
+    } else {
+        frm.$financial_metrics = $(frm.wrapper).find("div[data-fieldname='custom_metrics']").first();
+    }
+
+    if (!frm.$financial_metrics || !frm.$financial_metrics.length) {
+        console.warn("Project.custom_metrics render target is not available");
+        return null;
+    }
+
+    frm.$financial_metrics.show();
+    return frm.$financial_metrics;
+}
+
+function ensure_financial_metrics_section_open(frm) {
+    const $wrapper = get_financial_metrics_wrapper(frm);
+    if (!$wrapper || !$wrapper.length) {
+        return;
+    }
+
+    const $section = $wrapper.closest(".form-section");
+    if (!$section.length) {
+        return;
+    }
+
+    $section.find(".section-head.collapsible").removeClass("collapsed");
+    $section.find(".collapse-indicator use").attr("href", "#es-line-up");
+    $section.find(".section-body").removeClass("hide").show();
+}
+
+function format_financial_metric_value(value, kind) {
+    if (!Number.isFinite(value)) {
+        return "—";
+    }
+
+    if (kind === "ratio") {
+        return value.toFixed(3);
+    }
+
+    return frappe.format(value, { fieldtype: "Currency" });
+}
+
+function render_financial_metrics(frm) {
+    const $wrapper = get_financial_metrics_wrapper(frm);
+    if (!$wrapper || !$wrapper.length || typeof build_financial_metrics !== "function") {
+        return;
+    }
+
+    const metricsData = build_financial_metrics(frm);
+    ensure_financial_metrics_section_open(frm);
+    $wrapper.empty();
+    $wrapper.addClass("project-financial-metrics");
+
+    const $section = $('<section class="evm-metrics-section"></section>');
+    const $header = $(`
+        <div class="evm-metrics-header">
+            <div>
+                <h3 class="evm-metrics-title">${__("Финансовые метрики")}</h3>
+                <div class="evm-metrics-note">${frappe.utils.escape_html(metricsData.note || "")}</div>
+            </div>
+        </div>
+    `);
+    $section.append($header);
+
+    if (metricsData.warning) {
+        $section.append(
+            `<div class="evm-metrics-warning">${frappe.utils.escape_html(metricsData.warning)}</div>`
+        );
+    }
+
+    if (!metricsData.ready) {
+        $section.append(
+            `<div class="evm-metrics-empty">${frappe.utils.escape_html(metricsData.emptyMessage || __("Нет данных для расчета финансовых метрик."))}</div>`
+        );
+        $wrapper.append($section);
+        return;
+    }
+
+    const $tracks = $('<div class="evm-metrics-tracks"></div>');
+
+    metricsData.tracks.forEach((track) => {
+        const $track = $(`
+            <div class="evm-track-card" data-track="${frappe.utils.escape_html(track.key)}">
+                <div class="evm-track-title">${frappe.utils.escape_html(track.label)}</div>
+            </div>
+        `);
+
+        track.groups.forEach((group) => {
+            const $group = $(`
+                <div class="evm-metric-group" data-group="${frappe.utils.escape_html(group.key)}">
+                    <div class="evm-metric-group-title">${frappe.utils.escape_html(group.label)}</div>
+                </div>
+            `);
+
+            group.metrics.forEach((metric) => {
+                const metricValue = format_financial_metric_value(metric.value, metric.kind);
+                const description = frappe.utils.escape_html(metric.description || "");
+                const label = frappe.utils.escape_html(metric.label);
+                const statusClass = metric.status ? ` is-${metric.status}` : "";
+                const helpTitle = description.replace(/"/g, "&quot;");
+
+                $group.append(`
+                    <div class="evm-metric-row${statusClass}">
+                        <div class="evm-metric-label-wrap">
+                            <span class="evm-metric-label">${label}</span>
+                            <span class="evm-metric-help" title="${helpTitle}" aria-label="${helpTitle}">i</span>
+                        </div>
+                        <div class="evm-metric-value">${metricValue}</div>
+                    </div>
+                `);
+            });
+
+            $track.append($group);
+        });
+
+        $tracks.append($track);
+    });
+
+    $section.append($tracks);
+    $wrapper.append($section);
+}
+
+globalThis.render_financial_metrics = render_financial_metrics;
 
 function render_chart(frm, options) {
     if ( !frm.$chart ) {
@@ -385,6 +535,7 @@ function render_pl_chart(frm, init=true) {
 function _render_pl_chart(frm, init=true) {
     console.time("render_pl_chart");
     try {
+        render_financial_metrics(frm);
         // Подготовка данных
         let chartData = get_pl_chart_data(frm);
 

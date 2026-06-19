@@ -276,6 +276,338 @@ function sync_estimated_costing_from_forecast(frm) {
     frm.set_value("estimated_costing", get_total_forecast_expenses(frm));
 }
 
+const DINEXT_PROJECT_PL_EVM_METRIC_GROUPS = [
+    {
+        key: "base",
+        label: __("Базовые"),
+        metrics: [
+            {
+                key: "BAC",
+                label: "BAC",
+                kind: "currency",
+                description: __("Бюджет по завершению: полный базовый бюджет контура проекта."),
+            },
+            {
+                key: "PV",
+                label: "PV",
+                kind: "currency",
+                description: __("Плановый объем: кумулятивный план на текущую дату."),
+            },
+            {
+                key: "EV",
+                label: "EV",
+                kind: "currency",
+                description: __("Освоенный объем: базовый бюджет, умноженный на процент готовности проекта."),
+            },
+            {
+                key: "AC",
+                label: "AC",
+                kind: "currency",
+                description: __("Фактическая стоимость: накопленный факт по проводкам GL Entry."),
+            },
+        ],
+    },
+    {
+        key: "variance",
+        label: __("Отклонения"),
+        metrics: [
+            {
+                key: "CV",
+                label: "CV",
+                kind: "currency",
+                description: __("Отклонение по стоимости: EV минус AC."),
+            },
+            {
+                key: "SV",
+                label: "SV",
+                kind: "currency",
+                description: __("Отклонение по срокам/объему: EV минус PV."),
+            },
+        ],
+    },
+    {
+        key: "indices",
+        label: __("Индексы"),
+        metrics: [
+            {
+                key: "CPI",
+                label: "CPI",
+                kind: "ratio",
+                description: __("Индекс выполнения стоимости: отношение EV к AC."),
+            },
+            {
+                key: "SPI",
+                label: "SPI",
+                kind: "ratio",
+                description: __("Индекс выполнения сроков: отношение EV к PV."),
+            },
+        ],
+    },
+    {
+        key: "forecast",
+        label: __("Прогнозные"),
+        metrics: [
+            {
+                key: "EAC",
+                label: "EAC",
+                kind: "currency",
+                description: __("Прогноз по завершении: AC + (BAC - EV) / (CPI * SPI)."),
+            },
+            {
+                key: "ETC",
+                label: "ETC",
+                kind: "currency",
+                description: __("Оставшиеся затраты/освоение до завершения: EAC минус AC."),
+            },
+            {
+                key: "VAC",
+                label: "VAC",
+                kind: "currency",
+                description: __("Отклонение по завершении: BAC минус EAC."),
+            },
+        ],
+    },
+    {
+        key: "efficiency",
+        label: __("Требуемая эффективность"),
+        metrics: [
+            {
+                key: "TCPI",
+                label: "TCPI",
+                kind: "ratio",
+                description: __("Требуемая эффективность до конца проекта: (BAC - EV) / (BAC - AC)."),
+            },
+        ],
+    },
+];
+
+function get_financial_metric_roots(frm, trackType) {
+    if (!frm || !frm.aggregatedBudget) {
+        return [];
+    }
+
+    return Object.values(frm.aggregatedBudget).filter(
+        (row) => !row.parent_account && !row.task && row.type === trackType
+    );
+}
+
+function get_financial_metric_bucket_value(frm, row, period, valueKey) {
+    if (!frm || !row || !period) {
+        return 0;
+    }
+
+    const bucket = Array.isArray(row.dimension_data) && row.dimension_data.length ? row.dimension_data[0] : {};
+    const fieldname = `${valueKey}_${period.year}_${period.month}`;
+    let value = Number(bucket[fieldname]) || 0;
+
+    if (!value) {
+        value = get_child_budget_sum(row.value, "", [], period, frm.aggregatedBudget, valueKey);
+    }
+
+    return Number(value) || 0;
+}
+
+function get_financial_metric_track_period_totals(frm, period, trackType) {
+    const roots = get_financial_metric_roots(frm, trackType);
+    let plan = 0;
+    let fact = 0;
+
+    roots.forEach((row) => {
+        plan += get_financial_metric_bucket_value(frm, row, period, "plan");
+        fact += get_financial_metric_bucket_value(frm, row, period, "fact");
+    });
+
+    return { plan, fact };
+}
+
+function get_financial_metrics_reporting_date(frm) {
+    const todayString = frappe.datetime.get_today();
+    const fieldExists = Boolean(frm?.get_field && frm.get_field("custom_metrics_reporting_date"));
+    const rawValue = frm?.doc?.custom_metrics_reporting_date || todayString;
+
+    return {
+        date: frappe.datetime.str_to_obj(rawValue),
+        value: rawValue,
+        fieldExists,
+        usedDefault: !frm?.doc?.custom_metrics_reporting_date,
+    };
+}
+
+function compare_financial_metric_period_to_date(period, reportingDate) {
+    const reportingYear = reportingDate.getFullYear();
+    const reportingMonth = reportingDate.getMonth() + 1;
+
+    if (period.year < reportingYear || (period.year === reportingYear && period.month < reportingMonth)) {
+        return -1;
+    }
+
+    if (period.year === reportingYear && period.month === reportingMonth) {
+        return 0;
+    }
+
+    return 1;
+}
+
+function get_financial_metric_days_in_month(year, month) {
+    return new Date(year, month, 0).getDate();
+}
+
+function get_financial_metric_plan_factor(period, reportingDate) {
+    const comparison = compare_financial_metric_period_to_date(period, reportingDate);
+    if (comparison < 0) {
+        return 1;
+    }
+    if (comparison > 0) {
+        return 0;
+    }
+
+    return reportingDate.getDate() / get_financial_metric_days_in_month(period.year, period.month);
+}
+
+function get_financial_metric_actual_factor(period, reportingDate) {
+    const comparison = compare_financial_metric_period_to_date(period, reportingDate);
+    if (comparison < 0) {
+        return 1;
+    }
+    if (comparison > 0) {
+        return 0;
+    }
+
+    return reportingDate.getDate() / get_financial_metric_days_in_month(period.year, period.month);
+}
+
+function safe_financial_metric_division(numerator, denominator) {
+    if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || !denominator) {
+        return null;
+    }
+
+    return numerator / denominator;
+}
+
+function get_financial_metric_status(metricKey, value, track) {
+    if (!Number.isFinite(value)) {
+        return "neutral";
+    }
+
+    if (track === "Income") {
+        return "neutral";
+    }
+
+    switch (metricKey) {
+        case "CV":
+        case "SV":
+        case "VAC":
+            return value >= 0 ? "good" : "bad";
+        case "CPI":
+        case "SPI":
+            return value >= 1 ? "good" : "bad";
+        case "TCPI":
+            return value <= 1 ? "good" : "bad";
+        default:
+            return "neutral";
+    }
+}
+
+function build_financial_metric_groups(trackLabel, values) {
+    return DINEXT_PROJECT_PL_EVM_METRIC_GROUPS.map((group) => ({
+        key: group.key,
+        label: group.label,
+        metrics: group.metrics.map((metric) => {
+            const value = values[metric.key];
+            return {
+                key: metric.key,
+                label: metric.label,
+                kind: metric.kind,
+                description: metric.description,
+                value,
+                status: get_financial_metric_status(metric.key, value, trackLabel),
+            };
+        }),
+    }));
+}
+
+function build_financial_metrics_track(frm, trackType, reportingDate, progressPercent) {
+    const periods = get_budget_display_periods(frm, "month");
+    let BAC = 0;
+    let PV = 0;
+    let AC = 0;
+
+    periods.forEach((period) => {
+        const periodTotals = get_financial_metric_track_period_totals(frm, period, trackType);
+        BAC += periodTotals.plan;
+        PV += periodTotals.plan * get_financial_metric_plan_factor(period, reportingDate);
+        AC += periodTotals.fact * get_financial_metric_actual_factor(period, reportingDate);
+    });
+
+    const EV = BAC * (progressPercent / 100);
+    const CV = EV - AC;
+    const SV = EV - PV;
+    const CPI = safe_financial_metric_division(EV, AC);
+    const SPI = safe_financial_metric_division(EV, PV);
+    const EAC =
+        Number.isFinite(CPI) && Number.isFinite(SPI) && CPI && SPI
+            ? AC + (BAC - EV) / (CPI * SPI)
+            : null;
+    const ETC = Number.isFinite(EAC) ? EAC - AC : null;
+    const VAC = Number.isFinite(EAC) ? BAC - EAC : null;
+    const TCPI = BAC !== AC ? safe_financial_metric_division(BAC - EV, BAC - AC) : null;
+
+    const trackLabel = trackType === "Income" ? __("Доходы") : __("Расходы");
+
+    return {
+        key: trackType.toLowerCase(),
+        label: trackLabel,
+        values: { BAC, PV, EV, AC, CV, SV, CPI, SPI, EAC, ETC, VAC, TCPI },
+        groups: build_financial_metric_groups(trackLabel, { BAC, PV, EV, AC, CV, SV, CPI, SPI, EAC, ETC, VAC, TCPI }),
+    };
+}
+
+function build_financial_metrics(frm) {
+    if (!frm || !frm.aggregatedBudget) {
+        return {
+            ready: false,
+            emptyMessage: __("Финансовые метрики будут доступны после загрузки данных P&L."),
+            note: __("Метрики рассчитываются на выбранную отчетную дату."),
+            warning: null,
+            tracks: [],
+        };
+    }
+
+    const reportingDateInfo = get_financial_metrics_reporting_date(frm);
+    const reportingDate = reportingDateInfo.date;
+    const progressPercent = Number(frm.doc.percent_complete) || 0;
+    const warnings = [];
+
+    if (!reportingDateInfo.fieldExists) {
+        warnings.push(__("Поле custom_metrics_reporting_date не найдено в форме Project. Для расчета временно используется текущая дата."));
+    } else if (reportingDateInfo.usedDefault) {
+        warnings.push(__("Отчетная дата не заполнена. Используется текущая дата."));
+    }
+
+    if (progressPercent <= 0) {
+        warnings.push(
+            __("Поле Project.percent_complete не заполнено или равно 0. EV и производные метрики будут показаны как нулевые или недоступные.")
+        );
+    }
+
+    return {
+        ready: true,
+        note: __(
+            "Метрики рассчитываются на отчетную дату {0}. План и факт текущего месяца учитываются пропорционально дням месяца.",
+            [frappe.datetime.str_to_user(reportingDateInfo.value)]
+        ),
+        warning: warnings.length ? warnings.join(" ") : null,
+        reportingDate,
+        progressPercent,
+        tracks: [
+            build_financial_metrics_track(frm, "Income", reportingDate, progressPercent),
+            build_financial_metrics_track(frm, "Expense", reportingDate, progressPercent),
+        ],
+    };
+}
+
+globalThis.build_financial_metrics = build_financial_metrics;
+
 /**
  * Обновляет/создаёт запись dimension_data для конкретного child в frm.aggregatedBudget,
  * а затем точечно инвалидирует кеши, которые могли зависеть от этой записи.
