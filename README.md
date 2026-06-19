@@ -4,11 +4,12 @@
 
 **Dinext Projects P&L** — это приложение для Frappe/ERPNext, которое расширяет стандартный DocType `Project` функциями проектного P&L, планирования, прогноза, отчетности и согласования бюджета.
 
-Приложение объединяет кастомный P&L-интерфейс в карточке проекта с Dinext-логикой бюджетирования. Текущие плановые и прогнозные данные отображаются и редактируются в UI проекта, запросы на согласование создаются как стандартные ERPNext-документы `Budget` и `Monthly Distribution`, а согласованный план синхронизируется обратно в кастомный read model `Project Budget`. Точные утвержденные помесячные суммы хранятся отдельно от процентного `Monthly Distribution`, поэтому persisted-значения плана не дрейфуют из-за round-trip округления.
+Приложение объединяет кастомный P&L-интерфейс и отдельную вкладку `Метрики` в карточке проекта с Dinext-логикой бюджетирования. Текущие плановые и прогнозные данные отображаются и редактируются в UI проекта, EVM-показатели рассчитываются и показываются на отдельной вкладке `Метрики`, запросы на согласование создаются как стандартные ERPNext-документы `Budget` и `Monthly Distribution`, а согласованный план синхронизируется обратно в кастомный read model `Project Budget`. Точные утвержденные помесячные суммы хранятся отдельно от процентного `Monthly Distribution`, поэтому persisted-значения плана не дрейфуют из-за round-trip округления.
 
 ## ✨ Возможности
 
 - **Кастомная вкладка P&L в `Project`** с таблицей трудозатрат/затрат, итоговыми блоками, кнопками отчетов и графиком.
+- **Отдельная вкладка `Метрики` в `Project`** с финансовыми EVM-метриками по контурам доходов и расходов и отчетной датой расчета.
 - **Режимы просмотра план / прогноз / факт** с переключателями видимости плана и дельт.
 - **Flow согласования бюджета**, в котором сохранение плана из P&L создает ERPNext `Budget`, а не пишет напрямую в `Project Budget`.
 - **Гранулярность бюджета по ключу**: один `Budget` на сочетание `account + project/task + fiscal year`.
@@ -59,6 +60,16 @@ bench --site $SITE migrate
    - сохраняет точные исходные помесячные суммы в metadata `Budget`;
    - переводит бюджет в Dinext workflow согласования.
 
+### Сценарий просмотра метрик
+
+1. Откройте документ `Project`.
+2. Перейдите на вкладку `Метрики`.
+3. Выберите `Отчетная дата метрик`.
+4. Проверьте EVM-показатели по двум контурам:
+   - `Доходы`;
+   - `Расходы`.
+5. Используйте показатели `BAC`, `PV`, `EV`, `AC`, `CV`, `SV`, `CPI`, `SPI`, `EAC`, `ETC`, `VAC`, `TCPI` для анализа исполнения проекта на выбранную дату.
+
 ### Согласование бюджета
 
 - Pending budgets находятся в состоянии `Pending Approval`.
@@ -108,7 +119,7 @@ dinext_projects.project_pl_forecast_menu.push({
   - `dinext_budget_monthly_amounts`;
   - `workflow_state`;
 - workflow metadata для `Dinext Budget Approval`;
-- custom fields и client scripts для UI проекта.
+- custom fields и client scripts для UI проекта, включая вкладки `P&L` и `Метрики`.
 
 Важные эксплуатационные детали:
 
@@ -214,7 +225,7 @@ bench --site $SITE export-fixtures --app dinext_projects_pl
 
 - `dinext_projects_pl/hooks.py` подключает client assets, fixtures, override для `Budget` и submit/cancel hooks.
 - `dinext_projects_pl/fixtures/` содержит system-generated metadata, экспортированную из сайта.
-- `dinext_projects_pl/public/js/` содержит UI проекта, агрегацию данных, рендеринг графика и интерактивные обработчики навигации.
+- `dinext_projects_pl/public/js/` содержит UI проекта, агрегацию данных, рендеринг P&L-графика, вкладки `P&L`/`Метрики` и интерактивные обработчики навигации.
 - `dinext_projects_pl/dinext_projects_pl/budget_approval/` содержит app-owned flow согласования бюджета и sync с `Project Budget`.
 - `dinext_projects_pl/dinext_projects_pl/overrides/` адаптирует duplicate-checks ERPNext `Budget` под Dinext replacement semantics.
 - `dinext_projects_pl/dinext_projects_pl/doctype/` определяет кастомный read model `Project Budget`.
@@ -225,7 +236,7 @@ bench --site $SITE export-fixtures --app dinext_projects_pl
 
 ```mermaid
 flowchart LR
-  ProjectForm[Карточка проекта и P&L UI] --> ClientJS[project_pl.js и связанные helpers]
+  ProjectForm[Карточка проекта: P&L и Метрики] --> ClientJS[project_pl.js и связанные helpers]
   ClientJS --> ApprovalAPI[save_budget_plan_for_approval]
   ApprovalAPI --> BudgetDoc[ERPNext Budget]
   ApprovalAPI --> MonthlyDistribution[Monthly Distribution]
@@ -235,6 +246,10 @@ flowchart LR
   Workflow -->|Cancel approved| CancelHook[on_budget_cancel]
   SubmitHook --> ProjectBudget[Read model Project Budget]
   CancelHook --> ProjectBudget
+  ClientJS --> MetricsUI[EVM метрики на вкладке Метрики]
+  MetricsUI --> ProjectBudget
+  MetricsUI --> GLEntry[GL Entry fact]
+  MetricsUI --> ProjectProgress[Project.percent_complete]
   ClientJS -->|Двойной клик по plan cell| FindApproved[find_approved_budget_for_period]
   FindApproved --> BudgetDoc
   ClientJS --> Reports[ERPNext P&L и GL reports]

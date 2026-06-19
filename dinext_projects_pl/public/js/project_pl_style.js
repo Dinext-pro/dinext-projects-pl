@@ -176,7 +176,159 @@ function applyPLStyle() {
         .pl-chart-container svg {
             overflow: visible !important;
         }
+
+        .project-financial-metrics {
+            margin: 1rem 0 1.25rem;
+        }
+
+        .project-financial-metrics .evm-metrics-section {
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            background: var(--card-bg);
+            padding: 1rem;
+        }
+
+        .project-financial-metrics .evm-metrics-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .project-financial-metrics .evm-metrics-title {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .project-financial-metrics .evm-metrics-note {
+            margin-top: 0.25rem;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .project-financial-metrics .evm-metrics-warning,
+        .project-financial-metrics .evm-metrics-empty {
+            margin-top: 0.75rem;
+            padding: 0.75rem 0.875rem;
+            border-radius: var(--border-radius-md);
+            background: var(--bg-light-gray);
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .project-financial-metrics .evm-metrics-warning {
+            border: 1px solid var(--warning-border);
+            color: var(--warning-text, var(--text-color));
+        }
+
+        .project-financial-metrics .evm-metrics-tracks {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+            align-items: start;
+            margin-top: 0.75rem;
+        }
+
+        .project-financial-metrics .evm-track-card {
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            background: var(--subtle-fg);
+            padding: 0.875rem;
+        }
+
+        .project-financial-metrics .evm-track-title {
+            margin-bottom: 0.75rem;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .project-financial-metrics .evm-metric-group + .evm-metric-group {
+            margin-top: 0.875rem;
+        }
+
+        .project-financial-metrics .evm-metric-group-title {
+            margin-bottom: 0.375rem;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            color: var(--text-muted);
+        }
+
+        .project-financial-metrics .evm-metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.375rem 0;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .project-financial-metrics .evm-metric-group .evm-metric-row:first-of-type {
+            border-top: 0;
+        }
+
+        .project-financial-metrics .evm-metric-label-wrap {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            min-width: 0;
+        }
+
+        .project-financial-metrics .evm-metric-label {
+            color: var(--text-color);
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .project-financial-metrics .evm-metric-help {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            font-size: 10px;
+            line-height: 1;
+            cursor: help;
+            user-select: none;
+            background: var(--card-bg);
+        }
+
+        .project-financial-metrics .evm-metric-value {
+            white-space: nowrap;
+            font-feature-settings: "tnum";
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-color);
+            text-align: right;
+        }
+
+        .project-financial-metrics .evm-metric-row.is-good .evm-metric-value {
+            color: var(--green-600);
+        }
+
+        .project-financial-metrics .evm-metric-row.is-bad .evm-metric-value {
+            color: var(--red-600);
+        }
+
+        @media (max-width: 991px) {
+            .project-financial-metrics .evm-metrics-tracks {
+                grid-template-columns: 1fr;
+            }
+        }
     `;
+
+    if (frappe?.dom?.set_style) {
+        frappe.dom.set_style(pl_styles);
+        return;
+    }
 
     var styleSheet = document.createElement("style");
     styleSheet.textContent = pl_styles;
