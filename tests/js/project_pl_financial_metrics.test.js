@@ -224,6 +224,31 @@ function loadDashboardModuleInWrappedScope() {
     return context;
 }
 
+function collectRenderedMarkup(node) {
+    if (typeof node === "string") {
+        return node;
+    }
+
+    if (!node || typeof node !== "object") {
+        return "";
+    }
+
+    const parts = [];
+    if (typeof node.label === "string") {
+        parts.push(node.label);
+    }
+    if (typeof node.htmlValue === "string") {
+        parts.push(node.htmlValue);
+    }
+    if (Array.isArray(node.children)) {
+        node.children.forEach((child) => {
+            parts.push(collectRenderedMarkup(child));
+        });
+    }
+
+    return parts.join(" ");
+}
+
 test("financial metrics asset exports build and render entry points", () => {
     const context = loadFinancialMetricsModule();
 
@@ -270,6 +295,12 @@ test("build_financial_metrics returns grouped tracks for income and expense", ()
     assert.equal(expenseTrack.values.BAC, 400);
     assert.equal(expenseTrack.values.EV, 200);
     assert.equal(expenseTrack.groups.length > 0, true);
+
+    const baseMetric = expenseTrack.groups[0].metrics[0];
+    assert.equal(baseMetric.label, "BAC");
+    assert.equal(baseMetric.shortName, "Бюджет по завершению");
+    assert.equal(baseMetric.formula, "Складываем все утвержденные плановые суммы по этому направлению за весь срок проекта.");
+    assert.match(baseMetric.interpretation, /весь утвержденный бюджет проекта/i);
 });
 
 test("render_financial_metrics re-renders when reporting date changes", () => {
@@ -340,6 +371,57 @@ test("render_financial_metrics re-renders when reporting date changes", () => {
 
     assert.equal(frm._financial_metrics_reporting_date, "2026-01-20");
     assert.equal(context.__controlCalls.length, 2);
+});
+
+test("render_financial_metrics shows short names and detailed tooltip text", () => {
+    const context = loadFinancialMetricsModule();
+    const metricsWrapper = new FakeElement("metrics-wrapper");
+    const sectionWrapper = new FakeElement("section-wrapper");
+    metricsWrapper.closest = () => sectionWrapper;
+
+    const frm = {
+        doc: {
+            percent_complete: 50,
+            custom_metrics_reporting_date: "2026-01-15",
+        },
+        aggregatedBudget: {
+            income_root: {
+                value: "Income Root",
+                parent_account: "",
+                task: "",
+                type: "Income",
+                dimension_data: [{ plan_2026_1: 1000, fact_2026_1: 250 }],
+            },
+            expense_root: {
+                value: "Expense Root",
+                parent_account: "",
+                task: "",
+                type: "Expense",
+                dimension_data: [{ plan_2026_1: 400, fact_2026_1: 100 }],
+            },
+        },
+        wrapper: new FakeElement("form-wrapper"),
+        get_field(fieldname) {
+            if (fieldname === "custom_metrics") {
+                return { wrapper: metricsWrapper, $wrapper: metricsWrapper };
+            }
+
+            if (fieldname === "custom_metrics_reporting_date") {
+                return { wrapper: new FakeElement("date-field") };
+            }
+
+            return null;
+        },
+        set_df_property() {},
+    };
+
+    context.render_financial_metrics(frm);
+
+    const renderedMarkup = collectRenderedMarkup(metricsWrapper);
+    assert.match(renderedMarkup, /BAC/);
+    assert.match(renderedMarkup, /Бюджет по завершению/);
+    assert.match(renderedMarkup, /Правило расчета: Складываем все утвержденные плановые суммы по этому направлению за весь срок проекта\./);
+    assert.match(renderedMarkup, /Интерпретация: Это весь утвержденный бюджет проекта/);
 });
 
 test("dashboard chart render still invokes financial metrics and chart creation", () => {

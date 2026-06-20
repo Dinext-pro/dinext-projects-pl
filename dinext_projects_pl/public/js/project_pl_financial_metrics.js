@@ -7,25 +7,33 @@ const DINEXT_PROJECT_PL_EVM_METRIC_GROUPS = [
                 key: "BAC",
                 label: "BAC",
                 kind: "currency",
-                description: __("Бюджет по завершению: полный базовый бюджет контура проекта."),
+                shortName: __("Бюджет по завершению"),
+                formula: __("Складываем все утвержденные плановые суммы по этому направлению за весь срок проекта."),
+                interpretation: __("Это весь утвержденный бюджет проекта по выбранному направлению до самого завершения."),
             },
             {
                 key: "PV",
                 label: "PV",
                 kind: "currency",
-                description: __("Плановый объем: кумулятивный план на текущую дату."),
+                shortName: __("Плановый объем"),
+                formula: __("Берем план на дату отчета: прошлые месяцы учитываем полностью, текущий месяц - только по уже прошедшим дням."),
+                interpretation: __("Показывает, сколько по плану должно быть выполнено и освоено к выбранной дате."),
             },
             {
                 key: "EV",
                 label: "EV",
                 kind: "currency",
-                description: __("Освоенный объем: базовый бюджет, умноженный на процент готовности проекта."),
+                shortName: __("Освоенный объем"),
+                formula: __("Берем общий бюджет и умножаем его на текущий процент готовности проекта."),
+                interpretation: __("Показывает стоимость того результата, который проект уже реально должен был дать на эту дату."),
             },
             {
                 key: "AC",
                 label: "AC",
                 kind: "currency",
-                description: __("Фактическая стоимость: накопленный факт по проводкам GL Entry."),
+                shortName: __("Фактическая стоимость"),
+                formula: __("Складываем все фактические суммы на дату отчета: прошлые месяцы полностью, текущий месяц - по уже прошедшим дням."),
+                interpretation: __("Показывает, сколько денег уже реально потрачено или отражено по факту к этой дате."),
             },
         ],
     },
@@ -37,13 +45,19 @@ const DINEXT_PROJECT_PL_EVM_METRIC_GROUPS = [
                 key: "CV",
                 label: "CV",
                 kind: "currency",
-                description: __("Отклонение по стоимости: EV минус AC."),
+                shortName: __("Отклонение по стоимости"),
+                formula: __("Из стоимости уже выполненного результата вычитаем фактические затраты на него."),
+                interpretation: __(
+                    "Если значение меньше нуля, денег потрачено больше, чем стоит полученный результат. Если больше нуля, есть экономия."
+                ),
             },
             {
                 key: "SV",
                 label: "SV",
                 kind: "currency",
-                description: __("Отклонение по срокам/объему: EV минус PV."),
+                shortName: __("Отклонение по срокам"),
+                formula: __("Из стоимости уже выполненного результата вычитаем то, что по плану должно было быть сделано к этой дате."),
+                interpretation: __("Если значение меньше нуля, проект отстает от плана. Если больше нуля, проект идет с опережением."),
             },
         ],
     },
@@ -55,13 +69,19 @@ const DINEXT_PROJECT_PL_EVM_METRIC_GROUPS = [
                 key: "CPI",
                 label: "CPI",
                 kind: "ratio",
-                description: __("Индекс выполнения стоимости: отношение EV к AC."),
+                shortName: __("Индекс выполнения стоимости"),
+                formula: __("Делим стоимость уже выполненного результата на фактические затраты."),
+                interpretation: __(
+                    "Показывает, сколько результата проект получает на каждую потраченную денежную единицу. Значение больше единицы считается хорошим."
+                ),
             },
             {
                 key: "SPI",
                 label: "SPI",
                 kind: "ratio",
-                description: __("Индекс выполнения сроков: отношение EV к PV."),
+                shortName: __("Индекс выполнения сроков"),
+                formula: __("Делим стоимость уже выполненного результата на то, что по плану должно было быть сделано к этой дате."),
+                interpretation: __("Показывает, насколько фактический прогресс соответствует плану. Значение больше единицы считается хорошим."),
             },
         ],
     },
@@ -73,19 +93,27 @@ const DINEXT_PROJECT_PL_EVM_METRIC_GROUPS = [
                 key: "EAC",
                 label: "EAC",
                 kind: "currency",
-                description: __("Прогноз по завершении: AC + (BAC - EV) / (CPI * SPI)."),
+                shortName: __("Прогноз по завершении"),
+                formula: __("Берем уже накопленный факт и добавляем оставшуюся часть бюджета с поправкой на текущую эффективность по деньгам и срокам."),
+                interpretation: __(
+                    "Показывает, во сколько обойдется это направление проекта к завершению, если текущая динамика не изменится."
+                ),
             },
             {
                 key: "ETC",
                 label: "ETC",
                 kind: "currency",
-                description: __("Оставшиеся затраты/освоение до завершения: EAC минус AC."),
+                shortName: __("До завершения"),
+                formula: __("Из прогноза на завершение вычитаем то, что уже накоплено по факту."),
+                interpretation: __("Показывает, сколько еще денег потребуется до завершения при текущем прогнозе."),
             },
             {
                 key: "VAC",
                 label: "VAC",
                 kind: "currency",
-                description: __("Отклонение по завершении: BAC минус EAC."),
+                shortName: __("Отклонение по завершении"),
+                formula: __("Из общего утвержденного бюджета вычитаем прогноз итоговой суммы."),
+                interpretation: __("Если значение меньше нуля, к завершению ожидается перерасход. Если больше нуля, в бюджете остается запас."),
             },
         ],
     },
@@ -97,7 +125,11 @@ const DINEXT_PROJECT_PL_EVM_METRIC_GROUPS = [
                 key: "TCPI",
                 label: "TCPI",
                 kind: "ratio",
-                description: __("Требуемая эффективность до конца проекта: (BAC - EV) / (BAC - AC)."),
+                shortName: __("Требуемая эффективность"),
+                formula: __("Сравниваем оставшийся объем работы по бюджету с тем, сколько еще можно потратить без выхода за общий бюджет."),
+                interpretation: __(
+                    "Показывает, насколько эффективно нужно работать дальше, чтобы уложиться в общий бюджет. Значение меньше или равно единице считается достижимым."
+                ),
             },
         ],
     },
@@ -249,7 +281,9 @@ function build_financial_metric_groups(trackLabel, values) {
                 key: metric.key,
                 label: metric.label,
                 kind: metric.kind,
-                description: metric.description,
+                shortName: metric.shortName,
+                formula: metric.formula,
+                interpretation: metric.interpretation,
                 value,
                 status: get_financial_metric_status(metric.key, value, trackLabel),
             };
@@ -383,6 +417,20 @@ function format_financial_metric_value(value, kind) {
     return frappe.format(value, { fieldtype: "Currency" });
 }
 
+function build_financial_metric_tooltip(metric) {
+    const parts = [];
+
+    if (metric?.formula) {
+        parts.push(__( metric.formula ));
+    }
+
+    if (metric?.interpretation) {
+        parts.push(__( metric.interpretation ));
+    }
+
+    return parts.join("\n");
+}
+
 function render_financial_metrics(frm) {
     if (!frm) {
         return;
@@ -462,15 +510,19 @@ function render_financial_metrics(frm) {
 
             group.metrics.forEach((metric) => {
                 const metricValue = format_financial_metric_value(metric.value, metric.kind);
-                const description = frappe.utils.escape_html(metric.description || "");
+                const tooltipText = build_financial_metric_tooltip(metric);
+                const helpTitle = frappe.utils.escape_html(tooltipText).replace(/"/g, "&quot;");
                 const label = frappe.utils.escape_html(metric.label);
+                const shortName = frappe.utils.escape_html(metric.shortName || "");
                 const statusClass = metric.status ? ` is-${metric.status}` : "";
-                const helpTitle = description.replace(/"/g, "&quot;");
 
                 $group.append(`
                     <div class="evm-metric-row${statusClass}">
                         <div class="evm-metric-label-wrap">
-                            <span class="evm-metric-label">${label}</span>
+                            <span class="evm-metric-label">
+                                <span class="evm-metric-code">${label}</span>
+                                <span class="evm-metric-short-name">${shortName}</span>
+                            </span>
                             <span class="evm-metric-help" title="${helpTitle}" aria-label="${helpTitle}">i</span>
                         </div>
                         <div class="evm-metric-value">${metricValue}</div>
