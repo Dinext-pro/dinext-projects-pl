@@ -2,26 +2,22 @@
 frappe.ui.form.on('Project', {
 	refresh: function(frm) {
 		if (frm.doc.name && !frm.is_new()) {
-            ensure_financial_metrics_reporting_date(frm);
+            init_financial_metrics_reporting_date(frm);
 		    add_buttons( frm );
             add_project_profit_loss_chart(frm);
             //render_pl_chart(frm);
         }
 	},
-
-    custom_metrics_reporting_date(frm) {
-        ensure_financial_metrics_reporting_date(frm);
-        render_financial_metrics(frm);
-    },
 })
 
-function ensure_financial_metrics_reporting_date(frm) {
-    if (!frm || !frm.get_field || !frm.get_field("custom_metrics_reporting_date")) {
-        return;
+function init_financial_metrics_reporting_date(frm) {
+    if (frm._financial_metrics_reporting_date === undefined) {
+        frm._financial_metrics_reporting_date =
+            frm.doc.custom_metrics_reporting_date || frappe.datetime.get_today();
     }
 
-    if (!frm.doc.custom_metrics_reporting_date) {
-        frm.set_value("custom_metrics_reporting_date", frappe.datetime.get_today());
+    if (frm.get_field?.("custom_metrics_reporting_date")) {
+        frm.set_df_property("custom_metrics_reporting_date", "hidden", 1);
     }
 }
 
@@ -258,9 +254,30 @@ function render_financial_metrics(frm) {
                 <h3 class="evm-metrics-title">${__("Финансовые метрики")}</h3>
                 <div class="evm-metrics-note">${frappe.utils.escape_html(metricsData.note || "")}</div>
             </div>
+            <div class="evm-metrics-reporting-date"></div>
         </div>
     `);
     $section.append($header);
+
+    init_financial_metrics_reporting_date(frm);
+    frappe.ui.form.make_control({
+        parent: $header.find(".evm-metrics-reporting-date"),
+        df: {
+            fieldtype: "Date",
+            fieldname: "financial_metrics_reporting_date",
+            label: __("Отчетная дата метрик"),
+            change() {
+                const nextValue = this.get_value() || frappe.datetime.get_today();
+                if (nextValue === frm._financial_metrics_reporting_date) {
+                    return;
+                }
+                frm._financial_metrics_reporting_date = nextValue;
+                render_financial_metrics(frm);
+            },
+        },
+        value: frm._financial_metrics_reporting_date,
+        render_input: true,
+    });
 
     if (metricsData.warning) {
         $section.append(

@@ -196,6 +196,15 @@ function applyPLStyle() {
             margin-bottom: 0.75rem;
         }
 
+        .project-financial-metrics .evm-metrics-reporting-date {
+            flex: 0 0 auto;
+            min-width: 11rem;
+        }
+
+        .project-financial-metrics .evm-metrics-reporting-date .form-group {
+            margin-bottom: 0;
+        }
+
         .project-financial-metrics .evm-metrics-title {
             margin: 0;
             font-size: 1rem;

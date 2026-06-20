@@ -422,14 +422,12 @@ function get_financial_metric_track_period_totals(frm, period, trackType) {
 
 function get_financial_metrics_reporting_date(frm) {
     const todayString = frappe.datetime.get_today();
-    const fieldExists = Boolean(frm?.get_field && frm.get_field("custom_metrics_reporting_date"));
-    const rawValue = frm?.doc?.custom_metrics_reporting_date || todayString;
+    const rawValue = frm?._financial_metrics_reporting_date || todayString;
 
     return {
         date: frappe.datetime.str_to_obj(rawValue),
         value: rawValue,
-        fieldExists,
-        usedDefault: !frm?.doc?.custom_metrics_reporting_date,
+        usedDefault: !frm?._financial_metrics_reporting_date,
     };
 }
 
@@ -577,12 +575,6 @@ function build_financial_metrics(frm) {
     const reportingDate = reportingDateInfo.date;
     const progressPercent = Number(frm.doc.percent_complete) || 0;
     const warnings = [];
-
-    if (!reportingDateInfo.fieldExists) {
-        warnings.push(__("Поле custom_metrics_reporting_date не найдено в форме Project. Для расчета временно используется текущая дата."));
-    } else if (reportingDateInfo.usedDefault) {
-        warnings.push(__("Отчетная дата не заполнена. Используется текущая дата."));
-    }
 
     if (progressPercent <= 0) {
         warnings.push(
