@@ -289,9 +289,23 @@ function applyPLStyle() {
         }
 
         .project-financial-metrics .evm-metric-label {
+            display: inline-flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 0.25rem;
             color: var(--text-color);
             font-size: 13px;
             font-weight: 500;
+        }
+
+        .project-financial-metrics .evm-metric-code {
+            font-weight: 600;
+            letter-spacing: 0.01em;
+        }
+
+        .project-financial-metrics .evm-metric-short-name {
+            color: var(--text-muted);
+            font-weight: 400;
         }
 
         .project-financial-metrics .evm-metric-help {
