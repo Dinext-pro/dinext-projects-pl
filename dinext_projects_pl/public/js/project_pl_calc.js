@@ -153,6 +153,33 @@ function get_child_budget_sum(account, task, dimension = [], period, aggregatedB
     return sum;
 }
 
+function get_direct_budget_value(row, period, valueKey) {
+    if (!row || !Array.isArray(row.dimension_data) || !row.dimension_data.length || !period) {
+        return 0;
+    }
+
+    const fieldname = `${valueKey}_${period.year}_${period.month}`;
+    return row.dimension_data.reduce((sum, bucket) => {
+        return sum + (Number(bucket?.[fieldname]) || 0);
+    }, 0);
+}
+
+function get_row_period_total(frm, row, period, valueKey) {
+    const directValue = get_direct_budget_value(row, period, valueKey);
+    if (directValue) {
+        return directValue;
+    }
+
+    return get_child_budget_sum(
+        row.value,
+        row.task ? row.task.value : "",
+        [],
+        period,
+        frm.aggregatedBudget,
+        valueKey
+    );
+}
+
 /**
  * Оптимизированная calc_column_total — основной метод, использующий индексы.
  *
@@ -164,36 +191,18 @@ function calc_column_total(frm, period, roots, calc_plan = true, calc_fact = fal
     let actual_income = 0;
     let actual_expenses = 0;
 
-    // подготавливаем массивы бюджетов
-    const index = getOrCreateBudgetIndex( frm.aggregatedBudget || {} );
-
     for (const child of roots) {
-        // берем первое измерение (как в оригинале), но избегаем ошибок
-        const bucket = Array.isArray(child.dimension_data) && child.dimension_data.length ? child.dimension_data[0] : {};
-        const planKey = `plan_${period.year}_${period.month}`;
-        const actualKey = `${(period.is_past || calc_fact) ? "fact" : "forecast"}_${period.year}_${period.month}`;
-
-        let plan = Number(bucket[planKey]) || 0;
-        let actual = Number(bucket[actualKey]) || 0;
-
-        // если нет прямого плана — считаем сумму по детям (через индекс)
-        if (!plan && calc_plan) {
-            plan = get_child_budget_sum(child.value, "", [], period, frm.aggregatedBudget, "plan");
-        }
-
-        if (!actual) {
-            actual = get_child_budget_sum(child.value, "", [], period, frm.aggregatedBudget, (period.is_past || calc_fact) ? "fact" : "forecast");
-        }
+        const actualValueKey = (period.is_past || calc_fact) ? "fact" : "forecast";
+        const plan = calc_plan ? get_row_period_total(frm, child, period, "plan") : 0;
+        const actual = get_row_period_total(frm, child, period, actualValueKey);
 
         if (child.type === "Expense") {
-            if (!actual_expenses && actual) actual_expenses = actual;
-            if (!plan_expenses && plan) plan_expenses = plan;
+            actual_expenses += actual;
+            plan_expenses += plan;
         } else if (child.type === "Income") {
-            if (!actual_income && actual) actual_income = actual;
-            if (!plan_income && plan) plan_income = plan;
+            actual_income += actual;
+            plan_income += plan;
         }
-
-        if (actual_income && actual_expenses && plan_income && plan_expenses) break;
     }
 
     return {
@@ -214,24 +223,7 @@ function get_period_forecast_expenses(frm, period, roots) {
         if (child.type !== "Expense") {
             continue;
         }
-
-        const bucket = Array.isArray(child.dimension_data) && child.dimension_data.length
-            ? child.dimension_data[0]
-            : {};
-        const forecastKey = `forecast_${period.year}_${period.month}`;
-        let forecast = Number(bucket[forecastKey]) || 0;
-
-        if (!forecast) {
-            forecast = get_child_budget_sum(child.value, "", [], period, frm.aggregatedBudget, "forecast");
-        }
-
-        if (!forecast_expenses && forecast) {
-            forecast_expenses = forecast;
-        }
-
-        if (forecast_expenses) {
-            break;
-        }
+        forecast_expenses += get_row_period_total(frm, child, period, "forecast");
     }
 
     return forecast_expenses;

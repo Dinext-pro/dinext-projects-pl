@@ -116,6 +116,37 @@ class TestFinancialMetricsService(FrappeTestCase):
 		self.assertEqual(expense_track["values"]["BAC"], 400)
 		self.assertEqual(expense_track["values"]["EV"], 200)
 
+	def test_service_uses_parent_plan_without_double_counting_child_accounts(self):
+		project = frappe.get_doc("Project", self.project.name)
+		project.db_set(
+			{
+				"expected_start_date": "2026-01-01",
+				"expected_end_date": "2026-03-31",
+				"percent_complete": 50,
+			},
+			update_modified=False,
+		)
+
+		parent_expense_account = frappe.db.get_value("Account", self.expense_account, "parent_account")
+		if not parent_expense_account:
+			self.skipTest("Expense account does not have a parent account in the test chart of accounts")
+
+		self._seed_project_budget(
+			parent_expense_account,
+			[],
+			{(2026, 1): {"plan": 100, "expected": 0}},
+		)
+		self._seed_project_budget(
+			self.expense_account,
+			[],
+			{(2026, 1): {"plan": 40, "expected": 0}},
+		)
+
+		payload = get_project_financial_metrics(self.project.name, "2026-01-15")
+
+		expense_track = next(track for track in payload["tracks"] if track["key"] == "expense")
+		self.assertEqual(expense_track["values"]["BAC"], 100)
+
 	@classmethod
 	def _get_expense_account(cls, company):
 		account = frappe.db.get_value(

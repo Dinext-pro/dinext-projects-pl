@@ -9,6 +9,7 @@ import frappe
 from frappe.utils import add_months, flt, getdate
 
 from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.project_budget_plan_vs_forecast import (
+	build_hierarchy_for_project,
 	get_actual_data_simple,
 	process_project_data,
 )
@@ -54,7 +55,14 @@ def _get_pl_accounts(company: str) -> list[dict]:
 	)
 
 
-def _collect_plan_values(project: str, company: str, from_year: int, from_month: int, to_year: int, to_month: int):
+def _build_parent_children_map(accounts: list[dict]) -> dict[str | None, list[dict]]:
+	parent_children_map: dict[str | None, list[dict]] = defaultdict(list)
+	for account in accounts:
+		parent_children_map[account.parent_account or None].append(account)
+	return parent_children_map
+
+
+def _collect_project_plan_rows(project: str, company: str, from_year: int, from_month: int, to_year: int, to_month: int):
 	filters = {
 		"project": project,
 		"company": company,
@@ -63,16 +71,26 @@ def _collect_plan_values(project: str, company: str, from_year: int, from_month:
 		"from_month": from_month,
 		"to_month": to_month,
 	}
-	plan_values: dict[tuple[str, int, int], float] = defaultdict(float)
+	return process_project_data(project, filters) or []
 
-	for row in process_project_data(project, filters) or []:
-		account = row.get("account")
-		year = int(row.get("year") or 0)
-		month = int(row.get("month") or 0)
-		if not account or not year or not month:
-			continue
-		plan_values[(account, year, month)] += flt(row.get("plan"))
 
+def _build_normalized_plan_values(
+	project_rows: list[dict],
+	accounts: list[dict],
+) -> dict[tuple[str, int, int], float]:
+	if not project_rows:
+		return {}
+
+	project_hierarchy = build_hierarchy_for_project(
+		project_rows,
+		accounts,
+		_build_parent_children_map(accounts),
+	)
+	plan_values: dict[tuple[str, int, int], float] = {}
+	for account_name, account_info in project_hierarchy.items():
+		for period_key, values in account_info.get("data", {}).items():
+			year_str, month_str = period_key.split("_")
+			plan_values[(account_name, int(year_str), int(month_str))] = flt(values.get("plan"))
 	return plan_values
 
 
@@ -164,8 +182,15 @@ def get_track_period_totals(project_doc) -> tuple[list[dict], dict[str, dict[tup
 
 	from_year, from_month, to_year, to_month = _get_project_date_bounds(project_doc)
 	accounts = _get_pl_accounts(project_doc.company)
-	plan_values = _rollup_account_period_values(
-		_collect_plan_values(project_doc.name, project_doc.company, from_year, from_month, to_year, to_month),
+	plan_values = _build_normalized_plan_values(
+		_collect_project_plan_rows(
+			project_doc.name,
+			project_doc.company,
+			from_year,
+			from_month,
+			to_year,
+			to_month,
+		),
 		accounts,
 	)
 	actual_values = _rollup_account_period_values(
