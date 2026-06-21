@@ -95,10 +95,73 @@ function createTranslationStub() {
     };
 }
 
+function createSampleMetricsPayload() {
+    return {
+        ready: true,
+        note: "Метрики рассчитываются на отчетную дату 2026-01-15.",
+        warning: null,
+        reportingDate: "2026-01-15",
+        progressPercent: 50,
+        tracks: [
+            {
+                key: "income",
+                label: "Доходы",
+                values: { BAC: 1000, EV: 500 },
+                groups: [
+                    {
+                        key: "base",
+                        label: "Базовые",
+                        metrics: [
+                            {
+                                key: "BAC",
+                                label: "BAC",
+                                kind: "currency",
+                                shortName: "Бюджет по завершению",
+                                formula:
+                                    "Складываем все утвержденные плановые суммы по этому направлению за весь срок проекта.",
+                                interpretation:
+                                    "Это весь утвержденный бюджет проекта по выбранному направлению до самого завершения.",
+                                value: 1000,
+                                status: "neutral",
+                            },
+                        ],
+                    },
+                ],
+            },
+            {
+                key: "expense",
+                label: "Расходы",
+                values: { BAC: 400, EV: 200 },
+                groups: [
+                    {
+                        key: "base",
+                        label: "Базовые",
+                        metrics: [
+                            {
+                                key: "BAC",
+                                label: "BAC",
+                                kind: "currency",
+                                shortName: "Бюджет по завершению",
+                                formula:
+                                    "Складываем все утвержденные плановые суммы по этому направлению за весь срок проекта.",
+                                interpretation:
+                                    "Это весь утвержденный бюджет проекта по выбранному направлению до самого завершения.",
+                                value: 400,
+                                status: "neutral",
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    };
+}
+
 function createContext() {
     const controlCalls = [];
     const chartCalls = [];
     const formHandlers = {};
+    const apiCalls = [];
     const dollar = (value) => {
         if (value instanceof FakeElement) {
             return value;
@@ -107,20 +170,15 @@ function createContext() {
         return new FakeElement(typeof value === "string" ? value : "wrapped");
     };
 
-    return {
+    const context = {
         __: createTranslationStub(),
         console,
         $: dollar,
         __controlCalls: controlCalls,
         __chartCalls: chartCalls,
         __formHandlers: formHandlers,
+        __apiCalls: apiCalls,
         globalThis: {},
-        get_budget_display_periods() {
-            return [{ year: 2026, month: 1 }];
-        },
-        get_child_budget_sum() {
-            return 0;
-        },
         frappe: {
             datetime: {
                 get_today() {
@@ -168,8 +226,18 @@ function createContext() {
                     return null;
                 }
             },
+            call(options) {
+                apiCalls.push(options);
+                const handler = context.__financialMetricsApiHandler;
+                return Promise.resolve({
+                    message: handler ? handler(options) : createSampleMetricsPayload(),
+                });
+            },
         },
     };
+
+    context.globalThis = context;
+    return context;
 }
 
 function loadFinancialMetricsModule() {
@@ -256,86 +324,54 @@ test("financial metrics asset exports build and render entry points", () => {
     assert.equal(typeof context.render_financial_metrics, "function");
 });
 
-test("build_financial_metrics returns grouped tracks for income and expense", () => {
+test("build_financial_metrics requests server payload", async () => {
     const context = loadFinancialMetricsModule();
     const frm = {
         doc: {
+            name: "PROJ-0001",
             percent_complete: 50,
         },
-        aggregatedBudget: {
-            income_root: {
-                value: "Income Root",
-                parent_account: "",
-                task: "",
-                type: "Income",
-                dimension_data: [{ plan_2026_1: 1000, fact_2026_1: 250 }],
-            },
-            expense_root: {
-                value: "Expense Root",
-                parent_account: "",
-                task: "",
-                type: "Expense",
-                dimension_data: [{ plan_2026_1: 400, fact_2026_1: 100 }],
-            },
-        },
         _financial_metrics_reporting_date: "2026-01-15",
+        is_new() {
+            return false;
+        },
     };
 
-    const result = context.build_financial_metrics(frm);
+    const result = await context.build_financial_metrics(frm);
 
+    assert.equal(context.__apiCalls.length, 1);
+    assert.equal(
+        context.__apiCalls[0].method,
+        "dinext_projects_pl.dinext_projects_pl.financial_metrics.service.get_project_financial_metrics"
+    );
+    assert.equal(context.__apiCalls[0].args.project, "PROJ-0001");
+    assert.equal(context.__apiCalls[0].args.reporting_date, "2026-01-15");
     assert.equal(result.ready, true);
     assert.equal(result.tracks.length, 2);
-    assert.deepEqual(
-        Array.from(result.tracks, (track) => track.key),
-        ["income", "expense"]
-    );
-
-    const expenseTrack = result.tracks.find((track) => track.key === "expense");
-    assert.ok(expenseTrack);
-    assert.equal(expenseTrack.values.BAC, 400);
-    assert.equal(expenseTrack.values.EV, 200);
-    assert.equal(expenseTrack.groups.length > 0, true);
-
-    const baseMetric = expenseTrack.groups[0].metrics[0];
-    assert.equal(baseMetric.label, "BAC");
-    assert.equal(baseMetric.shortName, "Бюджет по завершению");
-    assert.equal(baseMetric.formula, "Складываем все утвержденные плановые суммы по этому направлению за весь срок проекта.");
-    assert.match(baseMetric.interpretation, /весь утвержденный бюджет проекта/i);
 });
 
-test("render_financial_metrics re-renders when reporting date changes", () => {
+test("render_financial_metrics re-renders when reporting date changes", async () => {
     const context = loadFinancialMetricsModule();
     const metricsWrapper = new FakeElement("metrics-wrapper");
     const sectionWrapper = new FakeElement("section-wrapper");
     metricsWrapper.closest = () => sectionWrapper;
-    const baseBuildFinancialMetrics = context.build_financial_metrics;
     const seenReportingDates = [];
-    context.build_financial_metrics = (frm) => {
-        seenReportingDates.push(frm._financial_metrics_reporting_date);
-        return baseBuildFinancialMetrics(frm);
+    context.__financialMetricsApiHandler = (options) => {
+        seenReportingDates.push(options.args.reporting_date);
+        return createSampleMetricsPayload();
     };
 
     const frm = {
         doc: {
+            name: "PROJ-0001",
             percent_complete: 50,
             custom_metrics_reporting_date: "2026-01-15",
         },
-        aggregatedBudget: {
-            income_root: {
-                value: "Income Root",
-                parent_account: "",
-                task: "",
-                type: "Income",
-                dimension_data: [{ plan_2026_1: 1000, fact_2026_1: 250 }],
-            },
-            expense_root: {
-                value: "Expense Root",
-                parent_account: "",
-                task: "",
-                type: "Expense",
-                dimension_data: [{ plan_2026_1: 400, fact_2026_1: 100 }],
-            },
+        _financial_metrics_reporting_date: "2026-01-15",
+        is_new() {
+            return false;
         },
+        aggregatedBudget: {},
         wrapper: new FakeElement("form-wrapper"),
         get_field(fieldname) {
             if (fieldname === "custom_metrics") {
@@ -354,6 +390,8 @@ test("render_financial_metrics re-renders when reporting date changes", () => {
     };
 
     context.render_financial_metrics(frm);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
     assert.deepEqual(seenReportingDates, ["2026-01-15"]);
     assert.equal(context.__controlCalls.length, 1);
     assert.deepEqual(frm.hiddenField, {
@@ -368,37 +406,29 @@ test("render_financial_metrics re-renders when reporting date changes", () => {
             return "2026-01-20";
         },
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     assert.equal(frm._financial_metrics_reporting_date, "2026-01-20");
     assert.equal(context.__controlCalls.length, 2);
+    assert.deepEqual(seenReportingDates, ["2026-01-15", "2026-01-20"]);
 });
 
-test("render_financial_metrics shows short names and detailed tooltip text", () => {
+test("render_financial_metrics shows short names and detailed tooltip text", async () => {
     const context = loadFinancialMetricsModule();
     const metricsWrapper = new FakeElement("metrics-wrapper");
     const sectionWrapper = new FakeElement("section-wrapper");
     metricsWrapper.closest = () => sectionWrapper;
+    context.__financialMetricsApiHandler = () => createSampleMetricsPayload();
 
     const frm = {
         doc: {
+            name: "PROJ-0001",
             percent_complete: 50,
             custom_metrics_reporting_date: "2026-01-15",
         },
-        aggregatedBudget: {
-            income_root: {
-                value: "Income Root",
-                parent_account: "",
-                task: "",
-                type: "Income",
-                dimension_data: [{ plan_2026_1: 1000, fact_2026_1: 250 }],
-            },
-            expense_root: {
-                value: "Expense Root",
-                parent_account: "",
-                task: "",
-                type: "Expense",
-                dimension_data: [{ plan_2026_1: 400, fact_2026_1: 100 }],
-            },
+        _financial_metrics_reporting_date: "2026-01-15",
+        is_new() {
+            return false;
         },
         wrapper: new FakeElement("form-wrapper"),
         get_field(fieldname) {
@@ -416,12 +446,16 @@ test("render_financial_metrics shows short names and detailed tooltip text", () 
     };
 
     context.render_financial_metrics(frm);
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     const renderedMarkup = collectRenderedMarkup(metricsWrapper);
     assert.match(renderedMarkup, /BAC/);
     assert.match(renderedMarkup, /Бюджет по завершению/);
-    assert.match(renderedMarkup, /Правило расчета: Складываем все утвержденные плановые суммы по этому направлению за весь срок проекта\./);
-    assert.match(renderedMarkup, /Интерпретация: Это весь утвержденный бюджет проекта/);
+    assert.match(
+        renderedMarkup,
+        /Складываем все утвержденные плановые суммы по этому направлению за весь срок проекта\./
+    );
+    assert.match(renderedMarkup, /Это весь утвержденный бюджет проекта/);
 });
 
 test("dashboard chart render still invokes financial metrics and chart creation", () => {
