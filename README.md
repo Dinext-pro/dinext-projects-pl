@@ -194,6 +194,7 @@ bench --site $SITE export-fixtures --app dinext_projects_pl
 ```bash
 bench --site $SITE run-tests --app dinext_projects_pl
 node --test tests/js/project_pl_financial_metrics.test.js
+node --test tests/js/project_pl_echarts.test.js
 ```
 
 ## 📄 Документация
@@ -210,6 +211,7 @@ node --test tests/js/project_pl_financial_metrics.test.js
 - [dinext_projects_pl/dinext_projects_pl/doctype/project_budget/test_project_budget.py](dinext_projects_pl/dinext_projects_pl/doctype/project_budget/test_project_budget.py) — regression-тесты budget approval flow.
 - [dinext_projects_pl/tests/test_financial_metrics_service.py](dinext_projects_pl/tests/test_financial_metrics_service.py) — unit/integration-тесты серверного расчета EVM-метрик.
 - [tests/js/project_pl_financial_metrics.test.js](tests/js/project_pl_financial_metrics.test.js) — JS-тесты render-слоя вкладки `Метрики`.
+- [tests/js/project_pl_echarts.test.js](tests/js/project_pl_echarts.test.js) — JS-тесты P&L ECharts (palette, tooltip, markLine, toolbox, geometry).
 
 ## ❤️ Благодарности
 
@@ -248,7 +250,8 @@ node --test tests/js/project_pl_financial_metrics.test.js
     │       └── project_pl_style.js
     ├── tests/
     │   └── js/
-    │       └── project_pl_financial_metrics.test.js
+    │       ├── project_pl_financial_metrics.test.js
+    │       └── project_pl_echarts.test.js
     └── dinext_projects_pl/
         ├── budget_approval/
         │   ├── __init__.py

@@ -22,6 +22,15 @@ const dashboardModulePath = path.resolve(
     "js",
     "project_pl_dashboard.js"
 );
+const echartsModulePath = path.resolve(
+    __dirname,
+    "..",
+    "..",
+    "dinext_projects_pl",
+    "public",
+    "js",
+    "project_pl_echarts.js"
+);
 
 class FakeElement {
     constructor(label = "element") {
@@ -79,6 +88,14 @@ class FakeElement {
     html(value) {
         this.htmlValue = value;
         return this;
+    }
+
+    toggleClass() {
+        return this;
+    }
+
+    get() {
+        return [this];
     }
 }
 
@@ -249,6 +266,59 @@ function loadFinancialMetricsModule() {
     return context;
 }
 
+function loadEchartsModule() {
+    const source = fs.readFileSync(echartsModulePath, "utf8");
+    const context = createContext();
+    context.globalThis = context;
+    context.window = {
+        requestIdleCallback(callback) {
+            callback();
+        },
+        matchMedia() {
+            return { matches: false };
+        },
+        echarts: {
+            init(element, theme) {
+                context.__chartCalls.push({ element, theme });
+                const instance = {
+                    setOption() {},
+                    resize() {},
+                    dispose() {},
+                };
+                return instance;
+            },
+        },
+    };
+    context.document = {
+        documentElement: {
+            getAttribute(name) {
+                return name === "data-theme" ? "light" : null;
+            },
+        },
+    };
+    context.MutationObserver = class {
+        observe() {}
+
+        disconnect() {}
+    };
+    context.getComputedStyle = () => ({
+        getPropertyValue() {
+            return "";
+        },
+    });
+    context.get_budget_display_periods = () => [{ year: 2026, month: 1, is_past: true }];
+    context.calc_column_total = () => ({
+        plan_income: 100,
+        actual_income: 90,
+        plan_expenses: 40,
+        actual_expenses: 35,
+    });
+    context.frappe.require = (_assets, callback) => callback();
+    vm.createContext(context);
+    vm.runInContext(source, context, { filename: echartsModulePath });
+    return context;
+}
+
 function loadDashboardModule() {
     const source = fs.readFileSync(dashboardModulePath, "utf8");
     const context = createContext();
@@ -258,39 +328,6 @@ function loadDashboardModule() {
     return context;
 }
 
-function loadDashboardModuleInWrappedScope() {
-    const source = fs.readFileSync(dashboardModulePath, "utf8");
-    const context = createContext();
-    context.globalThis = context;
-    context.window = context;
-    context.get_pl_chart_data = () => ({
-        labels: ["2026-01"],
-        datasets: [],
-    });
-    context.get_pl_chart_options = (frm, data) => ({ data });
-    context.globalThis.render_financial_metrics = (frm) => {
-        frm.metricsRenderCount = (frm.metricsRenderCount || 0) + 1;
-    };
-
-    const wrappedSource = `
-        (function () {
-            const globalThis = context.globalThis;
-            const window = context.window;
-            const console = context.console;
-            const __ = context.__;
-            const frappe = context.frappe;
-            const $ = context.$;
-            ${source}
-            get_pl_chart_data = context.get_pl_chart_data;
-            get_pl_chart_options = context.get_pl_chart_options;
-            context.__exports = { _render_pl_chart };
-        })();
-    `;
-
-    const script = new vm.Script(wrappedSource, { filename: dashboardModulePath });
-    script.runInNewContext({ context });
-    return context;
-}
 
 function collectRenderedMarkup(node) {
     if (typeof node === "string") {
@@ -458,21 +495,16 @@ test("render_financial_metrics shows short names and detailed tooltip text", asy
     assert.match(renderedMarkup, /Это весь утвержденный бюджет проекта/);
 });
 
-test("dashboard chart render still invokes financial metrics and chart creation", () => {
-    const context = loadDashboardModule();
+test("echarts chart render still invokes financial metrics and chart creation", async () => {
+    const context = loadEchartsModule();
     const chartWrapper = new FakeElement("chart-wrapper");
 
-    context.render_financial_metrics = (frm) => {
+    context.globalThis.render_financial_metrics = (frm) => {
         frm.metricsRenderCount = (frm.metricsRenderCount || 0) + 1;
     };
-    context.get_pl_chart_data = () => ({
-        labels: ["2026-01"],
-        datasets: [],
-    });
-    context.get_pl_chart_options = (frm, data) => ({ data });
 
     const frm = {
-        aggregatedBudget: { root: {} },
+        aggregatedBudget: { root: { parent_account: null, task: null } },
         bg_hide_plan: false,
         get_field(fieldname) {
             if (fieldname === "custom_pl_chart") {
@@ -483,17 +515,17 @@ test("dashboard chart render still invokes financial metrics and chart creation"
         },
     };
 
-    context._render_pl_chart(frm, true);
+    await context._render_pl_chart(frm, true);
 
     assert.equal(frm.metricsRenderCount, 1);
     assert.equal(context.__chartCalls.length, 1);
 });
 
-test("dashboard render uses global financial metrics contract", () => {
-    const context = loadDashboardModuleInWrappedScope();
+test("echarts render uses global financial metrics contract", async () => {
+    const context = loadEchartsModule();
     const chartWrapper = new FakeElement("chart-wrapper");
     const frm = {
-        aggregatedBudget: { root: {} },
+        aggregatedBudget: { root: { parent_account: null, task: null } },
         bg_hide_plan: false,
         get_field(fieldname) {
             if (fieldname === "custom_pl_chart") {
@@ -504,7 +536,11 @@ test("dashboard render uses global financial metrics contract", () => {
         },
     };
 
-    context.__exports._render_pl_chart(frm, true);
+    context.globalThis.render_financial_metrics = (targetFrm) => {
+        targetFrm.metricsRenderCount = (targetFrm.metricsRenderCount || 0) + 1;
+    };
+
+    await context._render_pl_chart(frm, true);
 
     assert.equal(frm.metricsRenderCount, 1);
     assert.equal(context.__chartCalls.length, 1);

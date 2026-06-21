@@ -1,0 +1,963 @@
+const ECHARTS_ASSET = "/assets/dinext_common/js/echarts.min.js";
+const LARGE_DATA_THRESHOLD = 1500;
+
+function pl_chart_debug_enabled() {
+    return Boolean(frappe?.boot?.developer_mode);
+}
+
+const PL_CHART_COLORS_HIDE_PLAN = ["#007a33", "#cc3333", "#ff9933", "#00509e"];
+const PL_CHART_COLORS_SHOW_PLAN = [
+    "#66b3a1",
+    "#007a33",
+    "#ff6666",
+    "#cc3333",
+    "#ffcc66",
+    "#ff9933",
+    "#007acc",
+    "#00509e",
+];
+
+let _plChartThemeObserver = null;
+let _plChartThemeObserverTarget = null;
+let _plChartResizeObserver = null;
+let _plChartResizeObserverTarget = null;
+
+function load_pl_echarts() {
+    if (window.echarts) {
+        return Promise.resolve();
+    }
+
+    return new Promise(function (resolve, reject) {
+        frappe.require([ECHARTS_ASSET], function () {
+            if (window.echarts) {
+                resolve();
+            } else {
+                reject(new Error("Failed to load ECharts"));
+            }
+        });
+    });
+}
+
+function is_pl_chart_dark_theme() {
+    const theme = document.documentElement.getAttribute("data-theme");
+    if (theme === "dark" || theme === "light") {
+        return theme === "dark";
+    }
+
+    const mode = document.documentElement.getAttribute("data-theme-mode");
+    if (mode === "dark") {
+        return true;
+    }
+    if (mode === "light") {
+        return false;
+    }
+
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function get_pl_chart_theme_colors() {
+    const rootStyle = getComputedStyle(document.documentElement);
+    const fallbackText = is_pl_chart_dark_theme() ? "#e2e2e2" : "#333333";
+    const fallbackMuted = is_pl_chart_dark_theme() ? "#a0a0a0" : "#748094";
+    const fallbackBorder = is_pl_chart_dark_theme() ? "#3a3a3a" : "#d1d8dd";
+    const fallbackBg = is_pl_chart_dark_theme() ? "#1e1e1e" : "#ffffff";
+
+    return {
+        text: rootStyle.getPropertyValue("--text-color").trim() || fallbackText,
+        muted: rootStyle.getPropertyValue("--text-muted").trim() || fallbackMuted,
+        border: rootStyle.getPropertyValue("--border-color").trim() || fallbackBorder,
+        bg: rootStyle.getPropertyValue("--card-bg").trim() || fallbackBg,
+    };
+}
+
+function format_pl_chart_axis_value(value) {
+    if (typeof frappe?.utils?.format_chart_axis_number === "function") {
+        return frappe.utils.format_chart_axis_number(value);
+    }
+
+    return frappe.format(value, { fieldtype: "Currency" });
+}
+
+function format_pl_chart_tooltip_value(value) {
+    return frappe.format(value, { fieldtype: "Currency" }, { only_value: true });
+}
+
+function get_pl_chart_view_label(frm) {
+    let view = __("факт/прогноз");
+    if (frm.budget_view_options == __("Только прогноз")) {
+        view = __("прогноз");
+    } else if (frm.budget_view_options == __("Только факт")) {
+        view = __("факт");
+    }
+    return view;
+}
+
+function build_pl_chart_toolbox(themeColors, frm) {
+    const projectName = frm?.doc?.name;
+
+    return {
+        right: 8,
+        top: 4,
+        itemSize: 16,
+        iconStyle: {
+            borderColor: themeColors.muted,
+        },
+        feature: {
+            saveAsImage: {
+                show: true,
+                title: __("Save as Image"),
+                name: projectName ? `project-pl-${projectName}` : "project-pl-chart",
+                type: "png",
+                pixelRatio: 2,
+                backgroundColor: themeColors.bg,
+            },
+        },
+    };
+}
+
+function build_pl_chart_data(frm) {
+    if (pl_chart_debug_enabled()) {
+        console.time("build_pl_chart_data");
+    }
+    let periods = get_budget_display_periods(frm, "month");
+    let labels = periods.map((p) => `${p.year}-${String(p.month).padStart(2, "0")}`);
+
+    let plan_income = [];
+    let actual_income = [];
+    let plan_expenses = [];
+    let actual_expenses = [];
+    let profit_plan = [];
+    let profit_actual = [];
+    let roots = getFinancialRootRows(frm.aggregatedBudget);
+
+    periods.forEach((period) => {
+        let r = calc_column_total(frm, period, roots, true);
+        plan_income.push(parseFloat(r.plan_income.toFixed(2)));
+        actual_income.push(parseFloat(r.actual_income.toFixed(2)));
+        plan_expenses.push(parseFloat((-r.plan_expenses).toFixed(2)));
+        actual_expenses.push(parseFloat((-r.actual_expenses).toFixed(2)));
+        profit_plan.push(parseFloat((r.plan_income - r.plan_expenses).toFixed(2)));
+        profit_actual.push(parseFloat((r.actual_income - r.actual_expenses).toFixed(2)));
+    });
+
+    let cumulative_profit_plan = [];
+    let cumulative_profit_actual = [];
+    let cumP = 0;
+    let cumA = 0;
+    for (let i = 0; i < profit_plan.length; i++) {
+        cumP += profit_plan[i];
+        cumA += profit_actual[i];
+        cumulative_profit_plan.push(parseFloat(cumP.toFixed(2)));
+        cumulative_profit_actual.push(parseFloat(cumA.toFixed(2)));
+    }
+
+    if (pl_chart_debug_enabled()) {
+        console.timeEnd("build_pl_chart_data");
+    }
+    return {
+        labels,
+        plan_income,
+        actual_income,
+        plan_expenses,
+        actual_expenses,
+        profit_plan,
+        profit_actual,
+        cumulative_profit_plan,
+        cumulative_profit_actual,
+        periods,
+    };
+}
+
+function get_pl_chart_data(frm) {
+    let d = build_pl_chart_data(frm);
+    let datasets = [];
+    let view = get_pl_chart_view_label(frm);
+
+    if (!frm.bg_hide_plan) {
+        datasets.push({ name: __("Доходы - план"), values: d.plan_income, chartType: "bar" });
+    }
+    datasets.push({ name: __("Доходы") + " - " + view, values: d.actual_income, chartType: "bar" });
+    if (!frm.bg_hide_plan) {
+        datasets.push({ name: __("Расходы - план"), values: d.plan_expenses, chartType: "bar" });
+    }
+    datasets.push({ name: __("Расходы") + " - " + view, values: d.actual_expenses, chartType: "bar" });
+
+    if (!frm.bg_hide_plan) {
+        datasets.push({ name: __("Прибыль - план"), values: d.profit_plan, chartType: "line" });
+    }
+    datasets.push({ name: __("Прибыль") + " - " + view, values: d.profit_actual, chartType: "line" });
+
+    if (!frm.bg_hide_plan) {
+        datasets.push({
+            name: __("Прибыль накопл. - план"),
+            values: d.cumulative_profit_plan,
+            chartType: "line",
+        });
+    }
+    datasets.push({
+        name: __("Прибыль накопл.") + " - " + view,
+        values: d.cumulative_profit_actual,
+        chartType: "line",
+    });
+
+    let yMarkers = null;
+    if (frm.bg_hide_plan) {
+        let profit_plan = d.cumulative_profit_plan[d.cumulative_profit_plan.length - 1];
+        if (profit_plan) {
+            yMarkers = [
+                {
+                    label: __("Плановая прибыль: ") + format_pl_chart_axis_value(profit_plan),
+                    value: profit_plan,
+                    options: { labelPos: "left" },
+                },
+            ];
+        }
+    }
+
+    return {
+        labels: d.labels,
+        datasets,
+        yMarkers,
+        dataObj: d,
+    };
+}
+
+function build_pl_bar_series(name, values, color, options = {}) {
+    const { stack = null } = options;
+    const series = {
+        name,
+        type: "bar",
+        data: values,
+        barGap: "20%",
+        barCategoryGap: "40%",
+        barMaxWidth: PL_CHART_BAR_MAX_WIDTH,
+        itemStyle: { color },
+        emphasis: { focus: "series" },
+    };
+
+    if (stack) {
+        series.stack = stack;
+        series.stackStrategy = "samesign";
+    }
+
+    return series;
+}
+
+const PL_CHART_BAR_STACK_ORDER = {
+    plan: 0,
+    actual: 1,
+};
+
+function get_pl_chart_bar_stack_group(dataset) {
+    const name = String(dataset.name || "");
+    if (name.includes(__(" - план"))) {
+        return "plan";
+    }
+    return "actual";
+}
+
+function get_pl_chart_bar_series_role(dataset) {
+    const name = String(dataset.name || "");
+    if (name.includes(__("Доходы"))) {
+        return 0;
+    }
+    if (name.includes(__("Расходы"))) {
+        return 1;
+    }
+    return 2;
+}
+
+function sort_pl_chart_bar_layer_items(items) {
+    return items.slice().sort((left, right) => {
+        const leftStack = get_pl_chart_bar_stack_group(left.dataset);
+        const rightStack = get_pl_chart_bar_stack_group(right.dataset);
+        if (leftStack !== rightStack) {
+            return PL_CHART_BAR_STACK_ORDER[leftStack] - PL_CHART_BAR_STACK_ORDER[rightStack];
+        }
+
+        return (
+            get_pl_chart_bar_series_role(left.dataset) -
+            get_pl_chart_bar_series_role(right.dataset)
+        );
+    });
+}
+
+const PL_CHART_BAR_SLOT_FILL = 0.8;
+const PL_CHART_BAR_MAX_WIDTH = 40;
+const PL_CHART_PROFIT_LABEL_GAP = 6;
+const PL_CHART_CURRENT_DATE_LINE_WIDTH = 1;
+
+const PL_CHART_LAYER_ORDER = ["cumulative", "bar", "profit"];
+const PL_CHART_LAYER_Z = {
+    cumulative: 1,
+    bar: 2,
+    profit: 3,
+};
+
+function get_pl_profit_dash_geometry(frm, stackGroup, categoryBandWidth) {
+    const stackCount = frm.bg_hide_plan ? 1 : 2;
+    const slotIndex =
+        stackGroup === "plan" ? 0 : frm.bg_hide_plan ? 0 : PL_CHART_BAR_STACK_ORDER.actual;
+    const slotWidth = categoryBandWidth / stackCount;
+    const offsetX = (slotIndex - (stackCount - 1) / 2) * slotWidth;
+    const dashWidth = slotWidth * PL_CHART_BAR_SLOT_FILL;
+
+    return {
+        offsetX,
+        dashWidth,
+        slotWidth,
+        stackCount,
+        slotIndex,
+    };
+}
+
+function get_pl_profit_label_layout(profitValue, lineY, gapPx = PL_CHART_PROFIT_LABEL_GAP) {
+    if (profitValue < 0) {
+        return {
+            y: lineY + gapPx,
+            verticalAlign: "top",
+        };
+    }
+
+    return {
+        y: lineY - gapPx,
+        verticalAlign: "bottom",
+    };
+}
+
+function get_pl_chart_dataset_layer(dataset) {
+    const name = String(dataset.name || "");
+    if (name.includes(__("накопл."))) {
+        return "cumulative";
+    }
+    if (name.includes(__("Прибыль"))) {
+        return "profit";
+    }
+    return "bar";
+}
+
+function build_pl_profit_dash_series(dataset, color, frm) {
+    const stackGroup = get_pl_chart_bar_stack_group(dataset);
+    const data = dataset.values.map((value, index) => [index, value]);
+
+    return {
+        name: dataset.name,
+        type: "custom",
+        z: PL_CHART_LAYER_Z.profit,
+        stackGroup,
+        color,
+        itemStyle: { color },
+        renderItem(params, api) {
+            const categoryIndex = params.dataIndex;
+            const profitValue = api.value(1);
+            if (profitValue == null || Number.isNaN(profitValue)) {
+                return;
+            }
+
+            const point = api.coord([categoryIndex, profitValue]);
+            const bandWidth = api.size([1, 0])[0];
+            const geo = get_pl_profit_dash_geometry(frm, stackGroup, bandWidth);
+            const xCenter = point[0] + geo.offsetX;
+            const halfWidth = geo.dashWidth / 2;
+            const y = point[1];
+            const labelLayout = get_pl_profit_label_layout(profitValue, y);
+
+            return {
+                type: "group",
+                children: [
+                    {
+                        type: "line",
+                        shape: {
+                            x1: xCenter - halfWidth,
+                            y1: y,
+                            x2: xCenter + halfWidth,
+                            y2: y,
+                        },
+                        style: {
+                            stroke: color,
+                            lineWidth: 2,
+                            lineDash: [4, 4],
+                        },
+                    },
+                    {
+                        type: "text",
+                        x: xCenter,
+                        y: labelLayout.y,
+                        style: {
+                            text: format_pl_chart_axis_value(profitValue),
+                            fill: color,
+                            fontSize: 11,
+                            textAlign: "center",
+                            textVerticalAlign: labelLayout.verticalAlign,
+                        },
+                    },
+                ],
+            };
+        },
+        encode: {
+            x: 0,
+            y: 1,
+        },
+        data,
+        tooltip: {
+            show: true,
+        },
+    };
+}
+
+function build_pl_chart_series_item(dataset, color, layer, frm) {
+    let series;
+
+    if (layer === "bar") {
+        series = {
+            ...build_pl_bar_series(dataset.name, dataset.values, color, {
+                stack: get_pl_chart_bar_stack_group(dataset),
+            }),
+            z: PL_CHART_LAYER_Z.bar,
+        };
+    } else if (layer === "cumulative") {
+        series = {
+            ...build_pl_line_series(dataset.name, dataset.values, color, {
+                showLine: true,
+                showSymbol: false,
+                area: true,
+            }),
+            z: PL_CHART_LAYER_Z.cumulative,
+        };
+    } else {
+        series = build_pl_profit_dash_series(dataset, color, frm);
+    }
+
+    return {
+        ...series,
+        color,
+    };
+}
+
+function build_pl_line_series(name, values, color, options = {}) {
+    const {
+        showLine = true,
+        showSymbol = false,
+        area = false,
+        markLine = null,
+    } = options;
+
+    const series = {
+        name,
+        type: "line",
+        data: values,
+        smooth: true,
+        showSymbol,
+        symbolSize: showSymbol ? 6 : 0,
+        lineStyle: {
+            color,
+            width: showLine ? 2 : 0,
+            opacity: showLine ? 1 : 0,
+        },
+        itemStyle: { color },
+        emphasis: { focus: "series" },
+    };
+
+    if (area) {
+        series.areaStyle = {
+            color,
+            opacity: 0.18,
+        };
+    }
+
+    if (markLine) {
+        series.markLine = markLine;
+    }
+
+    return series;
+}
+
+function get_pl_chart_y_axis_range(chartData) {
+    let min = Infinity;
+    let max = -Infinity;
+
+    chartData.datasets.forEach((dataset) => {
+        dataset.values.forEach((value) => {
+            min = Math.min(min, value);
+            max = Math.max(max, value);
+        });
+    });
+
+    chartData.yMarkers?.forEach((marker) => {
+        min = Math.min(min, marker.value);
+        max = Math.max(max, marker.value);
+    });
+
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+        return {};
+    }
+
+    if (min === max) {
+        const pad = Math.abs(min) * 0.1 || 1;
+        return {
+            min: min - pad,
+            max: max + pad,
+        };
+    }
+
+    const pad = (max - min) * 0.05;
+    return {
+        min: min - pad,
+        max: max + pad,
+    };
+}
+
+function get_pl_chart_current_period_index(periods) {
+    if (!periods?.length || !frappe.datetime?.get_today || !frappe.datetime?.str_to_obj) {
+        return -1;
+    }
+
+    const today = frappe.datetime.str_to_obj(frappe.datetime.get_today());
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+
+    return periods.findIndex((period) => period.year === year && period.month === month);
+}
+
+function build_pl_chart_plan_profit_mark_line_entry(marker, chartData, themeColors) {
+    const labels = chartData.labels || [];
+    const firstCategory = labels[0] ?? 0;
+    const lastCategory = labels[labels.length - 1] ?? firstCategory;
+    const markerLabel = {
+        show: true,
+        formatter: marker.label,
+        color: themeColors.text,
+        fontSize: 12,
+        position: "insideStartTop",
+        align: "left",
+        verticalAlign: "bottom",
+        distance: 8,
+    };
+
+    return [
+        {
+            coord: [firstCategory, marker.value],
+            symbol: "none",
+            label: markerLabel,
+        },
+        {
+            coord: [lastCategory, marker.value],
+            symbol: "none",
+        },
+    ];
+}
+
+function build_pl_chart_current_date_mark_line_entry(
+    categoryIndex,
+    themeColors,
+    categoryLabel
+) {
+    return {
+        xAxis: categoryIndex,
+        lineStyle: {
+            color: themeColors.text,
+            width: PL_CHART_CURRENT_DATE_LINE_WIDTH,
+            type: "solid",
+        },
+        label: {
+            show: true,
+            formatter: categoryLabel,
+            color: themeColors.text,
+            fontSize: 11,
+            position: "end",
+        },
+    };
+}
+
+function build_pl_chart_mark_line_config(data, themeColors) {
+    return {
+        silent: true,
+        symbol: ["none", "none"],
+        precision: 2,
+        lineStyle: {
+            color: themeColors.muted,
+            type: "dashed",
+            width: 1,
+        },
+        label: {
+            show: false,
+        },
+        data,
+    };
+}
+
+function build_pl_chart_mark_line(marker, chartData, themeColors) {
+    return build_pl_chart_mark_line_config(
+        [build_pl_chart_plan_profit_mark_line_entry(marker, chartData, themeColors)],
+        themeColors
+    );
+}
+
+function apply_pl_chart_mark_lines(targetSeries, markLineData, themeColors) {
+    if (!targetSeries || !markLineData.length) {
+        return;
+    }
+
+    targetSeries.markLine = build_pl_chart_mark_line_config(markLineData, themeColors);
+}
+
+function get_pl_echarts_option(frm, chartData) {
+    const themeColors = get_pl_chart_theme_colors();
+    const palette = frm.bg_hide_plan ? PL_CHART_COLORS_HIDE_PLAN : PL_CHART_COLORS_SHOW_PLAN;
+    const layeredDatasets = chartData.datasets.map((dataset, index) => ({
+        dataset,
+        color: palette[index] || palette[palette.length - 1],
+        layer: get_pl_chart_dataset_layer(dataset),
+    }));
+    const series = [];
+
+    PL_CHART_LAYER_ORDER.forEach((layer) => {
+        let layerItems = layeredDatasets.filter((item) => item.layer === layer);
+        if (layer === "bar") {
+            layerItems = sort_pl_chart_bar_layer_items(layerItems);
+        }
+
+        layerItems.forEach((item) => {
+            series.push(build_pl_chart_series_item(item.dataset, item.color, item.layer, frm));
+        });
+    });
+
+    const barSeries = series.find((item) => item.type === "bar");
+    const cumulativeSeries =
+        series.find((item) => item.areaStyle) || series[series.length - 1];
+
+    const planProfitMarkLine = [];
+    if (frm.bg_hide_plan && chartData.yMarkers?.length) {
+        planProfitMarkLine.push(
+            build_pl_chart_plan_profit_mark_line_entry(
+                chartData.yMarkers[0],
+                chartData,
+                themeColors
+            )
+        );
+    }
+    apply_pl_chart_mark_lines(barSeries, planProfitMarkLine, themeColors);
+
+    const currentDateMarkLine = [];
+    const currentPeriodIndex = get_pl_chart_current_period_index(chartData.dataObj?.periods);
+    if (currentPeriodIndex >= 0) {
+        currentDateMarkLine.push(
+            build_pl_chart_current_date_mark_line_entry(
+                currentPeriodIndex,
+                themeColors,
+                chartData.labels[currentPeriodIndex]
+            )
+        );
+    }
+    apply_pl_chart_mark_lines(cumulativeSeries, currentDateMarkLine, themeColors);
+
+    return {
+        animation: true,
+        backgroundColor: "transparent",
+        color: series.map((item) => item.color),
+        grid: {
+            left: 72,
+            right: 24,
+            top: 24,
+            bottom: 48,
+            containLabel: false,
+        },
+        tooltip: {
+            trigger: "axis",
+            axisPointer: { type: "shadow" },
+            backgroundColor: themeColors.bg,
+            borderColor: themeColors.border,
+            textStyle: { color: themeColors.text },
+            valueFormatter: format_pl_chart_tooltip_value,
+        },
+        legend: {
+            show: false,
+        },
+        toolbox: build_pl_chart_toolbox(themeColors, frm),
+        xAxis: {
+            type: "category",
+            data: chartData.labels,
+            axisLabel: {
+                color: themeColors.muted,
+            },
+            axisLine: {
+                lineStyle: { color: themeColors.border },
+            },
+            splitLine: {
+                show: true,
+                lineStyle: {
+                    color: themeColors.border,
+                    width: 1,
+                },
+            },
+        },
+        yAxis: {
+            type: "value",
+            ...get_pl_chart_y_axis_range(chartData),
+            axisLabel: {
+                color: themeColors.muted,
+                formatter: format_pl_chart_axis_value,
+            },
+            splitLine: {
+                lineStyle: { color: themeColors.border },
+            },
+        },
+        series,
+    };
+}
+
+function dispose_pl_chart_instance(frm) {
+    if (!frm?._pl_chart_instance) {
+        return;
+    }
+
+    if (typeof frm._pl_chart_instance.dispose === "function") {
+        frm._pl_chart_instance.dispose();
+    }
+
+    frm._pl_chart_instance = null;
+}
+
+function get_pl_chart_wrapper(frm) {
+    const field = frm?.get_field?.("custom_pl_chart");
+    if (!field) {
+        return null;
+    }
+
+    const fieldWrapper = $(field.wrapper || field.$wrapper);
+    if (fieldWrapper.length) {
+        const $inner = fieldWrapper.find("div[data-fieldname='custom_pl_chart']").first();
+        frm.$pl_chart = $inner.length ? $inner : fieldWrapper;
+    } else {
+        frm.$pl_chart = $(frm.wrapper).find("div[data-fieldname='custom_pl_chart']").first();
+    }
+
+    if (!frm.$pl_chart || !frm.$pl_chart.length) {
+        return null;
+    }
+
+    frm.$pl_chart.show?.();
+    return frm.$pl_chart;
+}
+
+function get_pl_chart_dom(frm) {
+    const $wrapper = get_pl_chart_wrapper(frm);
+    if (!$wrapper) {
+        return null;
+    }
+
+    $wrapper.addClass("pl-chart-wrapper");
+    $wrapper.toggleClass("pl-chart-with-plan", !frm.bg_hide_plan);
+
+    let $chartContainer = $wrapper.find(".pl-chart-container");
+    if (!$chartContainer.length) {
+        $wrapper.empty();
+        $chartContainer = $('<div class="pl-chart-container"></div>').appendTo($wrapper);
+    }
+
+    return $chartContainer.get(0);
+}
+
+function resize_pl_chart(frm) {
+    if (!frm?._pl_chart_instance) {
+        return;
+    }
+
+    frm._pl_chart_instance.resize();
+}
+
+function schedule_pl_chart_resize(frm) {
+    if (!frm?._pl_chart_instance) {
+        return;
+    }
+
+    const runResize = () => resize_pl_chart(frm);
+    runResize();
+    window.requestAnimationFrame(function () {
+        runResize();
+        window.requestAnimationFrame(runResize);
+    });
+    window.setTimeout(runResize, 50);
+    window.setTimeout(runResize, 200);
+}
+
+function ensure_pl_chart_resize_observer(frm, chartDom) {
+    if (typeof ResizeObserver === "undefined" || !chartDom || !frm) {
+        return;
+    }
+
+    if (_plChartResizeObserver && _plChartResizeObserverTarget === frm) {
+        return;
+    }
+
+    if (_plChartResizeObserver) {
+        _plChartResizeObserver.disconnect();
+        _plChartResizeObserver = null;
+        _plChartResizeObserverTarget = null;
+    }
+
+    _plChartResizeObserver = new ResizeObserver(function () {
+        resize_pl_chart(frm);
+    });
+    _plChartResizeObserver.observe(chartDom);
+    _plChartResizeObserverTarget = frm;
+}
+
+function bind_pl_tab_listener_once(frm) {
+    if (frm._pl_tab_listener_bound) {
+        return;
+    }
+
+    const $wrapper = frm.$wrapper || (frm.wrapper && $(frm.wrapper));
+    if (!$wrapper || !$wrapper.length) {
+        return;
+    }
+
+    $wrapper.on("shown.bs.tab", '[data-fieldname="custom_pl"]', function () {
+        schedule_pl_chart_resize(frm);
+    });
+    frm._pl_tab_listener_bound = true;
+}
+
+function ensure_pl_chart_theme_observer(frm) {
+    if (typeof MutationObserver === "undefined" || !frm) {
+        return;
+    }
+
+    const root = document.documentElement;
+    if (!root) {
+        return;
+    }
+
+    if (_plChartThemeObserver && _plChartThemeObserverTarget === frm) {
+        return;
+    }
+
+    if (_plChartThemeObserver) {
+        _plChartThemeObserver.disconnect();
+        _plChartThemeObserver = null;
+        _plChartThemeObserverTarget = null;
+    }
+
+    let theme = root.getAttribute("data-theme");
+    _plChartThemeObserver = new MutationObserver(function () {
+        const nextTheme = root.getAttribute("data-theme");
+        if (nextTheme === theme) {
+            return;
+        }
+        theme = nextTheme;
+
+        if (!_plChartThemeObserverTarget?._pl_chart_instance) {
+            return;
+        }
+
+        const chartData = get_pl_chart_data(_plChartThemeObserverTarget);
+        const option = get_pl_echarts_option(_plChartThemeObserverTarget, chartData);
+        _plChartThemeObserverTarget._pl_chart_instance.setOption(option, true);
+        _plChartThemeObserverTarget._pl_chart_instance.resize();
+    });
+
+    _plChartThemeObserver.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+    _plChartThemeObserverTarget = frm;
+}
+
+function render_pl_chart_impl(frm, init = true) {
+    bind_pl_tab_listener_once(frm);
+
+    if (Object.values(frm.aggregatedBudget).length > LARGE_DATA_THRESHOLD) {
+        if (pl_chart_debug_enabled()) {
+            console.log("requestIdleCallback( render_pl_chart )");
+        }
+        window.requestIdleCallback(function () {
+            _render_pl_chart(frm, init);
+        });
+        return;
+    }
+
+    return _render_pl_chart(frm, init);
+}
+
+function _render_pl_chart(frm, init = true) {
+    if (pl_chart_debug_enabled()) {
+        console.time("render_pl_chart");
+    }
+
+    return load_pl_echarts()
+        .then(function () {
+            try {
+                const renderFinancialMetrics = globalThis.render_financial_metrics;
+                if (typeof renderFinancialMetrics === "function") {
+                    renderFinancialMetrics(frm);
+                }
+
+                const chartData = get_pl_chart_data(frm);
+                const option = get_pl_echarts_option(frm, chartData);
+
+                if (frm._pl_chart_instance && !init) {
+                    frm._pl_chart_instance.setOption(option, true);
+                    schedule_pl_chart_resize(frm);
+                    if (pl_chart_debug_enabled()) {
+                        console.timeEnd("render_pl_chart");
+                    }
+                    return;
+                }
+
+                dispose_pl_chart_instance(frm);
+
+                const $wrapper = get_pl_chart_wrapper(frm);
+                if (init && $wrapper) {
+                    $wrapper.empty();
+                }
+
+                const chartDom = get_pl_chart_dom(frm);
+                if (!chartDom) {
+                    if (pl_chart_debug_enabled()) {
+                        console.timeEnd("render_pl_chart");
+                    }
+                    return;
+                }
+
+                frm._pl_chart_instance = window.echarts.init(chartDom);
+                frm._pl_chart_instance.setOption(option, true);
+                ensure_pl_chart_resize_observer(frm, chartDom);
+                schedule_pl_chart_resize(frm);
+                ensure_pl_chart_theme_observer(frm);
+            } catch (err) {
+                console.error("render_pl_chart error:", err);
+                const chartDom = get_pl_chart_dom(frm);
+                if (chartDom) {
+                    $(chartDom).html(
+                        `<div class="pl-chart-error">${__(
+                            "Ошибка при построении P&L графика"
+                        )}</div>`
+                    );
+                }
+            }
+
+            if (pl_chart_debug_enabled()) {
+                console.timeEnd("render_pl_chart");
+            }
+        })
+        .catch(function (err) {
+            console.error("P&L Chart creation failed:", err);
+            const chartDom = get_pl_chart_dom(frm);
+            if (chartDom) {
+                $(chartDom).html(
+                    `<div class="pl-chart-error">${__("Ошибка при построении P&L графика")}</div>`
+                );
+            }
+            if (pl_chart_debug_enabled()) {
+                console.timeEnd("render_pl_chart");
+            }
+        });
+}
+
+globalThis.render_pl_chart_impl = render_pl_chart_impl;
+globalThis.build_pl_chart_data = build_pl_chart_data;
+globalThis.get_pl_chart_data = get_pl_chart_data;
+globalThis.get_pl_echarts_option = get_pl_echarts_option;
+globalThis.get_pl_profit_dash_geometry = get_pl_profit_dash_geometry;
+globalThis.get_pl_profit_label_layout = get_pl_profit_label_layout;
+globalThis.get_pl_chart_current_period_index = get_pl_chart_current_period_index;
+globalThis.build_pl_profit_dash_series = build_pl_profit_dash_series;
+globalThis._render_pl_chart = _render_pl_chart;
