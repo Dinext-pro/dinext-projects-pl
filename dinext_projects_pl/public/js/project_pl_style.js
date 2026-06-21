@@ -148,33 +148,24 @@ function applyPLStyle() {
             margin: 0 10px 0 0;
             }
         }
+        #project-custom_pl div[data-fieldname='custom_pl_chart'].pl-chart-wrapper,
+        #project-custom_pl div[data-fieldname='custom_pl_chart'] .pl-chart-container,
         .pl-chart-wrapper {
-            & .dataset-line.dataset-2 .line-graph-path,
-            & .dataset-line.dataset-2 .region-fill,
-            & .dataset-line.dataset-4 .line-graph-path,
-            & .dataset-line.dataset-4 .region-fill,
-            & .dataset-line.dataset-5 .line-graph-path,
-            & .dataset-line.dataset-5 .region-fill{
-                display: none;
-            }
-            & .dataset-line.dataset-3 circle,
-            & .dataset-line.dataset-6 circle,
-            & .dataset-line.dataset-7 circle{
-                display: none;
-            }
-        }
-
-        /* Добавляем отступ для оси Y */
-        .pl-chart-container svg .y.axis .tick text {
-            transform: translateX(15px) !important;
+            width: 100%;
+            max-width: 100%;
         }
 
         .pl-chart-container {
-            overflow: visible !important;
+            width: 100%;
+            min-height: 360px;
+            height: 360px;
+            overflow: visible;
+            background: transparent;
         }
 
-        .pl-chart-container svg {
-            overflow: visible !important;
+        .pl-chart-error {
+            padding: 24px;
+            color: var(--red-500, #c0392b);
         }
 
         .project-financial-metrics {

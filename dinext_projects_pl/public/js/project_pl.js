@@ -22,6 +22,15 @@ if (!Array.isArray(dinext_projects.project_pl_forecast_menu)) {
     dinext_projects.project_pl_forecast_menu = [];
 }
 
+function render_pl_chart(frm, init = true) {
+    const renderChart = globalThis.render_pl_chart_impl;
+    if (typeof renderChart !== "function") {
+        return;
+    }
+
+    return renderChart(frm, init);
+}
+
 function add_pl_forecast_dropdown(frm, controls) {
     const raw = dinext_projects.project_pl_forecast_menu;
     const menu_array = Array.isArray(raw) ? raw : [];
@@ -217,7 +226,7 @@ function budget_total( frm, cell, periods ) {
     let actual_income_sum = 0;
     let actual_expenses_sum = 0;
     let is_past = false;
-    let roots = Object.values( frm.aggregatedBudget ).filter( b => !b.parent_account && !b.task );
+    let roots = getFinancialRootRows(frm.aggregatedBudget);
     
     periods.forEach(function(period) {
         let r = calc_column_total( frm, period, roots, !frm.bg_hide_plan );
@@ -234,7 +243,7 @@ function budget_total( frm, cell, periods ) {
 function budget_column_total( frm, cell, periods, current ) {
     let period = periods.find(p => p.year == current.year && p.month == current.month );
     
-    let roots = Object.values( frm.aggregatedBudget ).filter( b => !b.parent_account && !b.task );
+    let roots = getFinancialRootRows(frm.aggregatedBudget);
     let r = calc_column_total( frm, period, roots, !frm.bg_hide_plan );
     
     return budget_total_cell( period, r.plan_income, r.plan_expenses, r.actual_income, r.actual_expenses );
@@ -625,7 +634,11 @@ function load_budget_data(frm, periodType, updateRows) {
                                 let dt = new Date(e.posting_date);
                                 let y = dt.getFullYear(), m = dt.getMonth() + 1;
                                 let key = `fact_${y}_${m}`;
-                                bucket[key] = (bucket[key] || 0) + Math.abs(e.credit - e.debit);
+                                bucket[key] = (bucket[key] || 0) + signedGlPlActualAmount(
+                                    aggregated[acct].type,
+                                    e.debit,
+                                    e.credit
+                                );
                             });
 
                             console.timeLog("load_budget_data");
