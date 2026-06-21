@@ -181,3 +181,73 @@ test("calc_column_total uses merged facts after disallowed Task buckets collapse
     assert.equal(result.plan_expenses, 0);
     assert.equal(result.actual_expenses, 15000);
 });
+
+test("signedGlPlActualAmount applies net sign by account type", () => {
+    const context = loadCalcModule();
+
+    assert.equal(context.signedGlPlActualAmount("Income", 300, 1000), 700);
+    assert.equal(context.signedGlPlActualAmount("Income", 1000, 0), -1000);
+    assert.equal(context.signedGlPlActualAmount("Expense", 1000, 300), 700);
+    assert.equal(context.signedGlPlActualAmount("Expense", 0, 1000), -1000);
+});
+
+test("calc_column_total rolls up negative expense facts from child rows", () => {
+    const context = loadCalcModule();
+    const period = { year: 2026, month: 4, is_past: true };
+    const root = makeRootRow("Expense Root", "Expense", [{ plan_2026_4: 0, forecast_2026_4: 0 }]);
+    const child = {
+        value: "Expense Child",
+        type: "Expense",
+        parent_account: "Expense Root",
+        dimension_data: [{ fact_2026_4: -500 }],
+    };
+    const frm = {
+        aggregatedBudget: {
+            root,
+            child,
+        },
+    };
+
+    const result = context.calc_column_total(frm, period, [root], false, true);
+
+    assert.equal(result.actual_expenses, -500);
+});
+
+test("calc_column_total rolls up negative income facts from child rows", () => {
+    const context = loadCalcModule();
+    const period = { year: 2026, month: 4, is_past: true };
+    const root = makeRootRow("Income Root", "Income", [{ plan_2026_4: 0, forecast_2026_4: 0 }]);
+    const child = {
+        value: "Income Child",
+        type: "Income",
+        parent_account: "Income Root",
+        dimension_data: [{ fact_2026_4: -200 }],
+    };
+    const frm = {
+        aggregatedBudget: {
+            root,
+            child,
+        },
+    };
+
+    const result = context.calc_column_total(frm, period, [root], false, true);
+
+    assert.equal(result.actual_income, -200);
+});
+
+test("calc_column_total nets signed income and expense at root level", () => {
+    const context = loadCalcModule();
+    const period = { year: 2026, month: 4, is_past: true };
+    const roots = [
+        makeRootRow("Income Root", "Income", [{ fact_2026_4: 700 }]),
+        makeRootRow("Expense Root", "Expense", [{ fact_2026_4: 700 }]),
+    ];
+    const frm = {
+        aggregatedBudget: Object.fromEntries(roots.map((row, index) => [`root-${index}`, row])),
+    };
+
+    const result = context.calc_column_total(frm, period, roots, false, true);
+
+    assert.equal(result.actual_income, 700);
+    assert.equal(result.actual_expenses, 700);
+});

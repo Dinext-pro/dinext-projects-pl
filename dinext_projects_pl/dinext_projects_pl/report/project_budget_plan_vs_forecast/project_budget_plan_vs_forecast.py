@@ -1372,7 +1372,7 @@ def get_actual_data(filters):
                     WHEN a.root_type = 'Income' THEN 
                         ROUND(SUM(gle.credit - gle.debit), 0)
                     WHEN a.root_type = 'Expense' THEN 
-                        ABS(ROUND(SUM(gle.debit - gle.credit), 0))
+                        ROUND(SUM(gle.debit - gle.credit), 0)
                     ELSE 
                         ROUND(SUM(gle.debit - gle.credit), 0)
                 END as actual
@@ -2168,7 +2168,7 @@ def get_actual_data_simple(filters):
                     WHEN a.root_type = 'Income' THEN 
                         ROUND(SUM(gle.credit - gle.debit), 0)
                     WHEN a.root_type = 'Expense' THEN 
-                        ABS(ROUND(SUM(gle.debit - gle.credit), 0))
+                        ROUND(SUM(gle.debit - gle.credit), 0)
                     ELSE 
                         ROUND(SUM(gle.debit - gle.credit), 0)
                 END as actual

@@ -7,6 +7,26 @@ const _budgetIndexCache = new WeakMap();
 const RISK_KEY_SEP = "|risk|";
 
 /**
+ * Net P&L actual from a GL line by account root type.
+ * Income: credit - debit; Expense: debit - credit.
+ */
+function signedGlPlActualAmount(accountType, debit, credit) {
+    const d = Number(debit) || 0;
+    const c = Number(credit) || 0;
+    if (accountType === "Income") {
+        return c - d;
+    }
+    if (accountType === "Expense") {
+        return d - c;
+    }
+    return d - c;
+}
+
+function hasBucketPeriodValue(entry, fieldKey) {
+    return Boolean(entry && Object.prototype.hasOwnProperty.call(entry, fieldKey));
+}
+
+/**
  * Создает / возвращает индекс для массива aggregatedBudget.
  * Индекс содержит:
  *  - byValueMap: account -> [items]
@@ -138,10 +158,8 @@ function get_child_budget_sum(account, task, dimension = [], period, aggregatedB
 
             const sig = dimSignature(dimForChild);
             const entry = child._dimMap ? child._dimMap[sig] : (Array.isArray(child.dimension_data) ? child.dimension_data.find(x => dimSignature(x.dimensions) === sig) : null);
-            const val = entry ? (Number(entry[forecastKey]) || 0) : 0;
-
-            if (val > 0) {
-                sum += val;
+            if (hasBucketPeriodValue(entry, forecastKey)) {
+                sum += Number(entry[forecastKey]) || 0;
             } else {
                 // если прямого значения нет — добавляем в стек для рекурсивного обхода потомков
                 stack.push({ account: child.value, task: child.task ? child.task.value : undefined, dimArr: dimForChild });
