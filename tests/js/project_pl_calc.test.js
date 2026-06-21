@@ -251,3 +251,79 @@ test("calc_column_total nets signed income and expense at root level", () => {
     assert.equal(result.actual_income, 700);
     assert.equal(result.actual_expenses, 700);
 });
+
+test("getFinancialRootRows excludes risk reserve rows cloned from root accounts", () => {
+    const context = loadCalcModule();
+    const aggregatedBudget = {
+        income: makeRootRow("Income Root", "Income", [{ fact_2026_4: 1000 }]),
+        expense: makeRootRow("Expense Root", "Expense", [{ fact_2026_4: 0 }]),
+        child: {
+            value: "Expense Child",
+            type: "Expense",
+            parent_account: "Expense Root",
+            dimension_data: [{ fact_2026_4: 700 }],
+        },
+        "Expense Root|risk|RISK-001": {
+            value: "Expense Root",
+            type: "Expense",
+            parent_account: null,
+            indent: 1,
+            _parentKey: "Expense Root",
+            risk: { value: "RISK-001" },
+            dimension_data: [
+                {
+                    dimensions: [{ doc: "Project Risk", docname: "RISK-001" }],
+                    forecast_2026_4: 200000,
+                },
+            ],
+        },
+    };
+
+    const roots = context.getFinancialRootRows(aggregatedBudget);
+
+    assert.equal(roots.length, 2);
+    assert.ok(roots.some((row) => row.value === "Income Root"));
+    assert.ok(roots.some((row) => row.value === "Expense Root"));
+});
+
+test("calc_column_total does not double-count expenses when root has risk reserve row", () => {
+    const context = loadCalcModule();
+    const period = { year: 2026, month: 4, is_past: true };
+    const incomeRoot = makeRootRow("Income Root", "Income", [{ fact_2026_4: 1002000 }]);
+    const expenseRoot = makeRootRow("Expense Root", "Expense", [{ fact_2026_4: 0 }]);
+    const expenseChild = {
+        value: "Expense Child",
+        type: "Expense",
+        parent_account: "Expense Root",
+        dimension_data: [{ fact_2026_4: 134000 }],
+    };
+    const riskRow = {
+        value: "Expense Root",
+        type: "Expense",
+        parent_account: null,
+        indent: 1,
+        _parentKey: "Expense Root",
+        risk: { value: "RISK-001" },
+        dimension_data: [
+            {
+                dimensions: [{ doc: "Project Risk", docname: "RISK-001" }],
+                forecast_2026_4: 200000,
+            },
+        ],
+    };
+    const frm = {
+        aggregatedBudget: {
+            income: incomeRoot,
+            expense: expenseRoot,
+            child: expenseChild,
+            "Expense Root|risk|RISK-001": riskRow,
+        },
+    };
+
+    const roots = context.getFinancialRootRows(frm.aggregatedBudget);
+    const result = context.calc_column_total(frm, period, roots, false, true);
+
+    assert.equal(result.actual_income, 1002000);
+    assert.equal(result.actual_expenses, 134000);
+    assert.equal(result.actual_income - result.actual_expenses, 868000);
+});
