@@ -48,6 +48,10 @@ function makeRootRow(value, type, dimension_data) {
     };
 }
 
+function makeTask(value, subject, parent_task = null) {
+    return { value, subject, parent_task, indent: 0 };
+}
+
 test("calc_column_total sums all top-level roots for each track", () => {
     const context = loadCalcModule();
     const period = { year: 2026, month: 1, is_past: false };
@@ -109,4 +113,71 @@ test("calc_column_total falls back to child totals when root has no direct value
 
     assert.equal(result.plan_expenses, 12);
     assert.equal(result.actual_expenses, 9);
+});
+
+test("updateTaskDimensionOptimized merges disallowed Task buckets into the account bucket", () => {
+    const context = loadCalcModule();
+    const accountRow = {
+        value: "Подрядчики (МиП)",
+        type: "Expense",
+        parent_account: null,
+        indent: 0,
+        allowed_dimensions: [],
+        dimension_data: [
+            { dimensions: [{ doc: "Task", docname: "TASK-001" }], fact_2026_4: 10000, forecast_2026_4: 7000 },
+            { dimensions: [{ doc: "Task", docname: "TASK-002" }], fact_2026_5: 48000, forecast_2026_5: 15000 },
+        ],
+    };
+    const frm = {
+        aggregatedBudget: { account: accountRow },
+        aggregatedTasks: {
+            "TASK-001": makeTask("TASK-001", "Task 1"),
+            "TASK-002": makeTask("TASK-002", "Task 2"),
+        },
+    };
+
+    context.updateTaskDimensionOptimized(frm);
+
+    assert.deepEqual(Object.keys(frm.aggregatedBudget), ["Подрядчики (МиП)"]);
+    assert.equal(frm.aggregatedBudget["Подрядчики (МиП)"].dimension_data.length, 1);
+    assert.deepEqual(frm.aggregatedBudget["Подрядчики (МиП)"].dimension_data[0].dimensions || [], []);
+    assert.equal(frm.aggregatedBudget["Подрядчики (МиП)"].dimension_data[0].fact_2026_4, 10000);
+    assert.equal(frm.aggregatedBudget["Подрядчики (МиП)"].dimension_data[0].fact_2026_5, 48000);
+    assert.equal(frm.aggregatedBudget["Подрядчики (МиП)"].dimension_data[0].forecast_2026_4, 7000);
+    assert.equal(frm.aggregatedBudget["Подрядчики (МиП)"].dimension_data[0].forecast_2026_5, 15000);
+});
+
+test("calc_column_total uses merged facts after disallowed Task buckets collapse", () => {
+    const context = loadCalcModule();
+    const accountRow = {
+        value: "Подрядчики (МиП)",
+        type: "Expense",
+        parent_account: null,
+        indent: 0,
+        allowed_dimensions: [],
+        dimension_data: [
+            { dimensions: [{ doc: "Task", docname: "TASK-001" }], fact_2026_4: 10000, forecast_2026_4: 7000 },
+            { dimensions: [{ doc: "Task", docname: "TASK-002" }], fact_2026_4: 5000, forecast_2026_4: 3000 },
+        ],
+    };
+    const frm = {
+        aggregatedBudget: { account: accountRow },
+        aggregatedTasks: {
+            "TASK-001": makeTask("TASK-001", "Task 1"),
+            "TASK-002": makeTask("TASK-002", "Task 2"),
+        },
+    };
+
+    context.updateTaskDimensionOptimized(frm);
+
+    const result = context.calc_column_total(
+        frm,
+        { year: 2026, month: 4, is_past: true },
+        Object.values(frm.aggregatedBudget),
+        false,
+        true
+    );
+
+    assert.equal(result.plan_expenses, 0);
+    assert.equal(result.actual_expenses, 15000);
 });

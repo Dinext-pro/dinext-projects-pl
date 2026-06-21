@@ -448,6 +448,14 @@ function updateTaskDimensionOptimized(frm) {
         const dimensionData = budget.dimension_data || [];
         // shallow copy base budget once
         const baseBudgetCopy = { ...budget };
+        const allowed = budget.allowed_dimensions || [];
+        let allowsTask = false;
+        for (let ai = 0, aLen = allowed.length; ai < aLen; ai++) {
+            if (allowed[ai] && allowed[ai].document_type === "Task") {
+                allowsTask = true;
+                break;
+            }
+        }
 
         // build signature -> bucket map; allow multiple buckets per signature (array)
         const sigToBuckets = Object.create(null);
@@ -487,20 +495,56 @@ function updateTaskDimensionOptimized(frm) {
             }
         }
 
+        if (!allowsTask) {
+            const mergedBuckets = nonTaskBuckets.map((bucket) => ({
+                ...bucket,
+                dimensions: [...(bucket.dimensions || [])],
+            }));
+            const mergedBySig = Object.create(null);
+
+            for (let i = 0; i < mergedBuckets.length; i++) {
+                const bucket = mergedBuckets[i];
+                const sig = dimSignature(bucket.dimensions || []);
+                if (!mergedBySig[sig]) {
+                    mergedBySig[sig] = bucket;
+                }
+            }
+
+            for (const sig in sigToBuckets) {
+                const buckets = sigToBuckets[sig];
+                for (let i = 0; i < buckets.length; i++) {
+                    const bucket = buckets[i];
+                    const dimsWithoutTask = (bucket.dimensions || []).filter(
+                        (dim) => !(dim && dim.doc === "Task")
+                    );
+                    const targetSig = dimSignature(dimsWithoutTask);
+                    let targetBucket = mergedBySig[targetSig];
+
+                    if (!targetBucket) {
+                        targetBucket = { dimensions: dimsWithoutTask };
+                        mergedBySig[targetSig] = targetBucket;
+                        mergedBuckets.push(targetBucket);
+                    }
+
+                    for (const prop in bucket) {
+                        if (
+                            prop !== "dimensions" &&
+                            (prop.startsWith("plan_") || prop.startsWith("forecast_") || prop.startsWith("fact_"))
+                        ) {
+                            targetBucket[prop] = (parseFloat(targetBucket[prop]) || 0) + (parseFloat(bucket[prop]) || 0);
+                        }
+                    }
+                }
+            }
+
+            baseBudgetCopy.dimension_data = mergedBuckets;
+            budgetsWithTasks[String(budget.value)] = baseBudgetCopy;
+            continue;
+        }
+
         // записываем базовый бюджет без Task buckets
         baseBudgetCopy.dimension_data = nonTaskBuckets;
         budgetsWithTasks[String(budget.value)] = baseBudgetCopy;
-
-        // проверяем, разрешены ли Task в allowed_dimensions (один проход)
-        const allowed = budget.allowed_dimensions || [];
-        let allowsTask = false;
-        for (let ai = 0, aLen = allowed.length; ai < aLen; ai++) {
-            if (allowed[ai] && allowed[ai].document_type === "Task") {
-                allowsTask = true;
-                break;
-            }
-        }
-        if (!allowsTask) continue;
 
         // для каждой задачи собираем все бакеты, содержащие эту задачу (в т.ч. Task+Risk)
         for (let ti = 0; ti < tasksLen; ti++) {
