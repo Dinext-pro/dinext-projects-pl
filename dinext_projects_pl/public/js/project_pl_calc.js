@@ -199,6 +199,19 @@ function get_row_period_total(frm, row, period, valueKey) {
 }
 
 /**
+ * Top-level P&L rows for income/expense/profit totals.
+ * Excludes task and risk reserve rows (same rules as aggregatedBudgetToTreeOrder roots).
+ */
+function getFinancialRootRows(aggregatedBudget) {
+    if (!aggregatedBudget) {
+        return [];
+    }
+    return Object.values(aggregatedBudget).filter(
+        (b) => !b.parent_account && !b.task && !b._parentKey && !b.risk
+    );
+}
+
+/**
  * Оптимизированная calc_column_total — основной метод, использующий индексы.
  *
  * Возвращает объект { plan_income, plan_expenses, actual_income, actual_expenses }
@@ -256,7 +269,7 @@ function get_total_forecast_expenses(frm) {
     }
 
     const periods = get_budget_display_periods(frm, "month");
-    const roots = Object.values(frm.aggregatedBudget).filter(b => !b.parent_account && !b.task);
+    const roots = getFinancialRootRows(frm.aggregatedBudget);
     let total = 0;
 
     for (const period of periods) {
@@ -658,3 +671,5 @@ function addRiskDimensionRows( agg ) {
         agg[toAdd[i][0]] = toAdd[i][1];
     }
 }
+
+globalThis.getFinancialRootRows = getFinancialRootRows;
