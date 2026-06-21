@@ -213,7 +213,7 @@ function createChartFrm(overrides = {}) {
     return {
         aggregatedBudget: { root: { parent_account: null, task: null } },
         bg_hide_plan: true,
-        budget_view_options: "факт/прогноз",
+        budget_view_options: "actual/forecast",
         get_field(fieldname) {
             if (fieldname === "custom_pl_chart") {
                 return { $wrapper: chartWrapper };
@@ -244,7 +244,7 @@ test("get_pl_chart_data keeps expense values negative and adds plan marker when 
     assert.equal(chartData.datasets[1].values[0], -35);
     assert.equal(chartData.yMarkers?.length, 1);
     assert.equal(chartData.yMarkers[0].value, 120);
-    assert.equal(chartData.yMarkers[0].label, "Плановая прибыль: 120");
+    assert.equal(chartData.yMarkers[0].label, "Planned profit: 120");
 });
 
 test("build_pl_chart_data negates net expense totals for chart display", () => {
@@ -302,7 +302,7 @@ test("get_pl_echarts_option adds cumulative area lines and plan marker line", ()
     assert.equal(markerSeries.type, "bar");
     assert.equal(markerSeries.markLine.data[0][0].coord[1], 120);
     assert.equal(markerSeries.markLine.data[0][0].label.position, "insideStartTop");
-    assert.equal(markerSeries.markLine.data[0][0].label.formatter, "Плановая прибыль: 120");
+    assert.equal(markerSeries.markLine.data[0][0].label.formatter, "Planned profit: 120");
 });
 
 test("get_pl_echarts_option expands y axis to include plan profit marker", () => {
@@ -316,7 +316,7 @@ test("get_pl_echarts_option expands y axis to include plan profit marker", () =>
     chartData.datasets[1].values[0] = -35;
     chartData.yMarkers = [
         {
-            label: "Плановая прибыль: 2400000",
+            label: "Planned profit: 2400000",
             value: 2400000,
         },
     ];
@@ -377,8 +377,8 @@ test("get_pl_echarts_option renders profit as dashed custom series aligned to st
     assert.ok(actualProfit);
     assert.equal(typeof planProfit.renderItem, "function");
     assert.equal(typeof actualProfit.renderItem, "function");
-    assert.ok(String(planProfit.name).includes("Прибыль"));
-    assert.ok(String(actualProfit.name).includes("Прибыль"));
+    assert.ok(String(planProfit.name).includes("Profit"));
+    assert.ok(String(actualProfit.name).includes("Profit"));
 });
 
 test("get_pl_echarts_option aligns series colors with tooltip palette", () => {
@@ -589,10 +589,10 @@ test("get_pl_echarts_option stacks plan and actual bars separately", () => {
 
     assert.equal(planBars.length, 2);
     assert.equal(actualBars.length, 2);
-    assert.ok(String(planBars[0].name).includes("Доходы"));
-    assert.ok(String(planBars[1].name).includes("Расходы"));
-    assert.ok(String(actualBars[0].name).includes("Доходы"));
-    assert.ok(String(actualBars[1].name).includes("Расходы"));
+    assert.ok(String(planBars[0].name).includes("Income"));
+    assert.ok(String(planBars[1].name).includes("Expenses"));
+    assert.ok(String(actualBars[0].name).includes("Income"));
+    assert.ok(String(actualBars[1].name).includes("Expenses"));
 });
 
 test("get_pl_echarts_option uses only actual stack when plan is hidden", () => {
@@ -611,8 +611,8 @@ test("get_pl_echarts_option uses only actual stack when plan is hidden", () => {
 test("tooltip valueFormatter returns plain currency text without html wrapper", () => {
     const context = loadEchartsModule();
     const captured = [];
-    context.frappe.format = (value, df, options) => {
-        captured.push({ df, options });
+    context.frappe.format = (value, df, options, doc) => {
+        captured.push({ df, options, doc });
         if (options?.only_value) {
             return `RUB ${value}`;
         }
@@ -620,12 +620,17 @@ test("tooltip valueFormatter returns plain currency text without html wrapper", 
         return `<div style='text-align: right'>RUB ${value}</div>`;
     };
 
-    const frm = createChartFrm({ bg_hide_plan: true });
+    const frm = createChartFrm({
+        bg_hide_plan: true,
+        doc: { company: "Test Company", name: "PRJ-001" },
+    });
     const option = context.get_pl_echarts_option(frm, context.get_pl_chart_data(frm));
     const formatted = option.tooltip.valueFormatter(1234.5);
 
     assert.equal(formatted, "RUB 1234.5");
     assert.equal(captured[0]?.options?.only_value, true);
+    assert.equal(captured[0]?.df?.options, "Company:company:default_currency");
+    assert.equal(captured[0]?.doc?.company, "Test Company");
     assert.equal(formatted.includes("<div"), false);
 });
 
