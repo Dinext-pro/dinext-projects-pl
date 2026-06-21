@@ -78,16 +78,16 @@ frappe.provide("dinext_projects");
 dinext_projects.refresh_pl_forecast_dropdown = refresh_pl_forecast_dropdown;
 
 function addBudgetViewOptionsControl(frm, controls) {
-    frm.budget_view_options = frm.budget_view_options || __("Прогноз и факт");
+    frm.budget_view_options = frm.budget_view_options || __("Forecast and actual");
     const control = frappe.ui.form.make_control({
 		parent: controls,
 		df: {
 			fieldtype: 'Select',
 			fieldname: "view-options",
 			options: [
-                __("Прогноз и факт"),
-                __("Только прогноз"),
-                __("Только факт"),
+                __("Forecast and actual"),
+                __("Forecast only"),
+                __("Actual only"),
             ],
 			get_status: function(i) {
                 return "Write";
@@ -293,11 +293,11 @@ function get_budget_display_periods(frm, periodType) {
             
             // Определяем, является ли период прошлым
             let is_past;
-            if (frm.budget_view_options == __("Только факт")) {
+            if (frm.budget_view_options == __("Actual only")) {
                 is_past = true;
-            } else if (frm.budget_view_options == __("Только прогноз")) {
+            } else if (frm.budget_view_options == __("Forecast only")) {
                 is_past = false;
-            } else { // "Прогноз и факт"
+            } else { // "Forecast and actual"
                 let current_date_str = frappe.datetime.obj_to_str(current);
                 is_past = current_date_str < month_start;
             }
@@ -334,9 +334,9 @@ function get_budget_display_periods(frm, periodType) {
                 let quarterEndDateStr = frappe.datetime.obj_to_str(quarterEndDate);
                 
                 let is_past;
-                if (frm.budget_view_options == __("Только факт")) {
+                if (frm.budget_view_options == __("Actual only")) {
                     is_past = true;
-                } else if (frm.budget_view_options == __("Только прогноз")) {
+                } else if (frm.budget_view_options == __("Forecast only")) {
                     is_past = false;
                 } else {
                     is_past = quarterEndDateStr < month_start;
@@ -375,9 +375,9 @@ function get_budget_display_periods(frm, periodType) {
                 let yearEndDateStr = frappe.datetime.obj_to_str(yearEndDate);
                 
                 let is_past;
-                if (frm.budget_view_options == __("Только факт")) {
+                if (frm.budget_view_options == __("Actual only")) {
                     is_past = true;
-                } else if (frm.budget_view_options == __("Только прогноз")) {
+                } else if (frm.budget_view_options == __("Forecast only")) {
                     is_past = false;
                 } else {
                     is_past = yearEndDateStr < month_start;

@@ -70,6 +70,16 @@ function get_pl_chart_theme_colors() {
     };
 }
 
+function get_pl_chart_currency_docfield(frm) {
+    const docfield = { fieldtype: "Currency" };
+
+    if (frm?.doc?.company) {
+        docfield.options = "Company:company:default_currency";
+    }
+
+    return docfield;
+}
+
 function format_pl_chart_axis_value(value) {
     if (typeof frappe?.utils?.format_chart_axis_number === "function") {
         return frappe.utils.format_chart_axis_number(value);
@@ -78,16 +88,21 @@ function format_pl_chart_axis_value(value) {
     return frappe.format(value, { fieldtype: "Currency" });
 }
 
-function format_pl_chart_tooltip_value(value) {
-    return frappe.format(value, { fieldtype: "Currency" }, { only_value: true });
+function format_pl_chart_tooltip_value(value, frm) {
+    return frappe.format(
+        value,
+        get_pl_chart_currency_docfield(frm),
+        { only_value: true },
+        frm?.doc
+    );
 }
 
 function get_pl_chart_view_label(frm) {
-    let view = __("факт/прогноз");
-    if (frm.budget_view_options == __("Только прогноз")) {
-        view = __("прогноз");
-    } else if (frm.budget_view_options == __("Только факт")) {
-        view = __("факт");
+    let view = __("actual/forecast");
+    if (frm.budget_view_options == __("Forecast only")) {
+        view = __("forecast");
+    } else if (frm.budget_view_options == __("Actual only")) {
+        view = __("actual");
     }
     return view;
 }
@@ -174,28 +189,28 @@ function get_pl_chart_data(frm) {
     let view = get_pl_chart_view_label(frm);
 
     if (!frm.bg_hide_plan) {
-        datasets.push({ name: __("Доходы - план"), values: d.plan_income, chartType: "bar" });
+        datasets.push({ name: __("Income - plan"), values: d.plan_income, chartType: "bar" });
     }
-    datasets.push({ name: __("Доходы") + " - " + view, values: d.actual_income, chartType: "bar" });
+    datasets.push({ name: __("Income") + " - " + view, values: d.actual_income, chartType: "bar" });
     if (!frm.bg_hide_plan) {
-        datasets.push({ name: __("Расходы - план"), values: d.plan_expenses, chartType: "bar" });
+        datasets.push({ name: __("Expenses - plan"), values: d.plan_expenses, chartType: "bar" });
     }
-    datasets.push({ name: __("Расходы") + " - " + view, values: d.actual_expenses, chartType: "bar" });
+    datasets.push({ name: __("Expenses") + " - " + view, values: d.actual_expenses, chartType: "bar" });
 
     if (!frm.bg_hide_plan) {
-        datasets.push({ name: __("Прибыль - план"), values: d.profit_plan, chartType: "line" });
+        datasets.push({ name: __("Profit - plan"), values: d.profit_plan, chartType: "line" });
     }
-    datasets.push({ name: __("Прибыль") + " - " + view, values: d.profit_actual, chartType: "line" });
+    datasets.push({ name: __("Profit") + " - " + view, values: d.profit_actual, chartType: "line" });
 
     if (!frm.bg_hide_plan) {
         datasets.push({
-            name: __("Прибыль накопл. - план"),
+            name: __("Cumulative profit - plan"),
             values: d.cumulative_profit_plan,
             chartType: "line",
         });
     }
     datasets.push({
-        name: __("Прибыль накопл.") + " - " + view,
+        name: __("Cumulative profit") + " - " + view,
         values: d.cumulative_profit_actual,
         chartType: "line",
     });
@@ -206,7 +221,7 @@ function get_pl_chart_data(frm) {
         if (profit_plan) {
             yMarkers = [
                 {
-                    label: __("Плановая прибыль: ") + format_pl_chart_axis_value(profit_plan),
+                    label: __("Planned profit: ") + format_pl_chart_axis_value(profit_plan),
                     value: profit_plan,
                     options: { labelPos: "left" },
                 },
@@ -250,7 +265,7 @@ const PL_CHART_BAR_STACK_ORDER = {
 
 function get_pl_chart_bar_stack_group(dataset) {
     const name = String(dataset.name || "");
-    if (name.includes(__(" - план"))) {
+    if (name.includes(__(" - plan"))) {
         return "plan";
     }
     return "actual";
@@ -258,10 +273,10 @@ function get_pl_chart_bar_stack_group(dataset) {
 
 function get_pl_chart_bar_series_role(dataset) {
     const name = String(dataset.name || "");
-    if (name.includes(__("Доходы"))) {
+    if (name.includes(__("Income"))) {
         return 0;
     }
-    if (name.includes(__("Расходы"))) {
+    if (name.includes(__("Expenses"))) {
         return 1;
     }
     return 2;
@@ -327,10 +342,10 @@ function get_pl_profit_label_layout(profitValue, lineY, gapPx = PL_CHART_PROFIT_
 
 function get_pl_chart_dataset_layer(dataset) {
     const name = String(dataset.name || "");
-    if (name.includes(__("накопл."))) {
+    if (name.includes(__("Cumulative profit"))) {
         return "cumulative";
     }
-    if (name.includes(__("Прибыль"))) {
+    if (name.includes(__("Profit"))) {
         return "profit";
     }
     return "bar";
@@ -668,7 +683,7 @@ function get_pl_echarts_option(frm, chartData) {
             backgroundColor: themeColors.bg,
             borderColor: themeColors.border,
             textStyle: { color: themeColors.text },
-            valueFormatter: format_pl_chart_tooltip_value,
+            valueFormatter: (value) => format_pl_chart_tooltip_value(value, frm),
         },
         legend: {
             show: false,
@@ -928,7 +943,7 @@ function _render_pl_chart(frm, init = true) {
                 if (chartDom) {
                     $(chartDom).html(
                         `<div class="pl-chart-error">${__(
-                            "Ошибка при построении P&L графика"
+                            "Error building P&L chart"
                         )}</div>`
                     );
                 }
@@ -943,7 +958,7 @@ function _render_pl_chart(frm, init = true) {
             const chartDom = get_pl_chart_dom(frm);
             if (chartDom) {
                 $(chartDom).html(
-                    `<div class="pl-chart-error">${__("Ошибка при построении P&L графика")}</div>`
+                    `<div class="pl-chart-error">${__("Error building P&L chart")}</div>`
                 );
             }
             if (pl_chart_debug_enabled()) {
