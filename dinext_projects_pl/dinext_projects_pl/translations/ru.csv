@@ -10,6 +10,8 @@
 "Drill Down {0}","Детализация {0}",""
 "Enable Drill Down","Включить детализацию",""
 "Error loading budget details: {0}","Ошибка загрузки деталей бюджета: {0}",""
+"Exp and Fact","Ожид. и факт",""
+"Exp Only","Только ожид.",""
 "Export error: {0}","Ошибка экспорта: {0}",""
 "Export failed: Could not find table data","Ошибка экспорта: данные таблицы не найдены",""
 "Export to Excel","Экспорт в Excel",""

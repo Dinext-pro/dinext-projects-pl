@@ -4,6 +4,12 @@ from frappe import _
 from frappe.utils import flt, cint, today, getdate, formatdate
 
 
+PERIOD_CURRENCY_WIDTH = 92
+# PERIOD_DELTA_WIDTH = 64  # Postponed: there was no explicit requirement to widen Δ.
+TOTAL_CURRENCY_WIDTH = 132
+TOTAL_FORECAST_WIDTH = 142
+
+
 def _period_subcolumns(period_key, month_name, year, month, is_past_month, show_plan, view_type):
 	"""Atomic sub-columns per period (plan / fact|forecast / delta)."""
 	columns = []
@@ -14,7 +20,7 @@ def _period_subcolumns(period_key, month_name, year, month, is_past_month, show_
 			"label": _("Plan"),
 			"fieldname": "plan_{0}".format(period_key),
 			"fieldtype": "Currency",
-			"width": 76,
+			"width": PERIOD_CURRENCY_WIDTH,
 			"precision": 0,
 			"period_group": period_key,
 			"period_group_label": year_month_label,
@@ -27,7 +33,7 @@ def _period_subcolumns(period_key, month_name, year, month, is_past_month, show_
 				"label": _("Fact"),
 				"fieldname": "actual_{0}".format(period_key),
 				"fieldtype": "Currency",
-				"width": 76,
+				"width": PERIOD_CURRENCY_WIDTH,
 				"precision": 0,
 				"period_group": period_key,
 				"period_group_label": year_month_label,
@@ -38,7 +44,7 @@ def _period_subcolumns(period_key, month_name, year, month, is_past_month, show_
 				"label": _("Forecast"),
 				"fieldname": "forecast_{0}".format(period_key),
 				"fieldtype": "Currency",
-				"width": 76,
+				"width": PERIOD_CURRENCY_WIDTH,
 				"precision": 0,
 				"period_group": period_key,
 				"period_group_label": year_month_label,
@@ -49,7 +55,7 @@ def _period_subcolumns(period_key, month_name, year, month, is_past_month, show_
 			"label": _("Forecast"),
 			"fieldname": "forecast_{0}".format(period_key),
 			"fieldtype": "Currency",
-			"width": 76,
+			"width": PERIOD_CURRENCY_WIDTH,
 			"precision": 0,
 			"period_group": period_key,
 			"period_group_label": year_month_label,
@@ -60,7 +66,7 @@ def _period_subcolumns(period_key, month_name, year, month, is_past_month, show_
 			"label": _("Fact"),
 			"fieldname": "actual_{0}".format(period_key),
 			"fieldtype": "Currency",
-			"width": 76,
+			"width": PERIOD_CURRENCY_WIDTH,
 			"precision": 0,
 			"period_group": period_key,
 			"period_group_label": year_month_label,
@@ -133,7 +139,7 @@ def add_total_columns(columns, filters):
 			"label": _("Total Plan"),
 			"fieldname": "total_plan",
 			"fieldtype": "Currency",
-			"width": 120,
+			"width": TOTAL_CURRENCY_WIDTH,
 			"precision": 0,
 		})
 
@@ -142,7 +148,7 @@ def add_total_columns(columns, filters):
 			"label": _("Total Forecast/Fact"),
 			"fieldname": "total_exp_fct",
 			"fieldtype": "Currency",
-			"width": 130,
+			"width": TOTAL_FORECAST_WIDTH,
 			"precision": 0,
 		})
 	elif view_type == "forecast_only":
@@ -150,7 +156,7 @@ def add_total_columns(columns, filters):
 			"label": _("Total Forecast"),
 			"fieldname": "total_exp",
 			"fieldtype": "Currency",
-			"width": 120,
+			"width": TOTAL_CURRENCY_WIDTH,
 			"precision": 0,
 		})
 	elif view_type == "actual_only":
@@ -158,7 +164,7 @@ def add_total_columns(columns, filters):
 			"label": _("Total Fact"),
 			"fieldname": "total_fct",
 			"fieldtype": "Currency",
-			"width": 120,
+			"width": TOTAL_CURRENCY_WIDTH,
 			"precision": 0,
 		})
 

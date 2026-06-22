@@ -45,6 +45,9 @@ br.after_datatable_render = function () {
 		if (cg && cg.apply_grouped_headers) {
 			cg.apply_grouped_headers();
 		}
+		if (br.render_sticky_summary_footer) {
+			br.render_sticky_summary_footer(report);
+		}
 
 		$(".dt-row-header .dt-cell--header, .budget-period-group-row .dt-cell").addClass(
 			"budget-report-header-cell"
