@@ -107,6 +107,22 @@ function get_pl_chart_view_label(frm) {
     return view;
 }
 
+function is_pl_chart_expanded(frm) {
+    return Boolean(frm?.pl_chart_expanded);
+}
+
+function toggle_pl_chart_expanded(frm) {
+    if (!frm) {
+        return;
+    }
+
+    frm.pl_chart_expanded = !is_pl_chart_expanded(frm);
+
+    if (typeof globalThis.render_pl_chart_impl === "function") {
+        globalThis.render_pl_chart_impl(frm, false);
+    }
+}
+
 function build_pl_chart_toolbox(themeColors, frm) {
     const projectName = frm?.doc?.name;
 
@@ -118,6 +134,16 @@ function build_pl_chart_toolbox(themeColors, frm) {
             borderColor: themeColors.muted,
         },
         feature: {
+            myToggleExpandedMetrics: {
+                show: true,
+                title: is_pl_chart_expanded(frm)
+                    ? __("Hide expanded metrics")
+                    : __("Show expanded metrics"),
+                icon: "path://M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z",
+                onclick() {
+                    toggle_pl_chart_expanded(frm);
+                },
+            },
             saveAsImage: {
                 show: true,
                 title: __("Save as Image"),
@@ -157,13 +183,29 @@ function build_pl_chart_data(frm) {
 
     let cumulative_profit_plan = [];
     let cumulative_profit_actual = [];
+    let cumulative_income_plan = [];
+    let cumulative_income_actual = [];
+    let cumulative_expenses_plan = [];
+    let cumulative_expenses_actual = [];
     let cumP = 0;
     let cumA = 0;
+    let cumIncomePlan = 0;
+    let cumIncomeActual = 0;
+    let cumExpensesPlan = 0;
+    let cumExpensesActual = 0;
     for (let i = 0; i < profit_plan.length; i++) {
         cumP += profit_plan[i];
         cumA += profit_actual[i];
+        cumIncomePlan += plan_income[i];
+        cumIncomeActual += actual_income[i];
+        cumExpensesPlan += plan_expenses[i];
+        cumExpensesActual += actual_expenses[i];
         cumulative_profit_plan.push(parseFloat(cumP.toFixed(2)));
         cumulative_profit_actual.push(parseFloat(cumA.toFixed(2)));
+        cumulative_income_plan.push(parseFloat(cumIncomePlan.toFixed(2)));
+        cumulative_income_actual.push(parseFloat(cumIncomeActual.toFixed(2)));
+        cumulative_expenses_plan.push(parseFloat(cumExpensesPlan.toFixed(2)));
+        cumulative_expenses_actual.push(parseFloat(cumExpensesActual.toFixed(2)));
     }
 
     if (pl_chart_debug_enabled()) {
@@ -179,6 +221,10 @@ function build_pl_chart_data(frm) {
         profit_actual,
         cumulative_profit_plan,
         cumulative_profit_actual,
+        cumulative_income_plan,
+        cumulative_income_actual,
+        cumulative_expenses_plan,
+        cumulative_expenses_actual,
         periods,
     };
 }
@@ -214,6 +260,33 @@ function get_pl_chart_data(frm) {
         values: d.cumulative_profit_actual,
         chartType: "line",
     });
+
+    if (is_pl_chart_expanded(frm)) {
+        if (!frm.bg_hide_plan) {
+            datasets.push({
+                name: __("Cumulative income - plan"),
+                values: d.cumulative_income_plan,
+                chartType: "line",
+            });
+        }
+        datasets.push({
+            name: __("Cumulative income") + " - " + view,
+            values: d.cumulative_income_actual,
+            chartType: "line",
+        });
+        if (!frm.bg_hide_plan) {
+            datasets.push({
+                name: __("Cumulative expenses - plan"),
+                values: d.cumulative_expenses_plan,
+                chartType: "line",
+            });
+        }
+        datasets.push({
+            name: __("Cumulative expenses") + " - " + view,
+            values: d.cumulative_expenses_actual,
+            chartType: "line",
+        });
+    }
 
     let yMarkers = null;
     if (frm.bg_hide_plan) {
@@ -342,13 +415,44 @@ function get_pl_profit_label_layout(profitValue, lineY, gapPx = PL_CHART_PROFIT_
 
 function get_pl_chart_dataset_layer(dataset) {
     const name = String(dataset.name || "");
-    if (name.includes(__("Cumulative profit"))) {
+    if (name.includes(__("Cumulative"))) {
         return "cumulative";
     }
     if (name.includes(__("Profit"))) {
         return "profit";
     }
     return "bar";
+}
+
+function is_pl_cumulative_profit_series(dataset) {
+    return String(dataset.name || "").includes(__("Cumulative profit"));
+}
+
+function is_pl_cumulative_volume_series(dataset) {
+    const name = String(dataset.name || "");
+    return (
+        name.includes(__("Cumulative income")) || name.includes(__("Cumulative expenses"))
+    );
+}
+
+function get_pl_chart_dataset_color(dataset, index, palette, frm) {
+    if (!is_pl_cumulative_volume_series(dataset)) {
+        return palette[index] || palette[palette.length - 1];
+    }
+
+    const name = String(dataset.name || "");
+    const isPlan = name.includes(__(" - plan"));
+    const isIncome = name.includes(__("Cumulative income"));
+
+    if (frm.bg_hide_plan) {
+        return palette[isIncome ? 0 : 1];
+    }
+
+    if (isIncome) {
+        return palette[isPlan ? 0 : 1];
+    }
+
+    return palette[isPlan ? 2 : 3];
 }
 
 function build_pl_profit_dash_series(dataset, color, frm) {
@@ -431,11 +535,13 @@ function build_pl_chart_series_item(dataset, color, layer, frm) {
             z: PL_CHART_LAYER_Z.bar,
         };
     } else if (layer === "cumulative") {
+        const isProfitSeries = is_pl_cumulative_profit_series(dataset);
         series = {
             ...build_pl_line_series(dataset.name, dataset.values, color, {
                 showLine: true,
                 showSymbol: false,
-                area: true,
+                area: isProfitSeries,
+                lineWidth: isProfitSeries ? 2 : 1,
             }),
             z: PL_CHART_LAYER_Z.cumulative,
         };
@@ -455,6 +561,7 @@ function build_pl_line_series(name, values, color, options = {}) {
         showSymbol = false,
         area = false,
         markLine = null,
+        lineWidth = 2,
     } = options;
 
     const series = {
@@ -466,7 +573,7 @@ function build_pl_line_series(name, values, color, options = {}) {
         symbolSize: showSymbol ? 6 : 0,
         lineStyle: {
             color,
-            width: showLine ? 2 : 0,
+            width: showLine ? lineWidth : 0,
             opacity: showLine ? 1 : 0,
         },
         itemStyle: { color },
@@ -621,7 +728,7 @@ function get_pl_echarts_option(frm, chartData) {
     const palette = frm.bg_hide_plan ? PL_CHART_COLORS_HIDE_PLAN : PL_CHART_COLORS_SHOW_PLAN;
     const layeredDatasets = chartData.datasets.map((dataset, index) => ({
         dataset,
-        color: palette[index] || palette[palette.length - 1],
+        color: get_pl_chart_dataset_color(dataset, index, palette, frm),
         layer: get_pl_chart_dataset_layer(dataset),
     }));
     const series = [];
@@ -763,6 +870,7 @@ function get_pl_chart_dom(frm) {
 
     $wrapper.addClass("pl-chart-wrapper");
     $wrapper.toggleClass("pl-chart-with-plan", !frm.bg_hide_plan);
+    $wrapper.toggleClass("pl-chart-expanded", is_pl_chart_expanded(frm));
 
     let $chartContainer = $wrapper.find(".pl-chart-container");
     if (!$chartContainer.length) {
