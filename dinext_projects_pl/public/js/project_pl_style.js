@@ -163,6 +163,11 @@ function applyPLStyle() {
             background: transparent;
         }
 
+        .pl-chart-wrapper.pl-chart-expanded .pl-chart-container {
+            min-height: 440px;
+            height: 440px;
+        }
+
         .pl-chart-error {
             padding: 24px;
             color: var(--red-500, #c0392b);

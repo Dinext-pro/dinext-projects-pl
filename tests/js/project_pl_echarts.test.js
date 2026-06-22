@@ -289,6 +289,97 @@ test("get_pl_chart_data includes plan series when plan is visible", () => {
     assert.equal(chartData.yMarkers, null);
 });
 
+test("get_pl_chart_data adds cumulative income and expense series in expanded mode", () => {
+    const context = loadEchartsModule();
+    const frm = createChartFrm({ bg_hide_plan: false, pl_chart_expanded: true });
+    const chartData = context.get_pl_chart_data(frm);
+    const datasetNames = Array.from(chartData.datasets, (dataset) => dataset.name);
+
+    assert.equal(chartData.datasets.length, 12);
+    assert.deepEqual(datasetNames.slice(-4), [
+        "Cumulative income - plan",
+        "Cumulative income - actual/forecast",
+        "Cumulative expenses - plan",
+        "Cumulative expenses - actual/forecast",
+    ]);
+    assert.deepEqual(Array.from(chartData.datasets[8].values), [100, 200]);
+    assert.deepEqual(Array.from(chartData.datasets[9].values), [90, 180]);
+    assert.deepEqual(Array.from(chartData.datasets[10].values), [-40, -80]);
+    assert.deepEqual(Array.from(chartData.datasets[11].values), [-35, -70]);
+});
+
+test("get_pl_echarts_option styles expanded cumulative volume lines like matching bars", () => {
+    const context = loadEchartsModule();
+    const frm = createChartFrm({ bg_hide_plan: false, pl_chart_expanded: true });
+    const option = context.get_pl_echarts_option(frm, context.get_pl_chart_data(frm));
+
+    const planIncomeBar = option.series.find((series) => series.name === "Income - plan");
+    const actualIncomeBar = option.series.find(
+        (series) => series.name === "Income - actual/forecast"
+    );
+    const planExpenseBar = option.series.find((series) => series.name === "Expenses - plan");
+    const actualExpenseBar = option.series.find(
+        (series) => series.name === "Expenses - actual/forecast"
+    );
+    const cumPlanIncome = option.series.find(
+        (series) => series.name === "Cumulative income - plan"
+    );
+    const cumActualIncome = option.series.find(
+        (series) => series.name === "Cumulative income - actual/forecast"
+    );
+    const cumPlanExpense = option.series.find(
+        (series) => series.name === "Cumulative expenses - plan"
+    );
+    const cumActualExpense = option.series.find(
+        (series) => series.name === "Cumulative expenses - actual/forecast"
+    );
+    const cumPlanProfit = option.series.find(
+        (series) => series.name === "Cumulative profit - plan"
+    );
+
+    assert.ok(planIncomeBar);
+    assert.ok(cumPlanIncome);
+    assert.equal(cumPlanIncome.color, planIncomeBar.color);
+    assert.equal(cumPlanIncome.lineStyle.width, 1);
+    assert.equal(cumPlanIncome.areaStyle, undefined);
+
+    assert.equal(cumActualIncome.color, actualIncomeBar.color);
+    assert.equal(cumActualIncome.lineStyle.width, 1);
+
+    assert.equal(cumPlanExpense.color, planExpenseBar.color);
+    assert.equal(cumPlanExpense.lineStyle.width, 1);
+
+    assert.equal(cumActualExpense.color, actualExpenseBar.color);
+    assert.equal(cumActualExpense.lineStyle.width, 1);
+
+    assert.ok(cumPlanProfit.areaStyle);
+    assert.equal(cumPlanProfit.lineStyle.width, 2);
+});
+
+test("get_pl_echarts_option matches cumulative volume line colors when plan is hidden", () => {
+    const context = loadEchartsModule();
+    const frm = createChartFrm({ bg_hide_plan: true, pl_chart_expanded: true });
+    const option = context.get_pl_echarts_option(frm, context.get_pl_chart_data(frm));
+
+    const actualIncomeBar = option.series.find(
+        (series) => series.name === "Income - actual/forecast"
+    );
+    const actualExpenseBar = option.series.find(
+        (series) => series.name === "Expenses - actual/forecast"
+    );
+    const cumActualIncome = option.series.find(
+        (series) => series.name === "Cumulative income - actual/forecast"
+    );
+    const cumActualExpense = option.series.find(
+        (series) => series.name === "Cumulative expenses - actual/forecast"
+    );
+
+    assert.equal(cumActualIncome.color, actualIncomeBar.color);
+    assert.equal(cumActualIncome.lineStyle.width, 1);
+    assert.equal(cumActualExpense.color, actualExpenseBar.color);
+    assert.equal(cumActualExpense.lineStyle.width, 1);
+});
+
 test("get_pl_echarts_option adds cumulative area lines and plan marker line", () => {
     const context = loadEchartsModule();
     const frm = createChartFrm({ bg_hide_plan: true });
@@ -474,6 +565,34 @@ test("get_pl_echarts_option adds saveAsImage toolbox", () => {
     assert.notEqual(saveAsImage.backgroundColor, "transparent");
     assert.equal(option.toolbox.right, 8);
     assert.equal(option.toolbox.itemSize, 16);
+});
+
+test("get_pl_echarts_option adds expanded metrics toolbox toggle", () => {
+    const context = loadEchartsModule();
+    const frm = createChartFrm({ bg_hide_plan: true, doc: { name: "PRJ-001" } });
+    const option = context.get_pl_echarts_option(frm, context.get_pl_chart_data(frm));
+    const toggleExpandedMetrics = option.toolbox.feature.myToggleExpandedMetrics;
+
+    assert.ok(toggleExpandedMetrics);
+    assert.equal(toggleExpandedMetrics.show, true);
+    assert.equal(toggleExpandedMetrics.title, "Show expanded metrics");
+    assert.equal(typeof toggleExpandedMetrics.onclick, "function");
+
+    let renderArgs = null;
+    context.globalThis.render_pl_chart_impl = (renderFrm, init) => {
+        renderArgs = { renderFrm, init };
+    };
+
+    toggleExpandedMetrics.onclick();
+
+    assert.equal(frm.pl_chart_expanded, true);
+    assert.deepEqual(renderArgs, { renderFrm: frm, init: false });
+
+    const expandedOption = context.get_pl_echarts_option(frm, context.get_pl_chart_data(frm));
+    assert.equal(
+        expandedOption.toolbox.feature.myToggleExpandedMetrics.title,
+        "Hide expanded metrics"
+    );
 });
 
 test("get_pl_echarts_option adds current date vertical markLine when month is in range", () => {
