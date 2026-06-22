@@ -1426,10 +1426,15 @@ function save_bg_forecast_as_plan(frm) {
             data: data
         },
         freeze: true,
-        freeze_message: __("Отправка бюджетов на согласование..."),
+        freeze_message: __("Сохранение плана..."),
         callback: function(r) {
             if (!r.exc) {
-                frappe.show_alert(__("Бюджеты отправлены на согласование"), 5);
+                const mode = r.message?.mode || "approval";
+                const successMessage = mode === "direct"
+                    ? __("План сохранен")
+                    : __("Бюджеты отправлены на согласование");
+
+                frappe.show_alert(successMessage, 5);
                 load_budget_data(frm, "month", true);
                 load_and_render_project_dashboard(frm);
             }

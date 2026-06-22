@@ -4,7 +4,7 @@
 
 **Dinext Projects P&L** — это приложение для Frappe/ERPNext, которое расширяет стандартный DocType `Project` функциями проектного P&L, планирования, прогноза, отчетности и согласования бюджета.
 
-Приложение объединяет кастомный P&L-интерфейс и отдельную вкладку `Метрики` в карточке проекта с Dinext-логикой бюджетирования. Текущие плановые и прогнозные данные отображаются и редактируются в UI проекта, EVM-показатели рассчитываются на сервере через единый whitelisted API и отображаются на вкладке `Метрики`, запросы на согласование создаются как стандартные ERPNext-документы `Budget` и `Monthly Distribution`, а согласованный план синхронизируется обратно в кастомный read model `Project Budget`. Точные утвержденные помесячные суммы хранятся отдельно от процентного `Monthly Distribution`, поэтому persisted-значения плана не дрейфуют из-за round-trip округления.
+Приложение объединяет кастомный P&L-интерфейс и отдельную вкладку `Метрики` в карточке проекта с Dinext-логикой бюджетирования. Текущие плановые и прогнозные данные отображаются и редактируются в UI проекта, EVM-показатели рассчитываются на сервере через единый whitelisted API и отображаются на вкладке `Метрики`, а сохранение плана работает в двух режимах: через стандартные ERPNext-документы `Budget` и `Monthly Distribution` с workflow согласования либо через прямую запись в кастомный read model `Project Budget`. Точные утвержденные помесячные суммы хранятся отдельно от процентного `Monthly Distribution`, поэтому persisted-значения плана не дрейфуют из-за round-trip округления.
 
 ## ✨ Возможности
 
@@ -12,7 +12,8 @@
 - **Отдельная вкладка `Метрики` в `Project`** с финансовыми EVM-метриками по контурам доходов и расходов, отчетной датой расчета и серверным расчетом `BAC/PV/EV/AC/CV/SV/CPI/SPI/EAC/ETC/VAC/TCPI`.
 - **Единый серверный API EVM-метрик** `get_project_financial_metrics`, переиспользующий агрегацию plan/fact из report pipeline и возвращающий готовый payload для UI.
 - **Режимы просмотра план / прогноз / факт** с переключателями видимости плана и дельт.
-- **Flow согласования бюджета**, в котором сохранение плана из P&L создает ERPNext `Budget`, а не пишет напрямую в `Project Budget`.
+- **Flow согласования бюджета**, в котором сохранение плана из P&L создает ERPNext `Budget`, а не пишет напрямую в `Project Budget`, если site-level toggle согласования включен.
+- **Site-level toggle сохранения плана**: можно переключить режим между workflow согласования и прямым сохранением `pba_plan` без `Budget` и workflow.
 - **Гранулярность бюджета по ключу**: один `Budget` на сочетание `account + project/task + fiscal year`.
 - **Workflow согласования Dinext** со специальными ролями:
   - `Dinext_Project_Manager` отправляет на согласование;
@@ -55,11 +56,9 @@ bench --site $SITE migrate
 2. Перейдите в кастомный раздел P&L.
 3. Проверьте план, прогноз и факт по месяцам.
 4. Нажмите `Сохранить план`.
-5. Клиентский код вызывает app-owned Python service `save_budget_plan_for_approval`, который:
-   - группирует строки по `account + target + fiscal year`;
-   - создает `Budget` и `Monthly Distribution`;
-   - сохраняет точные исходные помесячные суммы в metadata `Budget`;
-   - переводит бюджет в Dinext workflow согласования.
+5. Клиентский код вызывает app-owned Python service `save_budget_plan_for_approval`, который группирует строки по `account + target + fiscal year`, а затем:
+   - **по умолчанию** создает `Budget` и `Monthly Distribution`, сохраняет точные исходные помесячные суммы в metadata `Budget` и переводит бюджет в Dinext workflow согласования;
+   - **если отключен site-level toggle** — сразу обновляет `Project Budget.pba_plan` без создания `Budget` и без workflow.
 
 ### Сценарий просмотра метрик
 
@@ -97,6 +96,9 @@ frappe.call({
 
 ### Согласование бюджета
 
+- Режим согласования управляется site config ключом `dinext_projects_pl_enable_plan_approval`.
+- Если ключ отсутствует или равен `1`, используется текущий approval flow через `Budget`.
+- Если ключ равен `0`, план сохраняется напрямую в `Project Budget`, а workflow согласования не запускается.
 - Pending budgets находятся в состоянии `Pending Approval`.
 - При `Approve` бюджет submit'ится и синхронизируется в `Project Budget`.
 - При согласовании replacement-версии ранее approved budget для того же канонического ключа отменяется, а новая версия становится источником истины.
@@ -136,7 +138,17 @@ dinext_projects.project_pl_forecast_menu.push({
 
 ## 🔧 Конфигурация
 
-Приложение не вводит собственные environment variables. Основная конфигурация выполняется через метаданные Frappe и стандартные ERPNext-сущности:
+Приложение не вводит собственные environment variables. Основная конфигурация выполняется через метаданные Frappe, `site_config.json` и стандартные ERPNext-сущности:
+
+- `site_config.json`:
+  - `dinext_projects_pl_enable_plan_approval` — включает (`1`, default) или отключает (`0`) сохранение плана через `Budget` workflow.
+- Пример настройки:
+
+```bash
+bench --site $SITE set-config dinext_projects_pl_enable_plan_approval 0
+```
+
+При выключенном ключе кнопка `Сохранить план` продолжает использовать тот же серверный API, но он пишет значения напрямую в `Project Budget.pba_plan` и не создает `Budget` / `Monthly Distribution`.
 
 - fixtures для `Accounting Dimension`;
 - custom fields в `Budget`:
@@ -150,6 +162,7 @@ dinext_projects.project_pl_forecast_menu.push({
 
 - `Monthly Distribution` — производный артефакт для monthly checks в ERPNext, а не источник истины для sync approved plan.
 - Точные approved monthly amounts сохраняются прямо в `Budget`, чтобы исключить drift из-за round-trip округления.
+- При `dinext_projects_pl_enable_plan_approval = 0` источником истины для новых операций `Сохранить план` сразу становится `Project Budget.pba_plan`, без промежуточного `Budget`.
 - `Project Budget.pba_expected` остается независимым прогнозом и не перезаписывается автоматически при approve-sync.
 - EVM-метрики используют только `pba_plan` и факт из `GL Entry`; прогноз (`pba_expected`) в расчет EVM не входит.
 - Отчетная дата EVM передается в API явно; proration текущего месяца выполняется на сервере.
