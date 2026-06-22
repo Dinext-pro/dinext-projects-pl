@@ -158,8 +158,9 @@ function get_child_budget_sum(account, task, dimension = [], period, aggregatedB
 
             const sig = dimSignature(dimForChild);
             const entry = child._dimMap ? child._dimMap[sig] : (Array.isArray(child.dimension_data) ? child.dimension_data.find(x => dimSignature(x.dimensions) === sig) : null);
-            if (hasBucketPeriodValue(entry, forecastKey)) {
-                sum += Number(entry[forecastKey]) || 0;
+            const bucketValue = Number(entry?.[forecastKey]) || 0;
+            if (hasBucketPeriodValue(entry, forecastKey) && bucketValue !== 0) {
+                sum += bucketValue;
             } else {
                 // если прямого значения нет — добавляем в стек для рекурсивного обхода потомков
                 stack.push({ account: child.value, task: child.task ? child.task.value : undefined, dimArr: dimForChild });
