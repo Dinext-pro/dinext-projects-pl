@@ -84,8 +84,8 @@ dinext_projects_pl.budget_plan_vs_forecast.filters = [
 		label: __("View Type"),
 		fieldtype: "Select",
 		options: [
-			{ value: "forecast_actual", label: __("Forecast and Fact") },
-			{ value: "forecast_only", label: __("Forecast Only") },
+			{ value: "forecast_actual", label: __("Exp and Fact") },
+			{ value: "forecast_only", label: __("Exp Only") },
 			{ value: "actual_only", label: __("Fact Only") },
 		],
 		default: "forecast_actual",

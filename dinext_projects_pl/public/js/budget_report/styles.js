@@ -14,6 +14,8 @@ br.apply_report_styles = function () {
 		}
 
 		.report-wrapper .dt-cell__content {
+			font-size: 12px;
+			font-variant-numeric: tabular-nums;
 			text-align: right !important;
 		}
 
@@ -25,7 +27,13 @@ br.apply_report_styles = function () {
 		}
 
 		.report-wrapper .dt-cell--col-0 .dt-cell__content {
+			font-size: 12px;
 			text-align: left !important;
+		}
+
+		.report-wrapper .dt-cell:not(.dt-cell--col-0):not(.dt-cell--header) .dt-cell__content {
+			font-size: 12px;
+			white-space: nowrap;
 		}
 
 		.report-wrapper .dt-row-header .dt-cell--col-0,
@@ -45,6 +53,7 @@ br.apply_report_styles = function () {
 		}
 
 		.report-wrapper .budget-period-group-cell .budget-period-group-label {
+			font-size: 12px;
 			text-align: center;
 			font-weight: 600;
 			width: 100%;
@@ -68,7 +77,7 @@ br.apply_report_styles = function () {
 		.report-wrapper .budget-report-header-cell .dt-cell__content,
 		.report-wrapper .dt-cell--header .dt-cell__content,
 		.report-wrapper .dt-row-header .dt-cell--header .dt-cell__content {
-			font-size: 11px;
+			font-size: 12px;
 			text-align: center !important;
 			display: flex;
 			justify-content: center !important;
@@ -82,7 +91,7 @@ br.apply_report_styles = function () {
 
 		.report-wrapper .budget-group-header > span {
 			width: 33.33%;
-			font-size: 10px;
+			font-size: 12px;
 			display: flex;
 			justify-content: center;
 		}
@@ -95,7 +104,7 @@ br.apply_report_styles = function () {
 		}
 
 		.report-wrapper .budget-group span {
-			font-size: smaller;
+			font-size: 12px;
 		}
 
 		.report-wrapper .budget-group > div {
@@ -121,13 +130,16 @@ br.apply_report_styles = function () {
 			font-style: italic !important;
 		}
 
+		.report-wrapper .dt-row-totalRow,
 		.report-wrapper .dt-row-totalRow .dt-cell,
 		.report-wrapper .dt-row-totalRow .dt-cell__content {
 			background-color: var(--budget-report-summary-bg) !important;
 			height: auto !important;
+			min-height: 48px;
 		}
 
 		.report-wrapper .dt-row-totalRow .dt-cell__content {
+			font-size: 12px;
 			padding-top: 4px;
 			padding-bottom: 4px;
 		}
@@ -136,10 +148,13 @@ br.apply_report_styles = function () {
 		.report-wrapper .budget-summary-labels {
 			display: flex;
 			flex-direction: column;
-			gap: 2px;
+			gap: 1px;
+			line-height: 1.35;
 		}
 
 		.report-wrapper .budget-summary-label {
+			display: block;
+			font-size: 12px;
 			font-weight: 700;
 			text-align: left;
 		}
@@ -151,6 +166,7 @@ br.apply_report_styles = function () {
 
 		.report-wrapper .budget-summary-value {
 			display: block;
+			font-size: 12px;
 			text-align: right;
 		}
 
