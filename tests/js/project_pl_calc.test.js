@@ -115,6 +115,64 @@ test("calc_column_total falls back to child totals when root has no direct value
     assert.equal(result.actual_expenses, 9);
 });
 
+test("calc_column_total rolls up child forecast through zero-valued intermediate parent", () => {
+    const context = loadCalcModule();
+    const period = { year: 2026, month: 3, is_past: false };
+    const root = makeRootRow("Доход - Dinext", "Income", [{ forecast_2026_3: 0 }]);
+    const parent = {
+        value: "Выручка от реализации - Dinext",
+        type: "Income",
+        parent_account: "Доход - Dinext",
+        dimension_data: [{ forecast_2026_3: 0 }],
+    };
+    const child = {
+        value: "Работы / услуги (выручка) - Dinext",
+        type: "Income",
+        parent_account: "Выручка от реализации - Dinext",
+        dimension_data: [{ forecast_2026_3: 200000 }],
+    };
+    const frm = {
+        aggregatedBudget: {
+            root,
+            parent,
+            child,
+        },
+    };
+
+    const result = context.calc_column_total(frm, period, [root], false);
+
+    assert.equal(result.actual_income, 200000);
+});
+
+test("calc_column_total keeps non-zero intermediate parent forecast as terminal value", () => {
+    const context = loadCalcModule();
+    const period = { year: 2026, month: 6, is_past: false };
+    const root = makeRootRow("Доход - Dinext", "Income", [{ forecast_2026_6: 0 }]);
+    const parent = {
+        value: "Выручка от реализации - Dinext",
+        type: "Income",
+        parent_account: "Доход - Dinext",
+        dimension_data: [{ forecast_2026_6: 115000 }],
+    };
+    const child = {
+        value: "Работы / услуги (выручка) - Dinext",
+        type: "Income",
+        parent_account: "Выручка от реализации - Dinext",
+        dimension_data: [{ forecast_2026_6: 200000 }],
+    };
+    const frm = {
+        aggregatedBudget: {
+            root,
+            parent,
+            child,
+        },
+    };
+
+    const result = context.calc_column_total(frm, period, [root], false);
+
+    assert.equal(result.actual_income, 115000);
+});
+
 test("updateTaskDimensionOptimized merges disallowed Task buckets into the account bucket", () => {
     const context = loadCalcModule();
     const accountRow = {
