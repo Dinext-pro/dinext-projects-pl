@@ -7,6 +7,26 @@ const _budgetIndexCache = new WeakMap();
 const RISK_KEY_SEP = "|risk|";
 
 /**
+ * Net P&L actual from a GL line by account root type.
+ * Income: credit - debit; Expense: debit - credit.
+ */
+function signedGlPlActualAmount(accountType, debit, credit) {
+    const d = Number(debit) || 0;
+    const c = Number(credit) || 0;
+    if (accountType === "Income") {
+        return c - d;
+    }
+    if (accountType === "Expense") {
+        return d - c;
+    }
+    return d - c;
+}
+
+function hasBucketPeriodValue(entry, fieldKey) {
+    return Boolean(entry && Object.prototype.hasOwnProperty.call(entry, fieldKey));
+}
+
+/**
  * Создает / возвращает индекс для массива aggregatedBudget.
  * Индекс содержит:
  *  - byValueMap: account -> [items]
@@ -138,10 +158,9 @@ function get_child_budget_sum(account, task, dimension = [], period, aggregatedB
 
             const sig = dimSignature(dimForChild);
             const entry = child._dimMap ? child._dimMap[sig] : (Array.isArray(child.dimension_data) ? child.dimension_data.find(x => dimSignature(x.dimensions) === sig) : null);
-            const val = entry ? (Number(entry[forecastKey]) || 0) : 0;
-
-            if (val > 0) {
-                sum += val;
+            const bucketValue = Number(entry?.[forecastKey]) || 0;
+            if (hasBucketPeriodValue(entry, forecastKey) && bucketValue !== 0) {
+                sum += bucketValue;
             } else {
                 // если прямого значения нет — добавляем в стек для рекурсивного обхода потомков
                 stack.push({ account: child.value, task: child.task ? child.task.value : undefined, dimArr: dimForChild });
@@ -151,6 +170,46 @@ function get_child_budget_sum(account, task, dimension = [], period, aggregatedB
 
     budgetIndex.sumCache.set(cacheKey, sum);
     return sum;
+}
+
+function get_direct_budget_value(row, period, valueKey) {
+    if (!row || !Array.isArray(row.dimension_data) || !row.dimension_data.length || !period) {
+        return 0;
+    }
+
+    const fieldname = `${valueKey}_${period.year}_${period.month}`;
+    return row.dimension_data.reduce((sum, bucket) => {
+        return sum + (Number(bucket?.[fieldname]) || 0);
+    }, 0);
+}
+
+function get_row_period_total(frm, row, period, valueKey) {
+    const directValue = get_direct_budget_value(row, period, valueKey);
+    if (directValue) {
+        return directValue;
+    }
+
+    return get_child_budget_sum(
+        row.value,
+        row.task ? row.task.value : "",
+        [],
+        period,
+        frm.aggregatedBudget,
+        valueKey
+    );
+}
+
+/**
+ * Top-level P&L rows for income/expense/profit totals.
+ * Excludes task and risk reserve rows (same rules as aggregatedBudgetToTreeOrder roots).
+ */
+function getFinancialRootRows(aggregatedBudget) {
+    if (!aggregatedBudget) {
+        return [];
+    }
+    return Object.values(aggregatedBudget).filter(
+        (b) => !b.parent_account && !b.task && !b._parentKey && !b.risk
+    );
 }
 
 /**
@@ -164,36 +223,18 @@ function calc_column_total(frm, period, roots, calc_plan = true, calc_fact = fal
     let actual_income = 0;
     let actual_expenses = 0;
 
-    // подготавливаем массивы бюджетов
-    const index = getOrCreateBudgetIndex( frm.aggregatedBudget || {} );
-
     for (const child of roots) {
-        // берем первое измерение (как в оригинале), но избегаем ошибок
-        const bucket = Array.isArray(child.dimension_data) && child.dimension_data.length ? child.dimension_data[0] : {};
-        const planKey = `plan_${period.year}_${period.month}`;
-        const actualKey = `${(period.is_past || calc_fact) ? "fact" : "forecast"}_${period.year}_${period.month}`;
-
-        let plan = Number(bucket[planKey]) || 0;
-        let actual = Number(bucket[actualKey]) || 0;
-
-        // если нет прямого плана — считаем сумму по детям (через индекс)
-        if (!plan && calc_plan) {
-            plan = get_child_budget_sum(child.value, "", [], period, frm.aggregatedBudget, "plan");
-        }
-
-        if (!actual) {
-            actual = get_child_budget_sum(child.value, "", [], period, frm.aggregatedBudget, (period.is_past || calc_fact) ? "fact" : "forecast");
-        }
+        const actualValueKey = (period.is_past || calc_fact) ? "fact" : "forecast";
+        const plan = calc_plan ? get_row_period_total(frm, child, period, "plan") : 0;
+        const actual = get_row_period_total(frm, child, period, actualValueKey);
 
         if (child.type === "Expense") {
-            if (!actual_expenses && actual) actual_expenses = actual;
-            if (!plan_expenses && plan) plan_expenses = plan;
+            actual_expenses += actual;
+            plan_expenses += plan;
         } else if (child.type === "Income") {
-            if (!actual_income && actual) actual_income = actual;
-            if (!plan_income && plan) plan_income = plan;
+            actual_income += actual;
+            plan_income += plan;
         }
-
-        if (actual_income && actual_expenses && plan_income && plan_expenses) break;
     }
 
     return {
@@ -202,6 +243,61 @@ function calc_column_total(frm, period, roots, calc_plan = true, calc_fact = fal
         actual_income,
         actual_expenses
     };
+}
+
+/**
+ * Прогнозные затраты по одному периоду (только forecast_*, без fact для прошлых месяцев).
+ */
+function get_period_forecast_expenses(frm, period, roots) {
+    let forecast_expenses = 0;
+
+    for (const child of roots) {
+        if (child.type !== "Expense") {
+            continue;
+        }
+        forecast_expenses += get_row_period_total(frm, child, period, "forecast");
+    }
+
+    return forecast_expenses;
+}
+
+/**
+ * Сумма всех прогнозных затрат проекта по затратным P&L-счетам (forecast / pba_expected).
+ */
+function get_total_forecast_expenses(frm) {
+    if (!frm || !frm.aggregatedBudget) {
+        return 0;
+    }
+
+    const periods = get_budget_display_periods(frm, "month");
+    const roots = getFinancialRootRows(frm.aggregatedBudget);
+    let total = 0;
+
+    for (const period of periods) {
+        total += get_period_forecast_expenses(frm, period, roots);
+    }
+
+    return parseFloat(total.toFixed(2));
+}
+
+function is_pl_expense_account(frm, account) {
+    if (!frm || !frm.aggregatedBudget || !account) {
+        return false;
+    }
+
+    const row = Object.values(frm.aggregatedBudget).find(b => b.value === account);
+    return Boolean(row && row.type === "Expense");
+}
+
+/**
+ * Обновляет estimated_costing в форме проекта без сохранения документа.
+ */
+function sync_estimated_costing_from_forecast(frm) {
+    if (!frm) {
+        return;
+    }
+
+    frm.set_value("estimated_costing", get_total_forecast_expenses(frm));
 }
 
 /**
@@ -384,6 +480,14 @@ function updateTaskDimensionOptimized(frm) {
         const dimensionData = budget.dimension_data || [];
         // shallow copy base budget once
         const baseBudgetCopy = { ...budget };
+        const allowed = budget.allowed_dimensions || [];
+        let allowsTask = false;
+        for (let ai = 0, aLen = allowed.length; ai < aLen; ai++) {
+            if (allowed[ai] && allowed[ai].document_type === "Task") {
+                allowsTask = true;
+                break;
+            }
+        }
 
         // build signature -> bucket map; allow multiple buckets per signature (array)
         const sigToBuckets = Object.create(null);
@@ -423,20 +527,56 @@ function updateTaskDimensionOptimized(frm) {
             }
         }
 
+        if (!allowsTask) {
+            const mergedBuckets = nonTaskBuckets.map((bucket) => ({
+                ...bucket,
+                dimensions: [...(bucket.dimensions || [])],
+            }));
+            const mergedBySig = Object.create(null);
+
+            for (let i = 0; i < mergedBuckets.length; i++) {
+                const bucket = mergedBuckets[i];
+                const sig = dimSignature(bucket.dimensions || []);
+                if (!mergedBySig[sig]) {
+                    mergedBySig[sig] = bucket;
+                }
+            }
+
+            for (const sig in sigToBuckets) {
+                const buckets = sigToBuckets[sig];
+                for (let i = 0; i < buckets.length; i++) {
+                    const bucket = buckets[i];
+                    const dimsWithoutTask = (bucket.dimensions || []).filter(
+                        (dim) => !(dim && dim.doc === "Task")
+                    );
+                    const targetSig = dimSignature(dimsWithoutTask);
+                    let targetBucket = mergedBySig[targetSig];
+
+                    if (!targetBucket) {
+                        targetBucket = { dimensions: dimsWithoutTask };
+                        mergedBySig[targetSig] = targetBucket;
+                        mergedBuckets.push(targetBucket);
+                    }
+
+                    for (const prop in bucket) {
+                        if (
+                            prop !== "dimensions" &&
+                            (prop.startsWith("plan_") || prop.startsWith("forecast_") || prop.startsWith("fact_"))
+                        ) {
+                            targetBucket[prop] = (parseFloat(targetBucket[prop]) || 0) + (parseFloat(bucket[prop]) || 0);
+                        }
+                    }
+                }
+            }
+
+            baseBudgetCopy.dimension_data = mergedBuckets;
+            budgetsWithTasks[String(budget.value)] = baseBudgetCopy;
+            continue;
+        }
+
         // записываем базовый бюджет без Task buckets
         baseBudgetCopy.dimension_data = nonTaskBuckets;
         budgetsWithTasks[String(budget.value)] = baseBudgetCopy;
-
-        // проверяем, разрешены ли Task в allowed_dimensions (один проход)
-        const allowed = budget.allowed_dimensions || [];
-        let allowsTask = false;
-        for (let ai = 0, aLen = allowed.length; ai < aLen; ai++) {
-            if (allowed[ai] && allowed[ai].document_type === "Task") {
-                allowsTask = true;
-                break;
-            }
-        }
-        if (!allowsTask) continue;
 
         // для каждой задачи собираем все бакеты, содержащие эту задачу (в т.ч. Task+Risk)
         for (let ti = 0; ti < tasksLen; ti++) {
@@ -532,3 +672,5 @@ function addRiskDimensionRows( agg ) {
         agg[toAdd[i][0]] = toAdd[i][1];
     }
 }
+
+globalThis.getFinancialRootRows = getFinancialRootRows;
