@@ -16,7 +16,7 @@ br.apply_report_styles = function () {
 		.report-wrapper .dt-cell__content {
 			font-size: 12px;
 			font-variant-numeric: tabular-nums;
-			text-align: right !important;
+			text-align: center !important;
 		}
 
 		.report-wrapper .dt-cell--col-0 {
@@ -167,7 +167,7 @@ br.apply_report_styles = function () {
 		.report-wrapper .budget-summary-value {
 			display: block;
 			font-size: 12px;
-			text-align: right;
+			text-align: center;
 		}
 
 		.indent-1 { padding-left: 20px !important; }
@@ -264,61 +264,93 @@ br.apply_report_styles = function () {
 			background-color: #f5f5f5;
 		}
 
-		#page-query-report .page-form > [data-fieldtype="MultiSelectList"] {
-			width: 260px !important;
-			min-width: 260px !important;
-			max-width: 320px !important;
-			flex: 0 0 260px !important;
-			float: none !important;
+		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form {
+			display: flex !important;
+			flex-wrap: wrap !important;
+			align-items: flex-end !important;
+			align-content: flex-start !important;
+			gap: 8px 16px !important;
+			padding: 16px 32px 8px 32px !important;
+			margin-left: 0 !important;
+			margin-right: 0 !important;
+			box-sizing: border-box !important;
 		}
 
-		#page-query-report .page-form > [data-fieldtype="MultiSelectList"] .multiselect-list,
-		#page-query-report .page-form > [data-fieldtype="MultiSelectList"] .multiselect-list .form-control {
-			width: 100% !important;
-			min-width: 100% !important;
+		#page-query-report.budget-plan-vs-forecast-page .report-wrapper {
+			width: 100%;
+			max-width: 100%;
+			box-sizing: border-box;
 		}
 
-		#page-query-report.budget-plan-vs-forecast-page .page-form > [data-fieldtype="MultiSelectList"] {
-			width: 260px !important;
-			min-width: 260px !important;
-			max-width: 320px !important;
-			flex: 0 0 260px !important;
-			float: none !important;
-		}
-
-		#page-query-report.budget-plan-vs-forecast-page .page-form > .budget-report-filter-wide,
-		#page-query-report.budget-plan-vs-forecast-page .page-form > .form-group.budget-report-filter-wide,
-		#page-query-report.budget-plan-vs-forecast-page .page-form > .frappe-control.budget-report-filter-wide {
-			width: 260px !important;
-			min-width: 260px !important;
-			max-width: 320px !important;
-			flex: 0 0 260px !important;
-			float: none !important;
-		}
-
-		#page-query-report.budget-plan-vs-forecast-page .page-form .budget-report-filter-wide .multiselect-list,
-		#page-query-report.budget-plan-vs-forecast-page .page-form .budget-report-filter-wide .multiselect-list .form-control {
-			width: 100% !important;
-			min-width: 100% !important;
-		}
-
-		#page-query-report.budget-plan-vs-forecast-page .page-form .budget-report-filter-wide .status-text {
+		#page-query-report.budget-plan-vs-forecast-page .report-wrapper .datatable {
+			width: 100%;
 			max-width: 100%;
 		}
 
-		#page-query-report.budget-plan-vs-forecast-page .page-form > [data-fieldname="company"] {
-			width: 180px !important;
-			min-width: 180px !important;
-			flex: 0 0 180px !important;
+		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form > .form-group,
+		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form > .frappe-control {
+			margin: 0 !important;
+			padding: 0 !important;
 			float: none !important;
+			flex: 0 0 auto !important;
+			max-width: none !important;
 		}
 
-		#page-query-report.budget-plan-vs-forecast-page .page-form > [data-fieldname="from_period"],
-		#page-query-report.budget-plan-vs-forecast-page .page-form > [data-fieldname="to_period"] {
+		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form > .budget-report-filter-wide {
+			width: 260px !important;
+			min-width: 260px !important;
+			max-width: 320px !important;
+		}
+
+		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form .budget-report-filter-wide .multiselect-list,
+		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form .budget-report-filter-wide .multiselect-list .form-control {
+			width: 100% !important;
+			min-width: 100% !important;
+		}
+
+		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form .budget-report-filter-wide .status-text {
+			max-width: 100%;
+		}
+
+		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form > .budget-report-filter-company {
+			width: 180px !important;
+			min-width: 180px !important;
+		}
+
+		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form > .budget-report-filter-period {
 			width: 110px !important;
 			min-width: 110px !important;
-			flex: 0 0 110px !important;
-			float: none !important;
+		}
+
+		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form > .budget-report-filter-select {
+			width: auto !important;
+			min-width: 140px !important;
+		}
+
+		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form > .budget-report-filter-check {
+			width: auto !important;
+			min-width: auto !important;
+			max-width: none !important;
+		}
+
+		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form > .budget-report-filter-check .checkbox {
+			margin: 0 !important;
+			min-height: 28px !important;
+			display: flex !important;
+			align-items: center !important;
+		}
+
+		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form > .budget-report-filter-check .checkbox label {
+			margin: 0 !important;
+			display: inline-flex !important;
+			align-items: center !important;
+			white-space: nowrap !important;
+		}
+
+		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form > .budget-report-filter-check .label-area {
+			white-space: nowrap !important;
+			overflow: visible !important;
+			text-overflow: clip !important;
 		}
 	`;
 

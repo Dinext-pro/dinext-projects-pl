@@ -3,6 +3,7 @@ frappe.provide("dinext_projects_pl.budget_plan_vs_forecast");
 var br = dinext_projects_pl.budget_plan_vs_forecast;
 
 br.ru_fallback_translations = {
+	"Account": "Счет",
 	"Accumulated Values": "Накопленные значения",
 	"Apply Cost Center Allocation": "Применять распределение МВЗ",
 	"Business Area": "Бизнес-сфера",
@@ -14,9 +15,12 @@ br.ru_fallback_translations = {
 	"Enabled": "включена",
 	"Exp and Fact": "Прогноз и факт",
 	"Exp Only": "Только прогноз",
+	"Fact": "Факт",
 	"Fact Only": "Только факт",
+	"Forecast": "Прогноз",
 	"From Period": "Период с",
 	"Gross Profit": "Валовая прибыль",
+	"Plan": "План",
 	"Profitability": "Рентабельность",
 	"Profitability (%)": "Рентабельность (%)",
 	"Project": "Проект",
@@ -29,6 +33,10 @@ br.ru_fallback_translations = {
 	"To Period": "Период по",
 	"Toggle Drill Down": "Переключить детализацию",
 	"Toggle Plan": "Переключить план",
+	"Total Fact": "Итого факт",
+	"Total Forecast": "Итого прогноз",
+	"Total Forecast/Fact": "Итого прогноз/факт",
+	"Total Plan": "Итого план",
 	"View Type": "Режим отображения",
 };
 
@@ -291,56 +299,74 @@ dinext_projects_pl.budget_plan_vs_forecast.setup_filter_layout = function (repor
 		? report.page.page_form
 		: report.page.wrapper.find(".page-form");
 
-	BUDGET_REPORT_WIDE_FILTER_FIELDS.forEach(function (fieldname) {
-		var $field = $form.children('[data-fieldname="' + fieldname + '"]');
-		if (!$field.length) {
-			$field = $form.find('> .form-group[data-fieldname="' + fieldname + '"]');
+	$form.addClass("budget-report-filters-form");
+
+	$form.children(".form-group, .frappe-control").each(function () {
+		var $field = $(this);
+		var fieldtype = $field.attr("data-fieldtype");
+		var fieldname = $field.attr("data-fieldname");
+
+		$field.removeClass(
+			"col-md-1 col-md-2 col-md-3 col-md-4 col-md-5 col-md-6 input-max-width"
+		);
+
+		if (BUDGET_REPORT_WIDE_FILTER_FIELDS.indexOf(fieldname) !== -1) {
+			$field.addClass("budget-report-filter-wide");
+		} else if (fieldtype === "Check") {
+			$field.addClass("budget-report-filter-check");
+		} else if (fieldname === "company") {
+			$field.addClass("budget-report-filter-company");
+		} else if (fieldname === "from_period" || fieldname === "to_period") {
+			$field.addClass("budget-report-filter-period");
+		} else if (fieldtype === "Select") {
+			$field.addClass("budget-report-filter-select");
 		}
-		if (!$field.length) {
-			return;
-		}
-
-		$field
-			.removeClass("col-md-1 col-md-2 col-md-3 col-md-4 input-max-width")
-			.addClass("budget-report-filter-wide")
-			.css({
-				width: "260px",
-				"min-width": "260px",
-				"max-width": "320px",
-				flex: "0 0 260px",
-				float: "none",
-			});
-
-		$field.find("> .multiselect-list, .multiselect-list").first().css({
-			width: "100%",
-			"min-width": "100%",
-		});
-
-		$field.find(".multiselect-list .form-control").css({
-			width: "100%",
-			"min-width": "100%",
-		});
-	});
-
-	$form.children('[data-fieldname="company"]').css({
-		width: "180px",
-		"min-width": "180px",
-		flex: "0 0 180px",
-		float: "none",
-	});
-
-	$form.children('[data-fieldname="from_period"], [data-fieldname="to_period"]').each(function () {
-		$(this).css({
-			width: "110px",
-			"min-width": "110px",
-			flex: "0 0 110px",
-			float: "none",
-		});
 	});
 
 	setTimeout(function () {
 		br.apply_report_translations(report);
 	}, 0);
+};
+
+br.apply_table_header_translations = function () {
+	var report = frappe.query_report;
+	if (!report || !report.$report) {
+		return;
+	}
+
+	report.$report.find(".dt-header .dt-cell__content").each(function () {
+		var $el = $(this);
+		var text = $el.text().trim();
+		if (!text) {
+			return;
+		}
+		var translated = br.__(text);
+		if (translated !== text) {
+			$el.text(translated);
+		}
+	});
+};
+
+br.fix_table_horizontal_layout = function () {
+	var report = frappe.query_report;
+	if (!report || !report.$report) {
+		return;
+	}
+
+	var $scrollable = report.$report.find(".dt-scrollable").first();
+	if (!$scrollable.length) {
+		return;
+	}
+
+	var scrollWidth = $scrollable[0].offsetWidth - $scrollable[0].clientWidth;
+	var $rows = report.$report.find(".dt-row-header, .budget-period-group-row, .dt-row-totalRow");
+
+	if (scrollWidth <= 0) {
+		$rows.css("padding-right", 0);
+		return;
+	}
+
+	$rows.css("padding-right", scrollWidth + "px");
 };
 
 br.apply_report_translations = function (report) {
