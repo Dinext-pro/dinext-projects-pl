@@ -10,6 +10,7 @@ br.install_sticky_datatable = function (report) {
 
 	var render_datatable = report.render_datatable.bind(report);
 	report.render_datatable = function () {
+		br.remove_delta_columns(report);
 		br.prepare_sticky_summary_rows(report);
 
 		if (!window.StickyDataTable) {
@@ -25,6 +26,32 @@ br.install_sticky_datatable = function (report) {
 			window.DataTable = OriginalDataTable;
 		}
 	};
+};
+
+br.remove_delta_columns = function (report) {
+	if (!report) {
+		return;
+	}
+
+	if (Array.isArray(report.columns)) {
+		report.columns = report.columns.filter(function (col) {
+			var fieldname = col && (col.fieldname || col.id);
+			return !(fieldname && fieldname.indexOf("delta_") === 0);
+		});
+	}
+
+	if (Array.isArray(report.data)) {
+		report.data.forEach(function (row) {
+			if (!row) {
+				return;
+			}
+			Object.keys(row).forEach(function (key) {
+				if (key.indexOf("delta_") === 0) {
+					delete row[key];
+				}
+			});
+		});
+	}
 };
 
 br.prepare_sticky_summary_rows = function (report) {
@@ -59,8 +86,16 @@ br.prepare_sticky_summary_rows = function (report) {
 
 br.get_datatable_options = function (options) {
 	if (options.columns) {
-		options.columns = options.columns.map(function (col) {
+		options.columns = options.columns.filter(function (col) {
+			var fieldname = col && (col.fieldname || col.id);
+			return !(fieldname && fieldname.indexOf("delta_") === 0);
+		}).map(function (col) {
 			var next_col = Object.assign({}, col, { dropdown: false, sortable: false });
+			var label = next_col.label || next_col.name;
+			if (label) {
+				next_col.label = br.__(label);
+				next_col.name = br.__(label);
+			}
 			if (next_col.id === "account" || next_col.fieldname === "account") {
 				next_col.sticky = true;
 				next_col.treeView = true;
@@ -96,10 +131,10 @@ br.sticky_summary_column_total = function (columnValues, cell) {
 		return (
 			'<div class="budget-summary-labels">' +
 			'<span class="budget-summary-label budget-summary-label--profit">' +
-			__("Gross Profit") +
+			br.__("Gross Profit") +
 			"</span>" +
 			'<span class="budget-summary-label budget-summary-label--profitability">' +
-			__("Profitability (%)") +
+			br.__("Profitability (%)") +
 			"</span>" +
 			"</div>"
 		);
@@ -197,7 +232,6 @@ br.install_sticky_summary_footer_renderer = function (report) {
 br.format_summary_value = function (row, column, row_type) {
 	var fieldname = column.id || column.fieldname;
 	var value = row ? flt(row[fieldname]) : 0;
-	var is_delta = fieldname && fieldname.indexOf("delta_") === 0;
 	var css_class = "budget-summary-value budget-summary-value--" + row_type;
 
 	if (row_type === "profit" && value > 0) {
@@ -207,7 +241,7 @@ br.format_summary_value = function (row, column, row_type) {
 	}
 
 	var display_value;
-	if (is_delta || row_type === "profitability") {
+	if (row_type === "profitability") {
 		display_value = String(value).replace(/\.0$/, "") + "%";
 	} else {
 		display_value = dinext_projects_pl.budget_plan_vs_forecast.period_cells.format_amount(value);

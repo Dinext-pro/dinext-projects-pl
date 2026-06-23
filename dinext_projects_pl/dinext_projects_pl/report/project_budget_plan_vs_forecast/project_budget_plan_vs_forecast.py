@@ -12,7 +12,7 @@ from .budget_loader import get_accounts, get_budget_data
 from .actual_loader import get_actual_data_simple
 from .hierarchy import add_account_hierarchy, accumulate_all_values_upwards
 from .totals import apply_forecast_actual_logic, add_row_totals, add_profit_row
-from .periods import apply_accumulated_values, compute_period_deltas
+from .periods import apply_accumulated_values
 from .drilldown import get_budget_details
 
 __all__ = ["execute", "get_data", "get_budget_details"]
@@ -43,8 +43,6 @@ def execute(filters=None):
         data = apply_accumulated_values(data, columns, filters)
 
     data = add_profit_row(data, columns, filters)
-
-    data = compute_period_deltas(data, filters)
 
     frappe.log(f"Final data rows: {len(data)}")
     frappe.log(f"Final columns: {[col['fieldname'] for col in columns]}")

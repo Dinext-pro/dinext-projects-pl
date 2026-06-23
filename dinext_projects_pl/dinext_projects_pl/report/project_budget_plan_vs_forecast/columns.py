@@ -5,13 +5,12 @@ from frappe.utils import flt, cint, today, getdate, formatdate
 
 
 PERIOD_CURRENCY_WIDTH = 92
-# PERIOD_DELTA_WIDTH = 64  # Postponed: there was no explicit requirement to widen Δ.
 TOTAL_CURRENCY_WIDTH = 132
 TOTAL_FORECAST_WIDTH = 142
 
 
 def _period_subcolumns(period_key, month_name, year, month, is_past_month, show_plan, view_type):
-	"""Atomic sub-columns per period (plan / fact|forecast / delta)."""
+	"""Atomic sub-columns per period (plan / fact|forecast)."""
 	columns = []
 	year_month_label = _("{0} {1}").format(month_name, year)
 
@@ -71,18 +70,6 @@ def _period_subcolumns(period_key, month_name, year, month, is_past_month, show_
 			"period_group": period_key,
 			"period_group_label": year_month_label,
 			"period_role": "display",
-		})
-
-	if show_plan:
-		columns.append({
-			"label": "Δ",
-			"fieldname": "delta_{0}".format(period_key),
-			"fieldtype": "Percent",
-			"width": 58,
-			"precision": 1,
-			"period_group": period_key,
-			"period_group_label": year_month_label,
-			"period_role": "delta",
 		})
 
 	return columns
@@ -190,8 +177,6 @@ def filter_zero_columns(columns, data):
 			if period_has_values[group]:
 				continue
 			for fieldname in fields:
-				if fieldname.startswith("delta_"):
-					continue
 				if flt(row.get(fieldname)) != 0:
 					period_has_values[group] = True
 					break

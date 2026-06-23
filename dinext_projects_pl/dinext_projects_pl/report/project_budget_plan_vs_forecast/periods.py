@@ -1,5 +1,5 @@
 # Copyright (c) 2025, Dinord and contributors
-from frappe.utils import flt, getdate, today
+from frappe.utils import flt
 
 
 def _period_sort_key(fieldname):
@@ -48,51 +48,5 @@ def apply_accumulated_values(data, columns, filters):
 			for fieldname in prefix_columns:
 				running_total += flt(row.get(fieldname, 0))
 				row[fieldname] = running_total
-
-	return data
-
-
-def compute_period_deltas(data, filters):
-	"""Compute delta_% columns from atomic plan/display values per period."""
-	if not filters.get("show_plan") or not data:
-		return data
-
-	view_type = filters.get("view_type", "forecast_actual")
-	current = getdate(today())
-	current_year = current.year
-	current_month = current.month
-
-	for row in data:
-		for key in list(row.keys()):
-			if not key.startswith("plan_"):
-				continue
-
-			period_key = key[5:]
-			plan = flt(row.get(key))
-			actual = flt(row.get(f"actual_{period_key}", 0))
-			forecast = flt(row.get(f"forecast_{period_key}", 0))
-
-			try:
-				year, month = period_key.split("_")
-				year = int(year)
-				month = int(month)
-			except ValueError:
-				continue
-
-			is_past = year < current_year or (year == current_year and month < current_month)
-
-			if view_type == "actual_only":
-				display = actual
-			elif view_type == "forecast_only":
-				display = forecast
-			elif is_past:
-				display = actual
-			else:
-				display = forecast
-
-			if plan:
-				row[f"delta_{period_key}"] = flt((display - plan) / plan * 100, 1)
-			else:
-				row[f"delta_{period_key}"] = 0
 
 	return data

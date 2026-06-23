@@ -1,5 +1,45 @@
 frappe.provide("dinext_projects_pl.budget_plan_vs_forecast");
 
+var br = dinext_projects_pl.budget_plan_vs_forecast;
+
+br.ru_fallback_translations = {
+	"Accumulated Values": "Накопленные значения",
+	"Apply Cost Center Allocation": "Применять распределение МВЗ",
+	"Business Area": "Бизнес-сфера",
+	"Company": "Компания",
+	"Controls": "Управление",
+	"Cost Center": "МВЗ",
+	"Disabled": "отключена",
+	"Enable Drill Down": "Включить детализацию",
+	"Enabled": "включена",
+	"Exp and Fact": "Прогноз и факт",
+	"Exp Only": "Только прогноз",
+	"Fact Only": "Только факт",
+	"From Period": "Период с",
+	"Gross Profit": "Валовая прибыль",
+	"Profitability": "Рентабельность",
+	"Profitability (%)": "Рентабельность (%)",
+	"Project": "Проект",
+	"Project Budget Plan vs Forecast": "План-Факт-Прогноз Бюджета",
+	"Project Portfolio": "Портфель проекта",
+	"Show Future Fact": "Показывать будущий факт",
+	"Show Plan": "Показывать план",
+	"Show Zero Columns": "Показывать нулевые колонки",
+	"Show Zero Rows": "Показывать нулевые строки",
+	"To Period": "Период по",
+	"Toggle Drill Down": "Переключить детализацию",
+	"Toggle Plan": "Переключить план",
+	"View Type": "Режим отображения",
+};
+
+br.__ = function (text) {
+	var translated = __(text);
+	if (translated !== text) {
+		return translated;
+	}
+	return br.ru_fallback_translations[text] || text;
+};
+
 function budget_report_link_options(doctype, txt, extra_filters) {
 	var company = frappe.query_report.get_filter_value("company");
 	var filters = Object.assign({ company: company }, extra_filters || {});
@@ -9,7 +49,7 @@ function budget_report_link_options(doctype, txt, extra_filters) {
 dinext_projects_pl.budget_plan_vs_forecast.filters = [
 	{
 		fieldname: "project",
-		label: __("Project"),
+		label: br.__("Project"),
 		fieldtype: "MultiSelectList",
 		get_data: function (txt) {
 			return budget_report_link_options("Project", txt);
@@ -18,7 +58,7 @@ dinext_projects_pl.budget_plan_vs_forecast.filters = [
 	},
 	{
 		fieldname: "project_portfolio",
-		label: __("Project Portfolio"),
+		label: br.__("Project Portfolio"),
 		fieldtype: "MultiSelectList",
 		get_data: function (txt) {
 			return frappe.db.get_link_options("Project Portfolio", txt);
@@ -27,7 +67,7 @@ dinext_projects_pl.budget_plan_vs_forecast.filters = [
 	},
 	{
 		fieldname: "cost_center",
-		label: __("Cost Center"),
+		label: br.__("Cost Center"),
 		fieldtype: "MultiSelectList",
 		get_data: function (txt) {
 			return budget_report_link_options("Cost Center", txt);
@@ -36,7 +76,7 @@ dinext_projects_pl.budget_plan_vs_forecast.filters = [
 	},
 	{
 		fieldname: "business_area",
-		label: __("Business Area"),
+		label: br.__("Business Area"),
 		fieldtype: "MultiSelectList",
 		get_data: function (txt) {
 			return frappe.db.get_link_options("Business Area", txt);
@@ -45,7 +85,7 @@ dinext_projects_pl.budget_plan_vs_forecast.filters = [
 	},
 	{
 		fieldname: "company",
-		label: __("Company"),
+		label: br.__("Company"),
 		fieldtype: "Link",
 		options: "Company",
 		default: frappe.defaults.get_user_default("Company"),
@@ -53,7 +93,7 @@ dinext_projects_pl.budget_plan_vs_forecast.filters = [
 	},
 	{
 		fieldname: "from_period",
-		label: __("From Period"),
+		label: br.__("From Period"),
 		fieldtype: "Date",
 		default: frappe.datetime.year_start(),
 		reqd: 1,
@@ -64,7 +104,7 @@ dinext_projects_pl.budget_plan_vs_forecast.filters = [
 	},
 	{
 		fieldname: "to_period",
-		label: __("To Period"),
+		label: br.__("To Period"),
 		fieldtype: "Date",
 		default: frappe.datetime.year_end(),
 		reqd: 1,
@@ -75,55 +115,55 @@ dinext_projects_pl.budget_plan_vs_forecast.filters = [
 	},
 	{
 		fieldname: "show_plan",
-		label: __("Show Plan"),
+		label: br.__("Show Plan"),
 		fieldtype: "Check",
 		default: 1,
 	},
 	{
 		fieldname: "view_type",
-		label: __("View Type"),
+		label: br.__("View Type"),
 		fieldtype: "Select",
 		options: [
-			{ value: "forecast_actual", label: __("Exp and Fact") },
-			{ value: "forecast_only", label: __("Exp Only") },
-			{ value: "actual_only", label: __("Fact Only") },
+			{ value: "forecast_actual", label: br.__("Exp and Fact") },
+			{ value: "forecast_only", label: br.__("Exp Only") },
+			{ value: "actual_only", label: br.__("Fact Only") },
 		],
 		default: "forecast_actual",
 	},
 	{
 		fieldname: "show_zero_columns",
-		label: __("Show Zero Columns"),
+		label: br.__("Show Zero Columns"),
 		fieldtype: "Check",
 		default: 1,
 	},
 	{
 		fieldname: "show_zero_rows",
-		label: __("Show Zero Rows"),
+		label: br.__("Show Zero Rows"),
 		fieldtype: "Check",
 		default: 0,
 	},
 	{
 		fieldname: "accumulated_values",
-		label: __("Accumulated Values"),
+		label: br.__("Accumulated Values"),
 		fieldtype: "Check",
 		default: 0,
 	},
 	{
 		fieldname: "enable_drill_down",
-		label: __("Enable Drill Down"),
+		label: br.__("Enable Drill Down"),
 		fieldtype: "Check",
 		default: 0,
 		hidden: 1,
 	},
 	{
 		fieldname: "include_future_actual",
-		label: __("Show Future Fact"),
+		label: br.__("Show Future Fact"),
 		fieldtype: "Check",
 		default: 0,
 	},
 	{
 		fieldname: "apply_cc_allocation",
-		label: __("Apply Cost Center Allocation"),
+		label: br.__("Apply Cost Center Allocation"),
 		fieldtype: "Check",
 		default: 1,
 	},
@@ -242,6 +282,8 @@ var BUDGET_REPORT_WIDE_FILTER_FIELDS = [
 ];
 
 dinext_projects_pl.budget_plan_vs_forecast.setup_filter_layout = function (report) {
+	br.apply_report_translations(report);
+
 	var $page = report.page.wrapper.closest("#page-query-report");
 	$page.addClass("budget-plan-vs-forecast-page");
 
@@ -295,4 +337,61 @@ dinext_projects_pl.budget_plan_vs_forecast.setup_filter_layout = function (repor
 			float: "none",
 		});
 	});
+
+	setTimeout(function () {
+		br.apply_report_translations(report);
+	}, 0);
+};
+
+br.apply_report_translations = function (report) {
+	if (!report) {
+		return;
+	}
+
+	var report_title = br.__("Project Budget Plan vs Forecast");
+	if (report.page && report.page.set_title) {
+		report.page.set_title(report_title);
+	}
+	document.title = report_title;
+
+	(report.filters || []).forEach(function (filter) {
+		var df = filter && filter.df;
+		if (!df || !df.label) {
+			return;
+		}
+		df.label = br.__(df.label);
+		if (filter.refresh_label) {
+			filter.refresh_label();
+		}
+	});
+
+	var $form = report.page && report.page.page_form && report.page.page_form.length
+		? report.page.page_form
+		: report.page.wrapper.find(".page-form");
+
+	Object.keys(br.ru_fallback_translations).forEach(function (source) {
+		$form.find(".label-area").each(function () {
+			var $label = $(this);
+			if ($label.text().trim() === source) {
+				$label.text(br.__(source));
+			}
+		});
+	});
+
+	var view_type_filter = report.get_filter && report.get_filter("view_type");
+	var view_type_options = {
+		forecast_actual: br.__("Exp and Fact"),
+		forecast_only: br.__("Exp Only"),
+		actual_only: br.__("Fact Only"),
+	};
+
+	if (view_type_filter && view_type_filter.$input) {
+		view_type_filter.$input.find("option").each(function () {
+			var $option = $(this);
+			var value = $option.attr("value");
+			if (view_type_options[value]) {
+				$option.text(view_type_options[value]);
+			}
+		});
+	}
 };
