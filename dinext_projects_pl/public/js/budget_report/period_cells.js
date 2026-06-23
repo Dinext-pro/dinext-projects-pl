@@ -36,9 +36,8 @@ pc.parse_period_fieldname = function (fieldname) {
 pc.render_period_header = function (year, month, options) {
 	options = options || {};
 	var show_plan = options.show_plan !== false;
-	var show_delta = options.show_delta !== false;
 	var is_past = pc.is_past_period(year, month);
-	var sublabel = is_past ? __("Fact") : __("Forecast");
+	var sublabel = is_past ? br.__("Fact") : br.__("Forecast");
 	var month_label = month < 10 ? "0" + month : String(month);
 
 	var html =
@@ -50,34 +49,26 @@ pc.render_period_header = function (year, month, options) {
 		'<div class="budget-group-header">';
 
 	if (show_plan) {
-		html += "<span>" + __("Plan") + "</span>";
+		html += "<span>" + br.__("Plan") + "</span>";
 	}
 	html += "<span>" + sublabel + "</span>";
-	if (show_delta) {
-		html += "<span>Δ</span>";
-	}
 	html += "</div></div>";
 
 	return html;
 };
 
-pc.render_period_cell = function (plan, actual, forecast, delta, options) {
+pc.render_period_cell = function (plan, actual, forecast, options) {
 	options = options || {};
 	var year = options.year;
 	var month = options.month;
 	var is_past =
 		options.is_past != null ? options.is_past : pc.is_past_period(year, month);
 	var show_plan = options.show_plan !== false;
-	var show_delta = options.show_delta !== false;
 
 	plan = flt(plan);
 	actual = flt(actual);
 	forecast = flt(forecast);
 	var display = is_past ? actual : forecast;
-
-	if (delta == null || delta === undefined) {
-		delta = plan ? (((display - plan) / plan) * 100).toFixed(1) : 0;
-	}
 
 	var html =
 		'<div class="budget-group" data-year="' +
@@ -103,15 +94,6 @@ pc.render_period_cell = function (plan, actual, forecast, delta, options) {
 		'"><span class="readonly-fact">' +
 		pc.format_amount(display) +
 		"</span></div>";
-
-	if (show_delta) {
-		html +=
-			'<div class="bg-group-delta' +
-			(flt(delta) === 0 ? " zero" : "") +
-			'"><span>' +
-			delta +
-			"%</span></div>";
-	}
 
 	html += "</div>";
 	return html;

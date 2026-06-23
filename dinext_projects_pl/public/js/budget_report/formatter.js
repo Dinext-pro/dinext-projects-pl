@@ -27,7 +27,6 @@ dinext_projects_pl.budget_plan_vs_forecast.formatter = function (
 	}
 
 	var fieldname = column.fieldname || "";
-	var is_delta = fieldname.startsWith("delta_");
 	var is_currency = column.fieldtype === "Currency";
 
 	if (data && is_currency && !data.is_profit_row && !data.is_profitability_row) {
@@ -35,16 +34,6 @@ dinext_projects_pl.budget_plan_vs_forecast.formatter = function (
 		value = pc.format_amount(raw);
 		if (raw === 0) {
 			value = `<span class="zero">${value}</span>`;
-		}
-	}
-
-	if (data && is_delta) {
-		var delta = flt(data[fieldname]);
-		var delta_display = String(delta).replace(/\.0$/, "");
-		if (delta === 0) {
-			value = `<span class="zero">${delta_display}%</span>`;
-		} else {
-			value = `${delta_display}%`;
 		}
 	}
 
@@ -57,16 +46,6 @@ dinext_projects_pl.budget_plan_vs_forecast.formatter = function (
 			value = `<span style="color: #dc3545; font-weight: bold;">${profit_display}</span>`;
 		} else {
 			value = `<span class="zero">${profit_display}</span>`;
-		}
-	}
-
-	if (data && data.is_profitability_row && is_delta) {
-		var profitability = flt(data[fieldname]);
-		var profitability_display = String(profitability).replace(/\.0$/, "");
-		if (profitability === 0) {
-			value = `<span class="zero">${profitability_display}%</span>`;
-		} else {
-			value = `<span style="font-style: italic;">${profitability_display}%</span>`;
 		}
 	}
 

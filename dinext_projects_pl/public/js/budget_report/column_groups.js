@@ -6,7 +6,7 @@ var br = dinext_projects_pl.budget_plan_vs_forecast;
 br.column_groups = cg;
 
 cg.parse_period_fieldname = function (fieldname) {
-	var match = /^(plan|actual|forecast|delta)_(\d{4})_(\d{2})$/.exec(fieldname || "");
+	var match = /^(plan|actual|forecast)_(\d{4})_(\d{2})$/.exec(fieldname || "");
 	if (!match) {
 		return null;
 	}
@@ -29,19 +29,16 @@ cg.format_period_label = function (period_key) {
 
 cg.subcolumn_label = function (type) {
 	if (type === "plan") {
-		return __("Plan");
+		return br.__("Plan");
 	}
 	if (type === "actual") {
-		return __("Fact");
+		return br.__("Fact");
 	}
 	if (type === "forecast") {
-		return __("Forecast");
+		return br.__("Forecast");
 	}
 	if (type === "display") {
-		return __("Fact");
-	}
-	if (type === "delta") {
-		return "Δ";
+		return br.__("Fact");
 	}
 	return type;
 };
