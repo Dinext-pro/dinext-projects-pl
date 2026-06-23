@@ -22,6 +22,15 @@ if (!Array.isArray(dinext_projects.project_pl_forecast_menu)) {
     dinext_projects.project_pl_forecast_menu = [];
 }
 
+function render_pl_chart(frm, init = true) {
+    const renderChart = globalThis.render_pl_chart_impl;
+    if (typeof renderChart !== "function") {
+        return;
+    }
+
+    return renderChart(frm, init);
+}
+
 function add_pl_forecast_dropdown(frm, controls) {
     const raw = dinext_projects.project_pl_forecast_menu;
     const menu_array = Array.isArray(raw) ? raw : [];
@@ -69,16 +78,16 @@ frappe.provide("dinext_projects");
 dinext_projects.refresh_pl_forecast_dropdown = refresh_pl_forecast_dropdown;
 
 function addBudgetViewOptionsControl(frm, controls) {
-    frm.budget_view_options = frm.budget_view_options || __("Прогноз и факт");
+    frm.budget_view_options = frm.budget_view_options || __("Forecast and actual");
     const control = frappe.ui.form.make_control({
 		parent: controls,
 		df: {
 			fieldtype: 'Select',
 			fieldname: "view-options",
 			options: [
-                __("Прогноз и факт"),
-                __("Только прогноз"),
-                __("Только факт"),
+                __("Forecast and actual"),
+                __("Forecast only"),
+                __("Actual only"),
             ],
 			get_status: function(i) {
                 return "Write";
@@ -217,7 +226,7 @@ function budget_total( frm, cell, periods ) {
     let actual_income_sum = 0;
     let actual_expenses_sum = 0;
     let is_past = false;
-    let roots = Object.values( frm.aggregatedBudget ).filter( b => !b.parent_account && !b.task );
+    let roots = getFinancialRootRows(frm.aggregatedBudget);
     
     periods.forEach(function(period) {
         let r = calc_column_total( frm, period, roots, !frm.bg_hide_plan );
@@ -234,7 +243,7 @@ function budget_total( frm, cell, periods ) {
 function budget_column_total( frm, cell, periods, current ) {
     let period = periods.find(p => p.year == current.year && p.month == current.month );
     
-    let roots = Object.values( frm.aggregatedBudget ).filter( b => !b.parent_account && !b.task );
+    let roots = getFinancialRootRows(frm.aggregatedBudget);
     let r = calc_column_total( frm, period, roots, !frm.bg_hide_plan );
     
     return budget_total_cell( period, r.plan_income, r.plan_expenses, r.actual_income, r.actual_expenses );
@@ -284,11 +293,11 @@ function get_budget_display_periods(frm, periodType) {
             
             // Определяем, является ли период прошлым
             let is_past;
-            if (frm.budget_view_options == __("Только факт")) {
+            if (frm.budget_view_options == __("Actual only")) {
                 is_past = true;
-            } else if (frm.budget_view_options == __("Только прогноз")) {
+            } else if (frm.budget_view_options == __("Forecast only")) {
                 is_past = false;
-            } else { // "Прогноз и факт"
+            } else { // "Forecast and actual"
                 let current_date_str = frappe.datetime.obj_to_str(current);
                 is_past = current_date_str < month_start;
             }
@@ -325,9 +334,9 @@ function get_budget_display_periods(frm, periodType) {
                 let quarterEndDateStr = frappe.datetime.obj_to_str(quarterEndDate);
                 
                 let is_past;
-                if (frm.budget_view_options == __("Только факт")) {
+                if (frm.budget_view_options == __("Actual only")) {
                     is_past = true;
-                } else if (frm.budget_view_options == __("Только прогноз")) {
+                } else if (frm.budget_view_options == __("Forecast only")) {
                     is_past = false;
                 } else {
                     is_past = quarterEndDateStr < month_start;
@@ -366,9 +375,9 @@ function get_budget_display_periods(frm, periodType) {
                 let yearEndDateStr = frappe.datetime.obj_to_str(yearEndDate);
                 
                 let is_past;
-                if (frm.budget_view_options == __("Только факт")) {
+                if (frm.budget_view_options == __("Actual only")) {
                     is_past = true;
-                } else if (frm.budget_view_options == __("Только прогноз")) {
+                } else if (frm.budget_view_options == __("Forecast only")) {
                     is_past = false;
                 } else {
                     is_past = yearEndDateStr < month_start;
@@ -625,7 +634,11 @@ function load_budget_data(frm, periodType, updateRows) {
                                 let dt = new Date(e.posting_date);
                                 let y = dt.getFullYear(), m = dt.getMonth() + 1;
                                 let key = `fact_${y}_${m}`;
-                                bucket[key] = (bucket[key] || 0) + Math.abs(e.credit - e.debit);
+                                bucket[key] = (bucket[key] || 0) + signedGlPlActualAmount(
+                                    aggregated[acct].type,
+                                    e.debit,
+                                    e.credit
+                                );
                             });
 
                             console.timeLog("load_budget_data");
@@ -1270,6 +1283,9 @@ function updateBudgetValue(project, account, dim, year, month, new_value) {
         // Обновляем UI
         let task = dim?.find(d => d.doc == "Task")?.docname;
         updateBudgetDimensionEntry(cur_frm, account, task, dim, year, month, "forecast", new_value);
+        if (is_pl_expense_account(cur_frm, account)) {
+            sync_estimated_costing_from_forecast(cur_frm);
+        }
         updateBudgetTable(cur_frm, "month");
         render_pl_chart(cur_frm, false);
         
@@ -1410,10 +1426,15 @@ function save_bg_forecast_as_plan(frm) {
             data: data
         },
         freeze: true,
-        freeze_message: __("Отправка бюджетов на согласование..."),
+        freeze_message: __("Сохранение плана..."),
         callback: function(r) {
             if (!r.exc) {
-                frappe.show_alert(__("Бюджеты отправлены на согласование"), 5);
+                const mode = r.message?.mode || "approval";
+                const successMessage = mode === "direct"
+                    ? __("План сохранен")
+                    : __("Бюджеты отправлены на согласование");
+
+                frappe.show_alert(successMessage, 5);
                 load_budget_data(frm, "month", true);
                 load_and_render_project_dashboard(frm);
             }
