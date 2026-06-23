@@ -45,6 +45,12 @@ br.after_datatable_render = function () {
 		if (cg && cg.apply_grouped_headers) {
 			cg.apply_grouped_headers();
 		}
+		if (br.apply_table_header_translations) {
+			br.apply_table_header_translations();
+		}
+		if (br.fix_table_horizontal_layout) {
+			br.fix_table_horizontal_layout();
+		}
 		if (br.render_sticky_summary_footer) {
 			br.render_sticky_summary_footer(report);
 		}
