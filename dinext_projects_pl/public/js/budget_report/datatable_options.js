@@ -199,6 +199,16 @@ br.render_sticky_summary_footer = function (report) {
 	if (report.datatable._sm && report.datatable._sm.applyToRenderedRows) {
 		report.datatable._sm.applyToRenderedRows();
 	}
+
+	var cg = dinext_projects_pl.budget_plan_vs_forecast.column_groups;
+	if (cg && cg.apply_period_boundary_classes && report.columns) {
+		cg.apply_period_boundary_classes(
+			report.columns.filter(function (col) {
+				return !col.hidden;
+			}),
+			report
+		);
+	}
 };
 
 br.get_sticky_summary_title = function ($cell) {

@@ -22,14 +22,16 @@ pc.format_amount = function (value) {
 };
 
 pc.parse_period_fieldname = function (fieldname) {
-	var match = /^(plan|actual|forecast)_(\d{4})_(\d{2})$/.exec(fieldname);
+	var match = /^(plan|actual|forecast)_(\d{4})(?:_(\d{2}|Q[1-4]))?$/.exec(fieldname || "");
 	if (!match) {
 		return null;
 	}
 	return {
 		type: match[1],
 		year: cint(match[2]),
-		month: cint(match[3]),
+		month: match[3] && /^\d+$/.test(match[3]) ? cint(match[3]) : null,
+		quarter: match[3] && match[3].indexOf("Q") === 0 ? cint(match[3].slice(1)) : null,
+		period_key: match[2] + (match[3] ? "_" + match[3] : ""),
 	};
 };
 

@@ -20,6 +20,8 @@ br.ru_fallback_translations = {
 	"Forecast": "Прогноз",
 	"From Period": "Период с",
 	"Gross Profit": "Валовая прибыль",
+	"Month": "Месяц",
+	"Period Granularity": "Детализация периода",
 	"Plan": "План",
 	"Profitability": "Рентабельность",
 	"Profitability (%)": "Рентабельность (%)",
@@ -31,6 +33,8 @@ br.ru_fallback_translations = {
 	"Show Zero Columns": "Показывать нулевые колонки",
 	"Show Zero Rows": "Показывать нулевые строки",
 	"To Period": "Период по",
+	"To view GL entries, select Fact Only and disable Show Plan.": "Для просмотра проводок выберите режим «Только факт» и отключите «Показывать план».",
+	"Quarter": "Квартал",
 	"Toggle Drill Down": "Переключить детализацию",
 	"Toggle Plan": "Переключить план",
 	"Total Fact": "Итого факт",
@@ -38,6 +42,7 @@ br.ru_fallback_translations = {
 	"Total Forecast/Fact": "Итого прогноз/факт",
 	"Total Plan": "Итого план",
 	"View Type": "Режим отображения",
+	"Year": "Год",
 };
 
 br.__ = function (text) {
@@ -122,6 +127,17 @@ dinext_projects_pl.budget_plan_vs_forecast.filters = [
 		},
 	},
 	{
+		fieldname: "period_granularity",
+		label: br.__("Period Granularity"),
+		fieldtype: "Select",
+		options: [
+			{ value: "month", label: br.__("Month") },
+			{ value: "quarter", label: br.__("Quarter") },
+			{ value: "year", label: br.__("Year") },
+		],
+		default: "month",
+	},
+	{
 		fieldname: "show_plan",
 		label: br.__("Show Plan"),
 		fieldtype: "Check",
@@ -183,8 +199,29 @@ var MONTH_PERIOD_PICKER_OPTIONS = {
 	dateFormat: "mm-yyyy",
 };
 
+var YEAR_PERIOD_PICKER_OPTIONS = {
+	minView: "years",
+	view: "years",
+	dateFormat: "yyyy",
+};
+
 var MONTH_PERIOD_DISPLAY_FORMAT = "MM-YYYY";
+var YEAR_PERIOD_DISPLAY_FORMAT = "YYYY";
 var MONTH_PERIOD_INPUT_FORMATS = ["MM-YYYY", "MM-YY", "M-YYYY", "M-YY"];
+var YEAR_PERIOD_INPUT_FORMATS = ["YYYY", "YY"];
+
+br.get_period_granularity = function (report) {
+	if (report && report.get_filter_value) {
+		return report.get_filter_value("period_granularity") || "month";
+	}
+	var filters = frappe.query_report && frappe.query_report.get_filter_values();
+	return (filters && filters.period_granularity) || "month";
+};
+
+br.is_year_only_period_granularity = function (report) {
+	var granularity = br.get_period_granularity(report);
+	return granularity === "quarter" || granularity === "year";
+};
 
 function budget_report_format_month_period(value) {
 	if (!value) {
@@ -210,29 +247,99 @@ function budget_report_parse_month_period(value) {
 	return frappe.datetime.user_to_str(value, false, true);
 }
 
+function budget_report_format_year_period(value) {
+	if (!value) {
+		return "";
+	}
+	var date_obj = moment(value, frappe.defaultDateFormat, true);
+	if (!date_obj.isValid()) {
+		date_obj = moment(value, YEAR_PERIOD_INPUT_FORMATS, true);
+	}
+	return date_obj.isValid() ? date_obj.format(YEAR_PERIOD_DISPLAY_FORMAT) : "";
+}
+
+function budget_report_parse_year_period(value, is_end) {
+	if (!value) {
+		return "";
+	}
+
+	var year_value = moment(value, YEAR_PERIOD_INPUT_FORMATS, true);
+	if (year_value.isValid()) {
+		return year_value
+			.month(is_end ? 11 : 0)
+			.startOf("month")
+			.format(frappe.defaultDateFormat);
+	}
+
+	var parsed = frappe.datetime.user_to_str(value, false, true);
+	if (!parsed) {
+		return "";
+	}
+
+	var date_obj = moment(parsed, frappe.defaultDateFormat, true);
+	if (!date_obj.isValid()) {
+		return parsed;
+	}
+
+	return date_obj
+		.month(is_end ? 11 : 0)
+		.startOf("month")
+		.format(frappe.defaultDateFormat);
+}
+
+function budget_report_format_period_input(value, is_year_only) {
+	return is_year_only
+		? budget_report_format_year_period(value)
+		: budget_report_format_month_period(value);
+}
+
+function budget_report_parse_period_input(value, is_year_only, is_end) {
+	return is_year_only
+		? budget_report_parse_year_period(value, is_end)
+		: budget_report_parse_month_period(value);
+}
+
+function budget_report_get_period_picker_options(is_year_only) {
+	return is_year_only ? YEAR_PERIOD_PICKER_OPTIONS : MONTH_PERIOD_PICKER_OPTIONS;
+}
+
 dinext_projects_pl.budget_plan_vs_forecast.setup_period_month_pickers = function (report) {
+	var is_year_only = br.is_year_only_period_granularity(report);
+	var picker_options = budget_report_get_period_picker_options(is_year_only);
+
 	["from_period", "to_period"].forEach(function (fieldname) {
 		var control = report.get_filter(fieldname);
 		if (!control) {
 			return;
 		}
 
+		var is_end = fieldname === "to_period";
+
 		if (!control._budget_month_period_patched) {
 			control._budget_month_period_patched = true;
 
 			control.format_for_input = function (value) {
-				return budget_report_format_month_period(value);
+				return budget_report_format_period_input(
+					value,
+					br.is_year_only_period_granularity(report)
+				);
 			};
 
 			control.parse = function (value) {
-				return budget_report_parse_month_period(value);
+				return budget_report_parse_period_input(
+					value,
+					br.is_year_only_period_granularity(report),
+					this.df.fieldname === "to_period"
+				);
 			};
 
 			control.validate = function (value) {
 				if (!value || value === "Invalid date") {
 					return "";
 				}
-				if (moment(value, MONTH_PERIOD_INPUT_FORMATS, true).isValid()) {
+				var year_only = br.is_year_only_period_granularity(report);
+				var input_formats = year_only ? YEAR_PERIOD_INPUT_FORMATS : MONTH_PERIOD_INPUT_FORMATS;
+				if (moment(value, input_formats, true).isValid()) {
 					return value;
 				}
 				return frappe.ui.form.ControlDate.prototype.validate.call(this, value);
@@ -256,12 +363,18 @@ dinext_projects_pl.budget_plan_vs_forecast.setup_period_month_pickers = function
 					return;
 				}
 
+				var year_only = br.is_year_only_period_granularity(report);
+				var input_formats = year_only ? YEAR_PERIOD_INPUT_FORMATS : MONTH_PERIOD_INPUT_FORMATS;
 				var system_value = value;
-				if (moment(value, MONTH_PERIOD_INPUT_FORMATS, true).isValid()) {
-					system_value = budget_report_parse_month_period(value);
+				if (moment(value, input_formats, true).isValid()) {
+					system_value = budget_report_parse_period_input(
+						value,
+						year_only,
+						this.df.fieldname === "to_period"
+					);
 				}
 
-				var display_value = budget_report_format_month_period(system_value);
+				var display_value = budget_report_format_period_input(system_value, year_only);
 				if (this.$input) {
 					if (this.$input.val() !== display_value) {
 						this.$input.val(display_value);
@@ -272,13 +385,33 @@ dinext_projects_pl.budget_plan_vs_forecast.setup_period_month_pickers = function
 		}
 
 		if (control.datepicker) {
-			control.datepicker.update(MONTH_PERIOD_PICKER_OPTIONS);
+			control.datepicker.update(picker_options);
 		}
 
 		var current_value = control.get_value();
 		if (current_value) {
 			control.set_formatted_input(current_value);
+		} else if (is_year_only) {
+			control.set_value(
+				is_end ? frappe.datetime.year_end() : frappe.datetime.year_start()
+			);
 		}
+	});
+};
+
+br.setup_period_granularity_handler = function (report) {
+	if (!report || report._budget_period_granularity_handler_installed) {
+		return;
+	}
+	report._budget_period_granularity_handler_installed = true;
+
+	var granularity_filter = report.get_filter("period_granularity");
+	if (!granularity_filter || !granularity_filter.$input) {
+		return;
+	}
+
+	granularity_filter.$input.on("change", function () {
+		br.setup_period_month_pickers(report);
 	});
 };
 
@@ -318,6 +451,8 @@ dinext_projects_pl.budget_plan_vs_forecast.setup_filter_layout = function (repor
 			$field.addClass("budget-report-filter-company");
 		} else if (fieldname === "from_period" || fieldname === "to_period") {
 			$field.addClass("budget-report-filter-period");
+		} else if (fieldname === "period_granularity") {
+			$field.addClass("budget-report-filter-select");
 		} else if (fieldtype === "Select") {
 			$field.addClass("budget-report-filter-select");
 		}
@@ -411,12 +546,29 @@ br.apply_report_translations = function (report) {
 		actual_only: br.__("Fact Only"),
 	};
 
+	var granularity_filter = report.get_filter && report.get_filter("period_granularity");
+	var granularity_options = {
+		month: br.__("Month"),
+		quarter: br.__("Quarter"),
+		year: br.__("Year"),
+	};
+
 	if (view_type_filter && view_type_filter.$input) {
 		view_type_filter.$input.find("option").each(function () {
 			var $option = $(this);
 			var value = $option.attr("value");
 			if (view_type_options[value]) {
 				$option.text(view_type_options[value]);
+			}
+		});
+	}
+
+	if (granularity_filter && granularity_filter.$input) {
+		granularity_filter.$input.find("option").each(function () {
+			var $option = $(this);
+			var value = $option.attr("value");
+			if (granularity_options[value]) {
+				$option.text(granularity_options[value]);
 			}
 		});
 	}

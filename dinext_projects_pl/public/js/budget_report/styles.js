@@ -11,6 +11,12 @@ br.apply_report_styles = function () {
 			--budget-report-first-column-z-index: 4;
 			--budget-report-header-z-index: 6;
 			--budget-report-summary-z-index: 5;
+			--budget-report-period-border: var(--gray-400, #ced4da);
+		}
+
+		html[data-theme="dark"] .report-wrapper,
+		html[data-theme-mode="dark"] .report-wrapper {
+			--budget-report-period-border: var(--gray-600, #6c757d);
 		}
 
 		.report-wrapper .dt-cell__content {
@@ -58,6 +64,10 @@ br.apply_report_styles = function () {
 			font-weight: 600;
 			width: 100%;
 			color: var(--budget-report-header-color);
+		}
+
+		.report-wrapper .budget-period-boundary {
+			border-left: 1px solid var(--budget-report-period-border) !important;
 		}
 
 		.report-wrapper .budget-report-header-cell {
@@ -200,7 +210,7 @@ br.apply_report_styles = function () {
 		[data-fieldname="total_exp_fct"],
 		[data-fieldname="total_exp"],
 		[data-fieldname="total_fct"] {
-			border-left: 2px solid #dee2e6 !important;
+			border-left: 1px solid var(--budget-report-period-border) !important;
 		}
 
 		.dt-cell--header[data-fieldname="total_plan"] .dt-cell__content,
@@ -262,6 +272,23 @@ br.apply_report_styles = function () {
 			text-decoration: underline solid !important;
 			font-weight: 600;
 			background-color: #f5f5f5;
+		}
+
+		.report-wrapper .budget-gl-drillable--active {
+			cursor: pointer;
+			text-decoration: underline dotted;
+			border-bottom: 1px dashed var(--gray-500, #868e96);
+		}
+
+		.report-wrapper .budget-gl-drillable--active:hover {
+			text-decoration: underline solid;
+			font-weight: 600;
+			background-color: var(--highlight-color, #f5f5f5);
+		}
+
+		html[data-theme="dark"] .report-wrapper .budget-gl-drillable--active:hover,
+		html[data-theme-mode="dark"] .report-wrapper .budget-gl-drillable--active:hover {
+			background-color: var(--gray-800, #2a2a2a);
 		}
 
 		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form {
@@ -351,6 +378,17 @@ br.apply_report_styles = function () {
 			white-space: nowrap !important;
 			overflow: visible !important;
 			text-overflow: clip !important;
+		}
+
+		.budget-plan-vs-forecast-page .budget-report-chart-container {
+			margin: 0 0 12px 0;
+			padding: 8px 0 0;
+		}
+
+		.budget-plan-vs-forecast-page .budget-report-chart {
+			width: 100%;
+			height: 320px;
+			min-height: 240px;
 		}
 	`;
 

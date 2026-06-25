@@ -6,20 +6,28 @@ var br = dinext_projects_pl.budget_plan_vs_forecast;
 br.column_groups = cg;
 
 cg.parse_period_fieldname = function (fieldname) {
-	var match = /^(plan|actual|forecast)_(\d{4})_(\d{2})$/.exec(fieldname || "");
+	var match = /^(plan|actual|forecast)_(\d{4})(?:_(\d{2}|Q[1-4]))?$/.exec(fieldname || "");
 	if (!match) {
 		return null;
 	}
+	var period_key = match[2] + (match[3] ? "_" + match[3] : "");
 	return {
 		type: match[1],
 		year: cint(match[2]),
-		month: cint(match[3]),
-		period_key: match[2] + "_" + match[3],
+		month: match[3] && /^\d+$/.test(match[3]) ? cint(match[3]) : null,
+		quarter: match[3] && match[3].indexOf("Q") === 0 ? cint(match[3].slice(1)) : null,
+		period_key: period_key,
 	};
 };
 
 cg.format_period_label = function (period_key) {
 	var parts = (period_key || "").split("_");
+	if (parts.length === 1 && /^\d{4}$/.test(parts[0])) {
+		return parts[0];
+	}
+	if (parts.length === 2 && parts[1].indexOf("Q") === 0) {
+		return parts[1] + " " + parts[0];
+	}
 	if (parts.length !== 2) {
 		return period_key;
 	}
@@ -143,4 +151,67 @@ cg.apply_grouped_headers = function () {
 	}
 
 	$header.before($groupRow);
+	cg.apply_period_boundary_classes(columns, report);
+};
+
+	cg.apply_period_boundary_classes = function (columns, report) {
+	if (!report || !report.$report || !columns || !columns.length) {
+		return;
+	}
+
+	var domOffset = cg.get_column_dom_offset();
+	var boundaries = cg.get_period_boundary_dom_indices(columns, domOffset);
+
+	report.$report.find(".budget-period-boundary").removeClass("budget-period-boundary");
+
+	boundaries.forEach(function (domIndex) {
+		cg.mark_body_period_boundary(report, domIndex);
+	});
+};
+
+cg.mark_body_period_boundary = function (report, domIndex) {
+	if (!report || !report.$report || domIndex == null) {
+		return;
+	}
+
+	var selector =
+		".dt-scrollable .dt-row:not(.dt-row-header):not(.budget-period-group-row) .dt-cell--col-" +
+		domIndex +
+		", .dt-scrollable .dt-row:not(.dt-row-header):not(.budget-period-group-row) .dt-cell[data-col-index=\"" +
+		domIndex +
+		"\"]" +
+		", .dt-row-totalRow .dt-cell--col-" +
+		domIndex +
+		", .dt-row-totalRow .dt-cell[data-col-index=\"" +
+		domIndex +
+		"\"]";
+
+	report.$report.find(selector).addClass("budget-period-boundary");
+};
+
+cg.get_period_boundary_dom_indices = function (columns, domOffset) {
+	var boundaries = [];
+	var previous_period_key = null;
+
+	columns.forEach(function (col, index) {
+		var parsed = cg.parse_period_fieldname(col.fieldname);
+		if (!parsed) {
+			previous_period_key = null;
+			return;
+		}
+
+		if (previous_period_key !== null && previous_period_key !== parsed.period_key) {
+			boundaries.push(index + domOffset);
+		}
+		previous_period_key = parsed.period_key;
+	});
+
+	for (var i = 0; i < columns.length; i++) {
+		if ((columns[i].fieldname || "").indexOf("total_") === 0) {
+			boundaries.push(i + domOffset);
+			break;
+		}
+	}
+
+	return boundaries;
 };

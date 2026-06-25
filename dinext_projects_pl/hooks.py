@@ -81,14 +81,16 @@ fixtures = [
 # include js, css files in header of desk.html
 # app_include_css = "/assets/dinext_projects_pl/css/dinext_projects_pl.css"
 app_include_js = [
-	"/assets/dinext_common/js/sticky-datatable.js?v=20260623_5",
-	"/assets/dinext_projects_pl/js/budget_report/filters.js?v=20260623_5",
-	"/assets/dinext_projects_pl/js/budget_report/datatable_options.js?v=20260623_5",
-	"/assets/dinext_projects_pl/js/budget_report/period_cells.js?v=20260623_5",
-	"/assets/dinext_projects_pl/js/budget_report/column_groups.js?v=20260623_5",
-	"/assets/dinext_projects_pl/js/budget_report/formatter.js?v=20260623_5",
-	"/assets/dinext_projects_pl/js/budget_report/drilldown.js?v=20260623_5",
-	"/assets/dinext_projects_pl/js/budget_report/styles.js?v=20260623_5",
+	"/assets/dinext_common/js/sticky-datatable.js?v=20260624_6",
+	"/assets/dinext_projects_pl/js/budget_report/filters.js?v=20260624_6",
+	"/assets/dinext_projects_pl/js/budget_report/datatable_options.js?v=20260624_6",
+	"/assets/dinext_projects_pl/js/budget_report/period_cells.js?v=20260624_6",
+	"/assets/dinext_projects_pl/js/budget_report/column_groups.js?v=20260624_6",
+	"/assets/dinext_projects_pl/js/budget_report/formatter.js?v=20260624_6",
+	"/assets/dinext_projects_pl/js/budget_report/drilldown.js?v=20260624_6",
+	"/assets/dinext_projects_pl/js/budget_report/chart.js?v=20260624_6",
+	"/assets/dinext_projects_pl/js/budget_report/export.js?v=20260624_6",
+	"/assets/dinext_projects_pl/js/budget_report/styles.js?v=20260624_6",
 ]
 
 # include js, css files in header of web template
