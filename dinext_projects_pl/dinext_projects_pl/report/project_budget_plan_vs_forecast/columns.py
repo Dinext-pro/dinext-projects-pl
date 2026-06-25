@@ -1,7 +1,9 @@
 # Copyright (c) 2025, Dinord and contributors
 import frappe
 from frappe import _
-from frappe.utils import flt, cint, today, getdate, formatdate
+from frappe.utils import flt, cint
+
+from .periods import get_report_periods
 
 
 PERIOD_CURRENCY_WIDTH = 92
@@ -9,10 +11,12 @@ TOTAL_CURRENCY_WIDTH = 132
 TOTAL_FORECAST_WIDTH = 142
 
 
-def _period_subcolumns(period_key, month_name, year, month, is_past_month, show_plan, view_type):
+def _period_subcolumns(period, show_plan, view_type):
 	"""Atomic sub-columns per period (plan / fact|forecast)."""
 	columns = []
-	year_month_label = _("{0} {1}").format(month_name, year)
+	period_key = period["key"]
+	period_label = period["label"]
+	is_past = period.get("is_past", False)
 
 	if show_plan:
 		columns.append({
@@ -22,12 +26,12 @@ def _period_subcolumns(period_key, month_name, year, month, is_past_month, show_
 			"width": PERIOD_CURRENCY_WIDTH,
 			"precision": 0,
 			"period_group": period_key,
-			"period_group_label": year_month_label,
+			"period_group_label": period_label,
 			"period_role": "plan",
 		})
 
 	if view_type == "forecast_actual":
-		if is_past_month:
+		if is_past:
 			columns.append({
 				"label": _("Fact"),
 				"fieldname": "actual_{0}".format(period_key),
@@ -35,7 +39,7 @@ def _period_subcolumns(period_key, month_name, year, month, is_past_month, show_
 				"width": PERIOD_CURRENCY_WIDTH,
 				"precision": 0,
 				"period_group": period_key,
-				"period_group_label": year_month_label,
+				"period_group_label": period_label,
 				"period_role": "display",
 			})
 		else:
@@ -46,7 +50,7 @@ def _period_subcolumns(period_key, month_name, year, month, is_past_month, show_
 				"width": PERIOD_CURRENCY_WIDTH,
 				"precision": 0,
 				"period_group": period_key,
-				"period_group_label": year_month_label,
+				"period_group_label": period_label,
 				"period_role": "display",
 			})
 	elif view_type == "forecast_only":
@@ -57,7 +61,7 @@ def _period_subcolumns(period_key, month_name, year, month, is_past_month, show_
 			"width": PERIOD_CURRENCY_WIDTH,
 			"precision": 0,
 			"period_group": period_key,
-			"period_group_label": year_month_label,
+			"period_group_label": period_label,
 			"period_role": "display",
 		})
 	elif view_type == "actual_only":
@@ -68,7 +72,7 @@ def _period_subcolumns(period_key, month_name, year, month, is_past_month, show_
 			"width": PERIOD_CURRENCY_WIDTH,
 			"precision": 0,
 			"period_group": period_key,
-			"period_group_label": year_month_label,
+			"period_group_label": period_label,
 			"period_role": "display",
 		})
 
@@ -87,29 +91,11 @@ def get_columns(filters, data):
 		}
 	]
 
-	from_year = cint(filters.get("from_year"))
-	to_year = cint(filters.get("to_year"))
 	show_plan = filters.get("show_plan")
 	view_type = filters.get("view_type", "forecast_actual")
 
-	current_date = getdate(today())
-	current_year = current_date.year
-	current_month = current_date.month
-
-	for year in range(from_year, to_year + 1):
-		start_month = 1 if year > from_year else cint(filters.get("from_month", 1))
-		end_month = 12 if year < to_year else cint(filters.get("to_month", 12))
-
-		for month in range(start_month, end_month + 1):
-			month_name = formatdate(f"{year}-{month:02d}-01", "MMM")
-			period_key = "{0}_{1:02d}".format(year, month)
-			is_past_month = (year < current_year) or (year == current_year and month < current_month)
-
-			columns.extend(
-				_period_subcolumns(
-					period_key, month_name, year, month, is_past_month, show_plan, view_type
-				)
-			)
+	for period in get_report_periods(filters):
+		columns.extend(_period_subcolumns(period, show_plan, view_type))
 
 	return columns
 

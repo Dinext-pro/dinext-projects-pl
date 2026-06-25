@@ -40,15 +40,18 @@ def normalize_filters(filters):
 	from_period = filters.get("from_period")
 	to_period = filters.get("to_period")
 
+	granularity = (filters.get("period_granularity") or "month").lower()
+	year_only_granularity = granularity in ("quarter", "year", "quarterly", "yearly")
+
 	if from_period:
 		from_date = getdate(from_period)
 		filters["from_year"] = from_date.year
-		filters["from_month"] = from_date.month
+		filters["from_month"] = 1 if year_only_granularity else from_date.month
 
 	if to_period:
 		to_date = getdate(to_period)
 		filters["to_year"] = to_date.year
-		filters["to_month"] = to_date.month
+		filters["to_month"] = 12 if year_only_granularity else to_date.month
 
 	# Defaults when report opens before client filter defaults are applied.
 	current = getdate(today())

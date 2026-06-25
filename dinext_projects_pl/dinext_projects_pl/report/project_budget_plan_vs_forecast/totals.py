@@ -60,77 +60,36 @@ def add_row_totals(data, filters, columns):
     """Добавляет тоталы по строкам с правильной логикой - только по отображаемым колонкам"""
     view_type = filters.get("view_type", "forecast_actual")
     show_plan = filters.get("show_plan")
-    
-    # Получаем текущую дату для режима forecast_actual
-    current_date = getdate(today())
-    current_year = current_date.year
-    current_month = current_date.month
-    
-    # Собираем список отображаемых колонок
+
+    plan_columns = []
     display_columns = []
     for col in columns:
-        fieldname = col["fieldname"]
-        if fieldname.startswith('plan_') or fieldname.startswith('forecast_') or fieldname.startswith('actual_'):
+        fieldname = col.get("fieldname")
+        if not fieldname:
+            continue
+        if fieldname.startswith("plan_") and col.get("period_group"):
+            plan_columns.append(fieldname)
+        elif col.get("period_group") and (
+            fieldname.startswith("forecast_")
+            or fieldname.startswith("actual_")
+            or col.get("period_role") == "display"
+        ):
             display_columns.append(fieldname)
-    
-    frappe.log(f"Display columns for totals: {len(display_columns)} columns")
-    
+
     for row in data:
-        total_plan = 0
-        total_exp = 0
-        total_fct = 0
-        total_exp_fct = 0
-        
-        # Проходим только по отображаемым колонкам
-        for fieldname in display_columns:
-            value = flt(row.get(fieldname, 0))
-            
-            if fieldname.startswith('plan_'):
-                total_plan += value
-                
-            elif fieldname.startswith('forecast_'):
-                total_exp += value
-                
-                if view_type == "forecast_actual":
-                    parts = fieldname.split('_')
-                    if len(parts) == 3:
-                        try:
-                            year = int(parts[1])
-                            month = int(parts[2])
-                            if year > current_year or (year == current_year and month >= current_month):
-                                total_exp_fct += value
-                        except (ValueError, IndexError):
-                            continue
-                elif view_type == "forecast_only":
-                    total_exp_fct += value
-                    
-            elif fieldname.startswith('actual_'):
-                total_fct += value
-                
-                if view_type == "forecast_actual":
-                    parts = fieldname.split('_')
-                    if len(parts) == 3:
-                        try:
-                            year = int(parts[1])
-                            month = int(parts[2])
-                            if year < current_year or (year == current_year and month < current_month):
-                                total_exp_fct += value
-                        except (ValueError, IndexError):
-                            continue
-                elif view_type == "actual_only":
-                    total_exp_fct += value
-        
-        # Устанавливаем отдельные тоталы в зависимости от настроек
+        total_plan = sum(flt(row.get(fieldname, 0)) for fieldname in plan_columns)
+        total_exp_fct = sum(flt(row.get(fieldname, 0)) for fieldname in display_columns)
+
         if show_plan:
             row["total_plan"] = total_plan
-        
+
         if view_type == "forecast_actual":
             row["total_exp_fct"] = total_exp_fct
         elif view_type == "forecast_only":
             row["total_exp"] = total_exp_fct
         elif view_type == "actual_only":
             row["total_fct"] = total_exp_fct
-    
+
     return data
 
 def add_profit_row(data, columns, filters):
@@ -242,35 +201,13 @@ def add_profit_row(data, columns, filters):
     # Рассчитываем тоталы
     total_income_plan = sum(income_by_column.get(col, 0) for col in plan_columns)
     total_expense_plan = sum(expense_by_column.get(col, 0) for col in plan_columns)
-    
-    total_columns = []
-    if view_type == "forecast_actual":
-        current_date = getdate(today())
-        current_year = current_date.year
-        current_month = current_date.month
-        
-        for col in forecast_columns + actual_columns:
-            parts = col.split('_')
-            if len(parts) == 3:
-                try:
-                    year = int(parts[1])
-                    month = int(parts[2])
-                    
-                    if col.startswith('forecast_'):
-                        if year > current_year or (year == current_year and month >= current_month):
-                            total_columns.append(col)
-                    elif col.startswith('actual_'):
-                        if year < current_year or (year == current_year and month < current_month):
-                            total_columns.append(col)
-                except (ValueError, IndexError):
-                    continue
-    elif view_type == "forecast_only":
-        total_columns = forecast_columns
-    elif view_type == "actual_only":
-        total_columns = actual_columns
-    
-    total_income_exp_fct = sum(income_by_column.get(col, 0) for col in total_columns)
-    total_expense_exp_fct = sum(expense_by_column.get(col, 0) for col in total_columns)
+
+    display_period_columns = [
+        col for col in monthly_columns
+        if col.startswith("forecast_") or col.startswith("actual_")
+    ]
+    total_income_exp_fct = sum(income_by_column.get(col, 0) for col in display_period_columns)
+    total_expense_exp_fct = sum(expense_by_column.get(col, 0) for col in display_period_columns)
     
     # Устанавливаем тоталы для строки прибыли
     if show_plan:

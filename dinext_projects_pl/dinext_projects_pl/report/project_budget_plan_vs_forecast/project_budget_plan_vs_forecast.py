@@ -12,7 +12,7 @@ from .budget_loader import get_accounts, get_budget_data
 from .actual_loader import get_actual_data_simple
 from .hierarchy import add_account_hierarchy, accumulate_all_values_upwards
 from .totals import apply_forecast_actual_logic, add_row_totals, add_profit_row
-from .periods import apply_accumulated_values
+from .periods import apply_accumulated_values, aggregate_data_by_granularity
 from .drilldown import get_budget_details
 
 __all__ = ["execute", "get_data", "get_budget_details"]
@@ -27,6 +27,7 @@ def execute(filters=None):
 
     validate_filters(filters)
     data = get_data(filters)
+    data = aggregate_data_by_granularity(data, filters)
 
     frappe.log(f"Total data rows after get_data: {len(data)}")
 

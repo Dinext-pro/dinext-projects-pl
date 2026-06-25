@@ -36,6 +36,11 @@ frappe.query_reports["Project Budget Plan vs Forecast"] = {
 
 		br.setup_filter_layout(report);
 		br.setup_period_month_pickers(report);
+		br.setup_period_granularity_handler(report);
+		br.setup_custom_export(report);
+		if (typeof br.install_gl_drilldown_handler === "function") {
+			br.install_gl_drilldown_handler();
+		}
 		br.apply_report_translations(report);
 	},
 
