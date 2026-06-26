@@ -3,8 +3,6 @@ frappe.provide("dinext_projects_pl.budget_plan_vs_forecast");
 var br = dinext_projects_pl.budget_plan_vs_forecast;
 var pc = br.period_cells;
 
-// Atomic cells: one value per column; period grouping is header-only (colspan row).
-
 dinext_projects_pl.budget_plan_vs_forecast.formatter = function (
 	value,
 	row,
@@ -12,21 +10,61 @@ dinext_projects_pl.budget_plan_vs_forecast.formatter = function (
 	data,
 	default_formatter
 ) {
+	var fieldname = column.fieldname || "";
+	var is_account_col = fieldname === "account";
+
+	if (is_account_col && data) {
+		if (data.is_profit_row) {
+			value = default_formatter(value, row, column, data);
+			return `<span data-is-profit-row="1">${value}</span>`;
+		}
+		if (data.is_profitability_row) {
+			value = default_formatter(value, row, column, data);
+			return `<span data-is-profitability-row="1">${value}</span>`;
+		}
+
+		if (data.account) {
+			var account_label =
+				frappe.utils.get_link_title("Account", data.account) || data.account;
+			var is_gl =
+				typeof br.is_gl_drilldown_enabled === "function" &&
+				br.is_gl_drilldown_enabled();
+			var label_class = "budget-account-label";
+			if (data.indent === 0) {
+				label_class += " budget-account-label--root";
+			}
+			if (is_gl) {
+				label_class += " budget-account-label--gl";
+			}
+			value =
+				'<span class="' +
+				label_class +
+				'">' +
+				frappe.utils.escape_html(account_label) +
+				"</span>";
+			delete column.link_onclick;
+			if (data.indent === 0 && !is_gl) {
+				value = `<b>${value}</b>`;
+			}
+			return value;
+		} else {
+			value = default_formatter(value, row, column, data);
+		}
+
+		delete column.link_onclick;
+
+		if (data.indent === 0) {
+			value = `<b>${value}</b>`;
+		}
+		return value;
+	}
+
 	value = default_formatter(value, row, column, data);
 
 	if (data && data.indent === 0) {
 		value = `<b>${value}</b>`;
 	}
 
-	if (data && column.fieldname === "account") {
-		if (data.is_profit_row) {
-			value = `<span data-is-profit-row="1">${value}</span>`;
-		} else if (data.is_profitability_row) {
-			value = `<span data-is-profitability-row="1">${value}</span>`;
-		}
-	}
-
-	var fieldname = column.fieldname || "";
 	var is_currency = column.fieldtype === "Currency";
 
 	if (data && is_currency && !data.is_profit_row && !data.is_profitability_row) {
@@ -52,52 +90,40 @@ dinext_projects_pl.budget_plan_vs_forecast.formatter = function (
 	}
 
 	if (data && data.account && !data.is_profit_row && !data.is_profitability_row) {
-		var enable_drill_down = frappe.query_report.get_filter_value("enable_drill_down");
 		var drill_amount = data ? flt(data[fieldname]) : 0;
+		var plan_forecast_drill =
+			typeof br.is_plan_forecast_drill_enabled === "function" &&
+			br.is_plan_forecast_drill_enabled();
 
 		if (
-			enable_drill_down &&
+			plan_forecast_drill &&
 			(fieldname.startsWith("plan_") || fieldname.startsWith("forecast_")) &&
 			drill_amount !== 0
 		) {
-			var parts = fieldname.split("_");
-			if (parts.length === 3) {
-				value = `<span class="drillable-amount"
-							data-account="${data.account}"
-							data-year="${parts[1]}"
-							data-month="${parts[2]}"
-							data-type="${parts[0]}"
-							data-amount="${drill_amount}"
-							data-is-total="0"
-							style="cursor: pointer; text-decoration: underline dotted; color: inherit;">
-							${value}
-						</span>`;
+			var parsed = pc.parse_period_fieldname(fieldname);
+			if (parsed) {
+				value = br.wrap_plan_forecast_drilldown_value(
+					value,
+					data,
+					fieldname,
+					parsed,
+					drill_amount
+				);
 			}
 		} else if (
-			enable_drill_down &&
-			(fieldname === "total_plan" ||
-				fieldname === "total_exp_fct" ||
-				fieldname === "total_exp" ||
-				fieldname === "total_fct") &&
+			plan_forecast_drill &&
+			(fieldname === "total_plan" || fieldname === "total_exp_fct") &&
 			drill_amount !== 0
 		) {
-			var total_type = "plan";
-			if (fieldname === "total_exp_fct" || fieldname === "total_exp") {
-				total_type = "forecast";
-			} else if (fieldname === "total_fct") {
-				total_type = "actual";
-			}
-
-			value = `<span class="drillable-amount"
-						data-account="${data.account}"
-						data-year="total"
-						data-month="total"
-						data-type="${total_type}"
-						data-amount="${drill_amount}"
-						data-is-total="1"
-						style="cursor: pointer; text-decoration: underline wavy; color: inherit; font-weight: 600;">
-						${value}
-					</span>`;
+			var total_type = fieldname === "total_plan" ? "plan" : "forecast";
+			value = br.wrap_plan_forecast_drilldown_value(
+				value,
+				data,
+				fieldname,
+				{ type: total_type, year: "total", period_key: "total" },
+				drill_amount,
+				true
+			);
 		}
 	}
 

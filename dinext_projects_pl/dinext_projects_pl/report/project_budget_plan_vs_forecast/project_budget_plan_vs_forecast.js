@@ -9,37 +9,17 @@ frappe.query_reports["Project Budget Plan vs Forecast"] = {
 		br.apply_report_styles();
 		br.install_sticky_datatable(report);
 
-		// report.page.add_inner_button(
-		// 	br.__("Toggle Plan"),
-		// 	function () {
-		// 		var show_plan = report.get_filter_value("show_plan");
-		// 		report.set_filter_value("show_plan", show_plan ? 0 : 1);
-		// 		report.refresh();
-		// 	},
-		// 	br.__("Controls")
-		// );
-
-		// report.page.add_inner_button(
-		// 	br.__("Toggle Drill Down"),
-		// 	function () {
-		// 		var enable = report.get_filter_value("enable_drill_down");
-		// 		report.set_filter_value("enable_drill_down", enable ? 0 : 1);
-		// 		frappe.show_alert({
-		// 			message: __("Drill Down {0}", [
-		// 				enable ? br.__("Disabled") : br.__("Enabled"),
-		// 			]),
-		// 			indicator: enable ? "red" : "green",
-		// 		});
-		// 	},
-		// 	br.__("Controls")
-		// );
-
 		br.setup_filter_layout(report);
+		br.setup_url_filter_persistence(report);
+		br.setup_budget_summary_hooks(report);
 		br.setup_period_month_pickers(report);
 		br.setup_period_granularity_handler(report);
 		br.setup_custom_export(report);
 		if (typeof br.install_gl_drilldown_handler === "function") {
 			br.install_gl_drilldown_handler();
+		}
+		if (typeof br.install_plan_forecast_drilldown_handler === "function") {
+			br.install_plan_forecast_drilldown_handler();
 		}
 		br.apply_report_translations(report);
 	},

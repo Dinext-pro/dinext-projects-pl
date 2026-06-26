@@ -37,6 +37,24 @@ br.apply_report_styles = function () {
 			text-align: left !important;
 		}
 
+		.report-wrapper .dt-row--highlight .dt-cell--col-0,
+		.report-wrapper .dt-row--highlight .dt-cell--col-0 .dt-cell__content,
+		.report-wrapper .dt-row--highlight .dt-cell--col-0 .dt-tree-node,
+		.report-wrapper .dt-row--highlight .dt-cell--col-0 .budget-account-label {
+			color: var(--text-color, #212529) !important;
+			background-color: var(--highlight-color, #f5f7fa) !important;
+		}
+
+		html[data-theme="dark"] .report-wrapper .dt-row--highlight .dt-cell--col-0,
+		html[data-theme-mode="dark"] .report-wrapper .dt-row--highlight .dt-cell--col-0,
+		html[data-theme="dark"] .report-wrapper .dt-row--highlight .dt-cell--col-0 .dt-cell__content,
+		html[data-theme-mode="dark"] .report-wrapper .dt-row--highlight .dt-cell--col-0 .dt-cell__content,
+		html[data-theme="dark"] .report-wrapper .dt-row--highlight .dt-cell--col-0 .budget-account-label,
+		html[data-theme-mode="dark"] .report-wrapper .dt-row--highlight .dt-cell--col-0 .budget-account-label {
+			color: var(--text-color, #ededed) !important;
+			background-color: var(--highlight-color, #2a2a2a) !important;
+		}
+
 		.report-wrapper .dt-cell:not(.dt-cell--col-0):not(.dt-cell--header) .dt-cell__content {
 			font-size: 12px;
 			white-space: nowrap;
@@ -223,27 +241,87 @@ br.apply_report_styles = function () {
 			border-bottom: 2px solid #adb5bd !important;
 		}
 
-		.budget-detail-table {
+		.budget-detail-dialog .budget-detail-table-wrap {
+			--budget-report-header-bg: var(--subtle-fg, #f8f9fa);
+			--budget-report-header-color: var(--text-color, #212529);
+			--budget-report-summary-bg: var(--control-bg, var(--card-bg, #f8f9fa));
+			--budget-report-period-border: var(--gray-400, #ced4da);
+			max-height: 420px;
+			overflow: auto;
+			border: 1px solid var(--border-color, #d1d8dd);
+			border-radius: var(--border-radius-md, 8px);
+			background-color: var(--card-bg, #fff);
+		}
+
+		html[data-theme="dark"] .budget-detail-dialog .budget-detail-table-wrap,
+		html[data-theme-mode="dark"] .budget-detail-dialog .budget-detail-table-wrap {
+			--budget-report-period-border: var(--gray-600, #6c757d);
+		}
+
+		.budget-detail-dialog .budget-detail-table {
 			width: 100%;
 			border-collapse: collapse;
-			margin-top: 10px;
+			margin: 0;
+			font-size: 12px;
+			font-variant-numeric: tabular-nums;
 		}
 
-		.budget-detail-table th {
-			background-color: #f8f9fa;
-			font-weight: bold;
-			padding: 8px;
+		.budget-detail-dialog .budget-detail-table thead th {
+			position: sticky;
+			top: 0;
+			z-index: 1;
+			background-color: var(--budget-report-header-bg) !important;
+			color: var(--budget-report-header-color);
+			font-weight: 600;
+			padding: 8px 10px;
+			text-align: center;
+			border-bottom: 1px solid var(--border-color, #d1d8dd);
+			white-space: nowrap;
+		}
+
+		.budget-detail-dialog .budget-detail-table tbody td {
+			padding: 6px 10px;
+			border-bottom: 1px solid var(--border-color, #e9ecef);
+			text-align: center;
+			color: var(--text-color, #212529);
+			white-space: nowrap;
+		}
+
+		.budget-detail-dialog .budget-detail-table__text-left {
+			text-align: left !important;
+		}
+
+		.budget-detail-dialog .budget-detail-table__amount-head,
+		.budget-detail-dialog .budget-detail-table__amount {
+			text-align: right !important;
+		}
+
+		.budget-detail-dialog .budget-detail-table tbody tr:hover td {
+			background-color: var(--highlight-color, #f5f7fa);
+		}
+
+		.budget-detail-dialog .budget-detail-table__total-row td {
+			font-weight: 600;
+			background-color: var(--budget-report-summary-bg) !important;
+			border-top: 2px solid var(--budget-report-period-border);
+			border-bottom: none;
+		}
+
+		.budget-detail-dialog .budget-detail-table__total-label {
+			text-align: right !important;
+		}
+
+		.budget-detail-dialog .budget-detail-table__meta {
+			margin-top: 8px;
+			font-size: 11px;
+			color: var(--text-muted, #6c757d);
+			text-align: right;
+		}
+
+		.budget-detail-dialog .budget-detail-table__meta--split {
+			display: flex;
+			justify-content: space-between;
 			text-align: left;
-			border-bottom: 2px solid #dee2e6;
-		}
-
-		.budget-detail-table td {
-			padding: 6px 8px;
-			border-bottom: 1px solid #e9ecef;
-		}
-
-		.budget-detail-table tr:hover {
-			background-color: #f1f3f4;
 		}
 
 		.detail-header {
@@ -383,6 +461,62 @@ br.apply_report_styles = function () {
 		.budget-plan-vs-forecast-page .budget-report-chart-container {
 			margin: 0 0 12px 0;
 			padding: 8px 0 0;
+		}
+
+		.budget-plan-vs-forecast-page .report-summary.budget-pl-summary {
+			display: flex;
+			margin: 0 0 12px 0;
+			padding: 20px 15px;
+			background-color: var(--card-bg, var(--bg-color));
+			border-radius: var(--border-radius-md, 8px);
+			border-bottom: 1px solid var(--border-color, #dee2e6);
+		}
+
+		@media (min-width: 576px) {
+			.budget-plan-vs-forecast-page .report-summary.budget-pl-summary {
+				flex-wrap: nowrap;
+			}
+
+			.budget-plan-vs-forecast-page .report-summary.budget-pl-summary .summary-item,
+			.budget-plan-vs-forecast-page .report-summary.budget-pl-summary .summary-separator .summary-value {
+				margin: 0;
+			}
+		}
+
+		.budget-plan-vs-forecast-page.budget-gl-drilldown-mode .dt-scrollable .dt-row:not(.dt-row-header):not(.dt-row-totalRow) .dt-cell--col-0 {
+			cursor: pointer;
+		}
+
+		.budget-plan-vs-forecast-page.budget-gl-drilldown-mode .dt-scrollable .dt-row:not(.dt-row-header):not(.dt-row-totalRow) .dt-cell--col-0:hover .dt-cell__content,
+		.budget-plan-vs-forecast-page.budget-gl-drilldown-mode .dt-scrollable .dt-row:not(.dt-row-header):not(.dt-row-totalRow) .dt-cell--col-0:hover .dt-tree-node,
+		.budget-plan-vs-forecast-page.budget-gl-drilldown-mode .dt-scrollable .dt-row:not(.dt-row-header):not(.dt-row-totalRow) .dt-cell--col-0:hover .budget-account-label {
+			color: var(--text-muted, #2490ef) !important;
+			text-decoration: underline !important;
+			text-decoration-thickness: 1px;
+			text-underline-offset: 2px;
+			text-decoration-color: var(--text-muted, #2490ef) !important;
+			background-color: transparent !important;
+		}
+
+		.budget-plan-vs-forecast-page .budget-account-label--root {
+			font-weight: 600;
+		}
+
+		.budget-plan-vs-forecast-page .budget-account-label {
+			color: inherit;
+			cursor: default;
+			text-decoration: none;
+			pointer-events: none;
+		}
+
+		.budget-plan-vs-forecast-page .budget-plan-forecast-drillable {
+			cursor: pointer;
+			text-decoration: underline dotted;
+			color: inherit;
+		}
+
+		.budget-plan-vs-forecast-page .budget-plan-forecast-drillable:hover {
+			color: var(--primary, #2490ef);
 		}
 
 		.budget-plan-vs-forecast-page .budget-report-chart {
