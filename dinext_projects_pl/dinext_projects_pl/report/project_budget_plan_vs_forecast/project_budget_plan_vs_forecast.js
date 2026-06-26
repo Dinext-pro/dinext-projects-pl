@@ -1,16 +1,16 @@
 // Budget report modules are loaded lazily — only when this report is opened.
 // Previously these were in app_include_js which loaded them on every desk page.
 const _budget_report_files = [
-	"/assets/dinext_common/js/sticky-datatable.js?v=20260625_07",
-	"/assets/dinext_projects_pl/js/budget_report/filters.js?v=20260626_03",
-	"/assets/dinext_projects_pl/js/budget_report/datatable_options.js?v=20260625_07",
-	"/assets/dinext_projects_pl/js/budget_report/period_cells.js?v=20260625_07",
-	"/assets/dinext_projects_pl/js/budget_report/column_groups.js?v=20260625_07",
-	"/assets/dinext_projects_pl/js/budget_report/formatter.js?v=20260625_07",
-	"/assets/dinext_projects_pl/js/budget_report/drilldown.js?v=20260626_03",
-	"/assets/dinext_projects_pl/js/budget_report/chart.js?v=20260625_07",
-	"/assets/dinext_projects_pl/js/budget_report/export.js?v=20260625_07",
-	"/assets/dinext_projects_pl/js/budget_report/styles.js?v=20260626_03",
+	"/assets/dinext_common/js/sticky-datatable.js",
+	"/assets/dinext_projects_pl/js/budget_report/filters.js",
+	"/assets/dinext_projects_pl/js/budget_report/datatable_options.js",
+	"/assets/dinext_projects_pl/js/budget_report/period_cells.js",
+	"/assets/dinext_projects_pl/js/budget_report/column_groups.js",
+	"/assets/dinext_projects_pl/js/budget_report/formatter.js",
+	"/assets/dinext_projects_pl/js/budget_report/drilldown.js",
+	"/assets/dinext_projects_pl/js/budget_report/chart.js",
+	"/assets/dinext_projects_pl/js/budget_report/export.js",
+	"/assets/dinext_projects_pl/js/budget_report/styles.js",
 ];
 
 frappe.require(_budget_report_files, function () {
