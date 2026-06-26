@@ -13,9 +13,42 @@ from .actual_loader import get_actual_data_simple
 from .hierarchy import add_account_hierarchy, accumulate_all_values_upwards
 from .totals import apply_forecast_actual_logic, add_row_totals, add_profit_row
 from .periods import apply_accumulated_values, aggregate_data_by_granularity
-from .drilldown import get_budget_details
+from . import drilldown as budget_drilldown
 
 __all__ = ["execute", "get_data", "get_budget_details"]
+
+
+@frappe.whitelist()
+def get_budget_details(
+	account,
+	year,
+	month=None,
+	quarter=None,
+	period_key=None,
+	period_granularity=None,
+	data_type="plan",
+	project=None,
+	project_portfolio=None,
+	cost_center=None,
+	business_area=None,
+	company=None,
+	apply_cc_allocation=None,
+):
+	return budget_drilldown.get_budget_details(
+		account=account,
+		year=year,
+		month=month,
+		quarter=quarter,
+		period_key=period_key,
+		period_granularity=period_granularity,
+		data_type=data_type,
+		project=project,
+		project_portfolio=project_portfolio,
+		cost_center=cost_center,
+		business_area=business_area,
+		company=company,
+		apply_cc_allocation=apply_cc_allocation,
+	)
 
 
 def execute(filters=None):

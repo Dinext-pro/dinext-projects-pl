@@ -5,6 +5,88 @@ var br = dinext_projects_pl.budget_plan_vs_forecast;
 br.GET_BUDGET_DETAILS_METHOD =
 	"dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.project_budget_plan_vs_forecast.get_budget_details";
 
+br.read_plan_forecast_drilldown_meta = function ($el) {
+	function read_attr(name) {
+		var value = $el.attr("data-" + name);
+		if (value === undefined || value === null || value === "") {
+			return null;
+		}
+		return value;
+	}
+
+	var month = read_attr("month");
+	var quarter = read_attr("quarter");
+
+	return {
+		account: read_attr("account"),
+		year: cint(read_attr("year")),
+		month: month ? cint(month) : null,
+		quarter: quarter ? cint(quarter) : null,
+		period_key: read_attr("period-key"),
+		period_granularity: read_attr("period-granularity"),
+		type: read_attr("amount-type") || read_attr("type"),
+		amount: flt($el.attr("data-amount")),
+		isTotal: cint($el.attr("data-is-total") || 0) === 1,
+	};
+};
+
+br.resolve_drilldown_period_info = function (periodInfo) {
+	periodInfo = periodInfo || {};
+	var year = cint(periodInfo.year);
+	var month =
+		periodInfo.month != null && periodInfo.month !== "" ? cint(periodInfo.month) : null;
+	var quarter =
+		periodInfo.quarter != null && periodInfo.quarter !== ""
+			? cint(periodInfo.quarter)
+			: null;
+	var period_key = periodInfo.period_key || null;
+
+	if (period_key && (!month || !year)) {
+		var parts = String(period_key).split("_");
+		if (parts.length >= 2 && /^\d+$/.test(parts[0]) && /^\d+$/.test(parts[1])) {
+			year = year || cint(parts[0]);
+			month = month || cint(parts[1]);
+		} else if (parts.length >= 2 && /^\d+$/.test(parts[0]) && /^Q[1-4]$/i.test(parts[1])) {
+			year = year || cint(parts[0]);
+			quarter = quarter || cint(parts[1].slice(1));
+		}
+	}
+
+	return {
+		year: year,
+		month: month,
+		quarter: quarter,
+		period_key: period_key,
+		period_granularity: periodInfo.period_granularity || "month",
+		type: periodInfo.type || "plan",
+	};
+};
+
+br.build_budget_details_args = function (account, periodInfo) {
+	periodInfo = br.resolve_drilldown_period_info(periodInfo);
+	var report = frappe.query_report;
+	var filters = report && report.get_filter_values ? report.get_filter_values() : {};
+	var filterArgs = br.get_report_filter_args();
+
+	return Object.assign(
+		{
+			account: account,
+			year: periodInfo.year,
+			month: periodInfo.month != null ? periodInfo.month : null,
+			quarter: periodInfo.quarter != null ? periodInfo.quarter : null,
+			period_key: periodInfo.period_key || null,
+			period_granularity:
+				periodInfo.period_granularity || filters.period_granularity || "month",
+			data_type: periodInfo.type || "plan",
+			company:
+				filterArgs.company ||
+				filters.company ||
+				(report && report.get_filter_value && report.get_filter_value("company")),
+		},
+		filterArgs
+	);
+};
+
 br.get_period_filter_range = function (filters) {
 	filters = filters || {};
 
@@ -34,6 +116,7 @@ br.get_period_filter_range = function (filters) {
 br.after_datatable_render = function () {
 	setTimeout(function () {
 		var report = frappe.query_report;
+		br.setup_budget_summary_hooks(report);
 		if (br.setup_filter_layout) {
 			br.setup_filter_layout(report);
 		}
@@ -51,6 +134,7 @@ br.after_datatable_render = function () {
 		if (br.fix_table_horizontal_layout) {
 			br.fix_table_horizontal_layout();
 		}
+		br.render_budget_summary(report);
 		if (br.render_sticky_summary_footer) {
 			br.render_sticky_summary_footer(report);
 		}
@@ -99,35 +183,58 @@ br.after_datatable_render = function () {
 			}
 		});
 
-		$(".drillable-amount")
-			.off("click")
-			.on("click", function (e) {
-				e.stopPropagation();
-
-				var account = $(this).data("account");
-				var year = $(this).data("year");
-				var month = $(this).data("month");
-				var type = $(this).data("type");
-				var amount = $(this).data("amount");
-				var isTotal = $(this).data("is-total");
-
-				if (isTotal == 1) {
-					br.showTotalBudgetDetails(account, type, amount);
-				} else {
-					br.showBudgetDetails(account, year, month, type, amount);
-				}
-			});
+		if (br.bind_account_gl_links) {
+			br.bind_account_gl_links();
+		}
 	}, 100);
 };
 
-br.showBudgetDetails = function (account, year, month, type, amount) {
+br.install_plan_forecast_drilldown_handler = function () {
+	if (br._plan_forecast_drill_handler_installed) {
+		return;
+	}
+	br._plan_forecast_drill_handler_installed = true;
+
+	$(document).on("click.budget_plan_forecast_drill", ".budget-plan-forecast-drillable", function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+
+		var meta = br.read_plan_forecast_drilldown_meta($(this));
+		if (!meta.account) {
+			frappe.show_alert({
+				message: __("Could not resolve account for drill-down"),
+				indicator: "orange",
+			});
+			return;
+		}
+
+		if (meta.isTotal) {
+			br.showTotalBudgetDetails(meta.account, meta.type, meta.amount);
+			return;
+		}
+
+		br.showBudgetDetails(meta.account, {
+			year: meta.year,
+			month: meta.month,
+			type: meta.type,
+			amount: meta.amount,
+			period_key: meta.period_key,
+			quarter: meta.quarter,
+			period_granularity: meta.period_granularity,
+		});
+	});
+};
+
+br.showBudgetDetails = function (account, periodInfo) {
+	periodInfo = periodInfo || {};
+	var type = periodInfo.type;
+	var year = periodInfo.year;
+	var month = periodInfo.month;
 	var amountLabel = type === "plan" ? __("Plan") : __("Forecast");
+	var periodLabel = periodInfo.period_key || year + "/" + (month || periodInfo.quarter || "");
+
 	var dialog = new frappe.ui.Dialog({
-		title: __("Budget Details: {0} - {1}/{2}", [
-			amountLabel,
-			year,
-			month,
-		]),
+		title: __("Budget Details: {0} - {1}", [amountLabel, periodLabel]),
 		size: "large",
 		fields: [
 			{
@@ -143,89 +250,139 @@ br.showBudgetDetails = function (account, year, month, type, amount) {
 	});
 
 	dialog.show();
-	br.loadBudgetDetails(account, year, month, type, dialog);
+	dialog.$wrapper.addClass("budget-detail-dialog");
+	br.loadBudgetDetails(account, periodInfo, dialog);
+};
+
+br.decorate_budget_details_dialog = function (dialog) {
+	if (dialog && dialog.$wrapper) {
+		dialog.$wrapper.addClass("budget-detail-dialog");
+	}
 };
 
 br.get_report_filter_args = function () {
-	var filters = frappe.query_report.get_filter_values();
+	var report = frappe.query_report;
+	var filters = report && report.get_filter_values ? report.get_filter_values() : {};
+
+	function normalize_filter_value(value) {
+		var items = br.normalize_report_filter_array(value);
+		return items.length ? items : null;
+	}
+
 	return {
-		project: filters.project || null,
-		project_portfolio: filters.project_portfolio || null,
-		cost_center: filters.cost_center || null,
-		business_area: filters.business_area || null,
-		company: filters.company,
+		project: normalize_filter_value(filters.project),
+		project_portfolio: normalize_filter_value(filters.project_portfolio),
+		cost_center: normalize_filter_value(filters.cost_center),
+		business_area: normalize_filter_value(filters.business_area),
+		company: filters.company || (report && report.get_filter_value("company")),
+		apply_cc_allocation: cint(filters.apply_cc_allocation),
 	};
 };
 
-br.loadBudgetDetails = function (account, year, month, type, dialog) {
+br.loadBudgetDetails = function (account, periodInfo, dialog) {
+	if (!account) {
+		br.showNoDataMessage(dialog);
+		return;
+	}
+
 	frappe.call({
 		method: br.GET_BUDGET_DETAILS_METHOD,
-		args: Object.assign(
-			{
-				account: account,
-				year: year,
-				month: month,
-				data_type: type,
-			},
-			br.get_report_filter_args()
-		),
+		args: br.build_budget_details_args(account, periodInfo),
 		callback: function (response) {
-			if (response.message && response.message.length > 0) {
-				br.renderBudgetDetails(response.message, dialog);
-			} else {
+			if (response.exc) {
+				frappe.msgprint({
+					title: __("Error"),
+					indicator: "red",
+					message: response.exc,
+				});
 				br.showNoDataMessage(dialog);
+				return;
 			}
+
+			var details = response.message;
+			if (Array.isArray(details) && details.length > 0) {
+				br.renderBudgetDetails(details, dialog);
+				return;
+			}
+
+			br.showNoDataMessage(dialog);
 		},
 		error: function (err) {
 			console.error("Error loading budget details:", err);
 			frappe.msgprint(__("Error loading budget details: {0}", [err]));
+			br.showNoDataMessage(dialog);
 		},
 	});
 };
 
 br.renderBudgetDetails = function (details, dialog) {
+	br.decorate_budget_details_dialog(dialog);
 	var html = "";
 
 	if (details.length > 0) {
 		var amountType = details[0].amount_type;
+		var has_period_label = Boolean(details[0].period_label);
+		var has_month = details.some(function (row) {
+			return row.month;
+		});
 
-		html += '<div style="max-height: 400px; overflow-y: auto;">';
+		html += '<div class="budget-detail-table-wrap">';
 		html += '<table class="budget-detail-table">';
-		html += "<thead>";
-		html += "<tr>";
-		html += "<th>" + __("Project") + "</th>";
-		html += "<th>" + __("Account") + "</th>";
-		html += "<th>" + __("Year") + "</th>";
-		html += '<th style="width: 60px;">' + __("Month") + "</th>";
-		html += '<th style="text-align: right;">' + __(amountType) + "</th>";
-		html += "</tr>";
-		html += "</thead>";
-		html += "<tbody>";
+		html += "<thead><tr>";
+		html += '<th class="budget-detail-table__text-left">' + __("Project") + "</th>";
+		html += '<th class="budget-detail-table__text-left">' + __("Account") + "</th>";
+		if (has_period_label) {
+			html += "<th>" + __("Period") + "</th>";
+		} else {
+			html += "<th>" + __("Year") + "</th>";
+			if (has_month) {
+				html += '<th style="width: 60px;">' + __("Month") + "</th>";
+			}
+		}
+		html += '<th class="budget-detail-table__amount-head">' + __(amountType) + "</th>";
+		html += "</tr></thead><tbody>";
 
 		var total = 0;
 		details.forEach(function (row) {
 			total += row.amount;
 
 			html += "<tr>";
-			html += "<td>" + row.project + "</td>";
-			html += "<td>" + row.account + "</td>";
-			html += "<td>" + row.year + "</td>";
-			html += '<td style="text-align: center;">' + row.month + "</td>";
-			html += '<td style="text-align: right;">' + br.formatCurrency(row.amount) + "</td>";
+			html +=
+				'<td class="budget-detail-table__text-left">' +
+				frappe.utils.escape_html(row.project || "") +
+				"</td>";
+			html +=
+				'<td class="budget-detail-table__text-left">' +
+				frappe.utils.escape_html(row.account || "") +
+				"</td>";
+			if (has_period_label) {
+				html += "<td>" + frappe.utils.escape_html(row.period_label || "") + "</td>";
+			} else {
+				html += "<td>" + (row.year || "") + "</td>";
+				if (has_month) {
+					html += "<td>" + (row.month || "") + "</td>";
+				}
+			}
+			html +=
+				'<td class="budget-detail-table__amount">' +
+				br.formatCurrency(row.amount) +
+				"</td>";
 			html += "</tr>";
 		});
 
+		var colspan = has_period_label ? 3 : has_month ? 4 : 3;
+		html += '<tr class="budget-detail-table__total-row">';
 		html +=
-			'<tr style="border-top: 2px solid #dee2e6; font-weight: bold; background-color: #f8f9fa;">';
-		html += '<td colspan="4" style="text-align: right;">' + __("Total") + ":</td>";
-		html += '<td style="text-align: right;">' + br.formatCurrency(total) + "</td>";
-		html += "</tr>";
-		html += "</tbody>";
-		html += "</table>";
-		html += "</div>";
+			'<td colspan="' +
+			colspan +
+			'" class="budget-detail-table__total-label">' +
+			__("Total") +
+			":</td>";
+		html +=
+			'<td class="budget-detail-table__amount">' + br.formatCurrency(total) + "</td>";
+		html += "</tr></tbody></table></div>";
 
-		html +=
-			'<div style="margin-top: 10px; font-size: 12px; color: #666; text-align: right;">';
+		html += '<div class="budget-detail-table__meta">';
 		html += __("Total Records") + ": " + details.length;
 		html += "</div>";
 	} else {
@@ -364,7 +521,6 @@ br.showTotalBudgetDetails = function (account, type, amount) {
 	var to_year = periodRange.to.year;
 	var from_month = periodRange.from.month;
 	var to_month = periodRange.to.month;
-	var filterArgs = br.get_report_filter_args();
 	var amountLabel = type === "plan" ? __("Plan") : __("Forecast");
 
 	var dialog = new frappe.ui.Dialog({
@@ -384,6 +540,7 @@ br.showTotalBudgetDetails = function (account, type, amount) {
 	});
 
 	dialog.show();
+	br.decorate_budget_details_dialog(dialog);
 
 	dialog.fields_dict.html_details.set_value(`
 		<div class="alert alert-info" style="margin: 10px;">
@@ -413,15 +570,11 @@ br.showTotalBudgetDetails = function (account, type, amount) {
 
 		frappe.call({
 			method: br.GET_BUDGET_DETAILS_METHOD,
-			args: Object.assign(
-				{
-					account: account,
-					year: ym.year,
-					month: ym.month,
-					data_type: type,
-				},
-				filterArgs
-			),
+			args: br.build_budget_details_args(account, {
+				year: ym.year,
+				month: ym.month,
+				type: type,
+			}),
 			callback: function (response) {
 				if (response.message && response.message.length > 0) {
 					response.message.forEach(function (row) {
@@ -443,23 +596,21 @@ br.showTotalBudgetDetails = function (account, type, amount) {
 };
 
 br.renderTotalBudgetDetails = function (details, dialog, type) {
+	br.decorate_budget_details_dialog(dialog);
 	var html = "";
 
 	if (details.length > 0) {
 		var amountType = type === "plan" ? __("Plan") : __("Forecast");
 
-		html += '<div style="max-height: 400px; overflow-y: auto;">';
+		html += '<div class="budget-detail-table-wrap">';
 		html += '<table class="budget-detail-table">';
-		html += "<thead>";
-		html += "<tr>";
-		html += "<th>" + __("Project") + "</th>";
-		html += "<th>" + __("Account") + "</th>";
+		html += "<thead><tr>";
+		html += '<th class="budget-detail-table__text-left">' + __("Project") + "</th>";
+		html += '<th class="budget-detail-table__text-left">' + __("Account") + "</th>";
 		html += "<th>" + __("Year") + "</th>";
 		html += '<th style="width: 60px;">' + __("Month") + "</th>";
-		html += '<th style="text-align: right;">' + __(amountType) + "</th>";
-		html += "</tr>";
-		html += "</thead>";
-		html += "<tbody>";
+		html += '<th class="budget-detail-table__amount-head">' + __(amountType) + "</th>";
+		html += "</tr></thead><tbody>";
 
 		details.sort(function (a, b) {
 			if (a.year !== b.year) return a.year - b.year;
@@ -472,25 +623,30 @@ br.renderTotalBudgetDetails = function (details, dialog, type) {
 			total += row.amount;
 
 			html += "<tr>";
-			html += "<td>" + row.project + "</td>";
-			html += "<td>" + row.account + "</td>";
-			html += "<td>" + row.year + "</td>";
-			html += '<td style="text-align: center;">' + row.month + "</td>";
-			html += '<td style="text-align: right;">' + br.formatCurrency(row.amount) + "</td>";
+			html +=
+				'<td class="budget-detail-table__text-left">' +
+				frappe.utils.escape_html(row.project || "") +
+				"</td>";
+			html +=
+				'<td class="budget-detail-table__text-left">' +
+				frappe.utils.escape_html(row.account || "") +
+				"</td>";
+			html += "<td>" + (row.year || "") + "</td>";
+			html += "<td>" + (row.month || "") + "</td>";
+			html +=
+				'<td class="budget-detail-table__amount">' +
+				br.formatCurrency(row.amount) +
+				"</td>";
 			html += "</tr>";
 		});
 
+		html += '<tr class="budget-detail-table__total-row">';
+		html += '<td colspan="4" class="budget-detail-table__total-label">' + __("Total") + ":</td>";
 		html +=
-			'<tr style="border-top: 2px solid #dee2e6; font-weight: bold; background-color: #f8f9fa;">';
-		html += '<td colspan="4" style="text-align: right;">' + __("Total") + ":</td>";
-		html += '<td style="text-align: right;">' + br.formatCurrency(total) + "</td>";
-		html += "</tr>";
-		html += "</tbody>";
-		html += "</table>";
-		html += "</div>";
+			'<td class="budget-detail-table__amount">' + br.formatCurrency(total) + "</td>";
+		html += "</tr></tbody></table></div>";
 
-		html +=
-			'<div style="margin-top: 10px; font-size: 12px; color: #666; display: flex; justify-content: space-between;">';
+		html += '<div class="budget-detail-table__meta budget-detail-table__meta--split">';
 		html +=
 			"<span>" +
 			__("Period") +
@@ -516,6 +672,153 @@ br.renderTotalBudgetDetails = function (details, dialog, type) {
 };
 
 var pc = dinext_projects_pl.budget_plan_vs_forecast.period_cells;
+
+br.is_plan_forecast_drill_enabled = function () {
+	var report = frappe.query_report;
+	if (!report || !report.get_filter_value) {
+		return false;
+	}
+	var projects = br.normalize_report_filter_array(report.get_filter_value("project"));
+	if (projects.length === 1) {
+		return false;
+	}
+	return true;
+};
+
+br.get_report_filter_period = function () {
+	var filters = frappe.query_report.get_filter_values();
+	return {
+		from_date: filters.from_period || frappe.datetime.year_start(),
+		to_date: filters.to_period || frappe.datetime.year_end(),
+	};
+};
+
+br.get_account_column_dom_index = function () {
+	var report = frappe.query_report;
+	if (!report || !Array.isArray(report.columns)) {
+		return 0;
+	}
+
+	var cg = dinext_projects_pl.budget_plan_vs_forecast.column_groups;
+	var dom_offset =
+		cg && typeof cg.get_column_dom_offset === "function" ? cg.get_column_dom_offset() : 0;
+
+	for (var i = 0; i < report.columns.length; i++) {
+		var col = report.columns[i];
+		if ((col.fieldname || col.id) === "account") {
+			return i + dom_offset;
+		}
+	}
+
+	return dom_offset;
+};
+
+br.get_datatable_row_data = function ($row) {
+	var report = frappe.query_report;
+	if (!report || !Array.isArray(report.data) || !$row || !$row.length) {
+		return null;
+	}
+
+	var row_index = cint($row.attr("data-row-index"));
+	if (row_index >= 0 && report.data[row_index]) {
+		return report.data[row_index];
+	}
+
+	var account_col = br.get_account_column_dom_index();
+	var $account_cell = $row.find(".dt-cell--col-" + account_col).first();
+	var class_name = $account_cell.attr("class") || "";
+	var match = class_name.match(new RegExp("dt-cell--" + account_col + "-(\\d+)"));
+	if (match) {
+		row_index = cint(match[1]);
+		return report.data[row_index] || null;
+	}
+
+	return null;
+};
+
+br.decorate_account_gl_cells = function () {
+	var $page = $("#page-query-report.budget-plan-vs-forecast-page");
+	if (!$page.length) {
+		return;
+	}
+
+	var enabled = br.is_gl_drilldown_enabled();
+	$page.toggleClass("budget-gl-drilldown-mode", enabled);
+
+	var account_col = br.get_account_column_dom_index();
+	var cell_selector = ".dt-cell--col-" + account_col;
+
+	$page.find(cell_selector).each(function () {
+		var $cell = $(this);
+		$cell.removeClass("budget-account-cell--gl").removeAttr("data-account");
+
+		if (
+			!enabled ||
+			$cell.closest(".dt-row-header, .dt-row-totalRow, .budget-period-group-row").length
+		) {
+			return;
+		}
+
+		var row_data = br.get_datatable_row_data($cell.closest(".dt-row"));
+		if (
+			!row_data ||
+			!row_data.account ||
+			row_data.is_profit_row ||
+			row_data.is_profitability_row
+		) {
+			return;
+		}
+
+		$cell
+			.addClass("budget-account-cell--gl")
+			.attr("data-account", row_data.account);
+	});
+};
+
+br.open_account_gl_drilldown = function (account) {
+	if (!account) {
+		return;
+	}
+
+	if (!br.is_gl_drilldown_enabled()) {
+		frappe.show_alert({
+			message: br.get_gl_drilldown_disabled_message(),
+			indicator: "orange",
+		});
+		return;
+	}
+
+	var period = br.get_report_filter_period();
+	br.resolve_gl_filter_projects().then(function (projects) {
+		frappe.route_options = br.build_gl_route_options(account, period, projects);
+		frappe.set_route("query-report", "General Ledger");
+	});
+};
+
+br.bind_account_gl_links = function () {
+	br.decorate_account_gl_cells();
+};
+
+br.handle_account_gl_cell_click = function (event) {
+	if ($(event.target).closest(".dt-tree-node__toggle").length) {
+		return;
+	}
+
+	var $cell = $(event.currentTarget);
+	var row_data = br.get_datatable_row_data($cell.closest(".dt-row"));
+	if (
+		!row_data ||
+		!row_data.account ||
+		row_data.is_profit_row ||
+		row_data.is_profitability_row
+	) {
+		return;
+	}
+
+	event.preventDefault();
+	event.stopPropagation();
+	br.open_account_gl_drilldown(row_data.account);
+};
 
 br.is_gl_drilldown_enabled = function () {
 	var report = frappe.query_report;
@@ -664,13 +967,17 @@ br.open_general_ledger_drilldown = function (account, fieldname) {
 };
 
 br.install_gl_drilldown_handler = function () {
-	if (br._gl_drilldown_handler_installed) {
-		return;
-	}
-	br._gl_drilldown_handler_installed = true;
+	$(document).off(
+		"dblclick.budget_gl_drill",
+		"#page-query-report.budget-plan-vs-forecast-page .budget-gl-drillable"
+	);
+	$(document).off(
+		"click.budget_gl_drill",
+		"#page-query-report.budget-plan-vs-forecast-page.budget-gl-drilldown-mode .dt-scrollable .dt-row:not(.dt-row-header):not(.dt-row-totalRow) .dt-cell--col-0"
+	);
 
 	$(document).on(
-		"dblclick",
+		"dblclick.budget_gl_drill",
 		"#page-query-report.budget-plan-vs-forecast-page .budget-gl-drillable",
 		function (event) {
 			event.preventDefault();
@@ -678,6 +985,14 @@ br.install_gl_drilldown_handler = function () {
 
 			var $target = $(event.currentTarget);
 			br.open_general_ledger_drilldown($target.data("account"), $target.data("fieldname"));
+		}
+	);
+
+	$(document).on(
+		"click.budget_gl_drill",
+		"#page-query-report.budget-plan-vs-forecast-page.budget-gl-drilldown-mode .dt-scrollable .dt-row:not(.dt-row-header):not(.dt-row-totalRow) .dt-cell--col-0",
+		function (event) {
+			br.handle_account_gl_cell_click(event);
 		}
 	);
 };
@@ -703,4 +1018,202 @@ br.wrap_gl_drilldown_value = function (value, data, fieldname, raw) {
 		value +
 		"</span>"
 	);
+};
+
+br.wrap_plan_forecast_drilldown_value = function (value, data, fieldname, parsed, raw, isTotal) {
+	if (!data || !data.account || flt(raw) === 0) {
+		return value;
+	}
+
+	var filters = frappe.query_report.get_filter_values();
+	var granularity = filters.period_granularity || "month";
+	var year = parsed.year || "";
+	var month = parsed.month || "";
+	var quarter = parsed.quarter || "";
+	var period_key = parsed.period_key || fieldname.split("_").slice(1).join("_");
+
+	return (
+		'<span class="drillable-amount budget-plan-forecast-drillable"' +
+		' data-account="' +
+		frappe.utils.escape_html(data.account) +
+		'" data-year="' +
+		frappe.utils.escape_html(String(year)) +
+		'" data-month="' +
+		frappe.utils.escape_html(month ? String(month) : "") +
+		'" data-quarter="' +
+		frappe.utils.escape_html(quarter ? String(quarter) : "") +
+		'" data-period-key="' +
+		frappe.utils.escape_html(period_key) +
+		'" data-period-granularity="' +
+		frappe.utils.escape_html(granularity) +
+		'" data-amount-type="' +
+		frappe.utils.escape_html(parsed.type || "") +
+		'" data-amount="' +
+		raw +
+		'" data-is-total="' +
+		(isTotal ? "1" : "0") +
+		'">' +
+		value +
+		"</span>"
+	);
+};
+
+br.get_report_company_currency = function (company) {
+	if (company) {
+		var cached = frappe.model.get_doc("Company", company);
+		if (cached && cached.default_currency) {
+			return cached.default_currency;
+		}
+	}
+	return (frappe.boot.sysdefaults && frappe.boot.sysdefaults.currency) || "RUB";
+};
+
+br.ensure_budget_pl_summary = function (report) {
+	var $page = $("#page-query-report");
+	if (!$page.length && report && report.page && report.page.wrapper) {
+		$page = report.page.wrapper.closest("#page-query-report");
+	}
+	if (!$page.length) {
+		return null;
+	}
+
+	if (report.$budget_pl_summary && report.$budget_pl_summary.length) {
+		return report.$budget_pl_summary;
+	}
+
+	var $existing = $page.find("> .layout-main-section > .budget-pl-summary, .layout-main-section > .budget-pl-summary").first();
+	if (!$existing.length) {
+		$existing = $page.find(".budget-pl-summary").first();
+	}
+	if ($existing.length) {
+		report.$budget_pl_summary = $existing;
+		return $existing;
+	}
+
+	var $summary = $('<div class="report-summary budget-pl-summary"></div>');
+	var $filters = $page.find(".page-form.budget-report-filters-form").first();
+	if (!$filters.length) {
+		$filters = $page.find(".page-form").first();
+	}
+	var $report = (report && report.$report) || $page.find(".report-wrapper").first();
+
+	if ($filters.length) {
+		$summary.insertAfter($filters);
+	} else if ($report.length) {
+		$summary.insertBefore($report);
+	} else {
+		var $main = $page.find(".layout-main-section").first();
+		if (!$main.length && report && report.page) {
+			$main = report.page.main || report.page.wrapper;
+		}
+		$summary.appendTo($main);
+	}
+
+	report.$budget_pl_summary = $summary;
+	return $summary;
+};
+
+br.get_budget_report_columns = function (report) {
+	if (report && report.raw_data && report.raw_data.columns) {
+		return report.raw_data.columns;
+	}
+	return (report && report.columns) || [];
+};
+
+br.build_budget_summary_totals = function (report) {
+	if (!report || !report.data || !report.data.length) {
+		return null;
+	}
+
+	var period_groups = br.get_budget_period_groups(br.get_budget_report_columns(report));
+	var income_roots = br.get_budget_root_rows(report.data).filter(function (row) {
+		return row.root_type === "Income";
+	});
+	var expense_roots = br.get_budget_root_rows(report.data).filter(function (row) {
+		return row.root_type === "Expense";
+	});
+
+	var income_display = 0;
+	var expense_display = 0;
+
+	period_groups.forEach(function (group) {
+		income_display += br.sum_row_fields(income_roots, group.display);
+		expense_display += br.sum_row_fields(expense_roots, group.display);
+	});
+
+	return {
+		income: income_display,
+		expense: Math.abs(expense_display),
+		profit: income_display - expense_display,
+	};
+};
+
+br.build_pl_report_summary = function (totals, currency) {
+	return [
+		{
+			value: totals.income,
+			label: br.__("Total Income"),
+			datatype: "Currency",
+			currency: currency,
+		},
+		{ type: "separator", value: "-" },
+		{
+			value: totals.expense,
+			label: br.__("Total Expense"),
+			datatype: "Currency",
+			currency: currency,
+		},
+		{ type: "separator", value: "=", color: "blue" },
+		{
+			value: totals.profit,
+			indicator: totals.profit > 0 ? "Green" : "Red",
+			label: br.__("Net Profit"),
+			datatype: "Currency",
+			currency: currency,
+		},
+	];
+};
+
+br.render_budget_summary = function (report) {
+	report = report || frappe.query_report;
+	if (!report) {
+		return;
+	}
+
+	var $summary = br.ensure_budget_pl_summary(report);
+	if (!$summary) {
+		return;
+	}
+
+	var totals = br.build_budget_summary_totals(report);
+	$summary.empty();
+
+	if (!totals) {
+		$summary.hide();
+		return;
+	}
+
+	var filters = report.get_filter_values ? report.get_filter_values() : {};
+	var currency = br.get_report_company_currency(filters.company);
+
+	br.build_pl_report_summary(totals, currency).forEach(function (summary) {
+		frappe.utils.build_summary_item(summary).appendTo($summary);
+	});
+
+	$summary.css("display", "flex").show();
+};
+
+br.setup_budget_summary_hooks = function (report) {
+	if (!report || report._budget_summary_hooks_installed) {
+		return;
+	}
+	report._budget_summary_hooks_installed = true;
+
+	var original_refresh = report.refresh.bind(report);
+	report.refresh = function (have_filters_changed) {
+		return original_refresh(have_filters_changed).then(function (result) {
+			br.render_budget_summary(report);
+			return result;
+		});
+	};
 };

@@ -11,6 +11,7 @@ br.ru_fallback_translations = {
 	"Controls": "Управление",
 	"Cost Center": "МВЗ",
 	"Disabled": "отключена",
+	"Deviation": "Отклонение",
 	"Enable Drill Down": "Включить детализацию",
 	"Enabled": "включена",
 	"Exp and Fact": "Прогноз и факт",
@@ -23,6 +24,7 @@ br.ru_fallback_translations = {
 	"Month": "Месяц",
 	"Period Granularity": "Детализация периода",
 	"Plan": "План",
+	"pp": "п.п.",
 	"Profitability": "Рентабельность",
 	"Profitability (%)": "Рентабельность (%)",
 	"Project": "Проект",
@@ -32,6 +34,9 @@ br.ru_fallback_translations = {
 	"Show Plan": "Показывать план",
 	"Show Zero Columns": "Показывать нулевые колонки",
 	"Show Zero Rows": "Показывать нулевые строки",
+	"Total Expense": "Всего расходов",
+	"Total Income": "Суммарный доход",
+	"Net Profit": "Чистая прибыль",
 	"To Period": "Период по",
 	"To view GL entries, select Fact Only and disable Show Plan.": "Для просмотра проводок выберите режим «Только факт» и отключите «Показывать план».",
 	"Quarter": "Квартал",
@@ -460,6 +465,7 @@ dinext_projects_pl.budget_plan_vs_forecast.setup_filter_layout = function (repor
 
 	setTimeout(function () {
 		br.apply_report_translations(report);
+		br.render_budget_summary(report);
 	}, 0);
 };
 
@@ -572,4 +578,61 @@ br.apply_report_translations = function (report) {
 			}
 		});
 	}
+};
+
+br.get_filter_values_for_url = function (report) {
+	var values = Object.assign({}, report.get_filter_values());
+
+	(report.filters || []).forEach(function (f) {
+		if (!f.df || f.df.fieldtype !== "Check") {
+			return;
+		}
+
+		var fieldname = f.df.fieldname;
+		var value = cint(f.df.hidden ? f.value : f.get_value());
+		var default_value = cint(f.df.default);
+
+		if (value !== default_value) {
+			values[fieldname] = value;
+			return;
+		}
+
+		if (!value) {
+			delete values[fieldname];
+		}
+	});
+
+	return values;
+};
+
+br.setup_url_filter_persistence = function (report) {
+	if (!report || report._budget_url_filter_persistence_installed) {
+		return;
+	}
+	report._budget_url_filter_persistence_installed = true;
+
+	report.get_url_with_filters = function () {
+		var query_params = new URLSearchParams();
+		if (this.prepared_report_name) {
+			query_params.append("prepared_report_name", this.prepared_report_name);
+		} else {
+			Object.entries(br.get_filter_values_for_url(this)).forEach(function (entry) {
+				var field = entry[0];
+				var value = entry[1];
+				if (Array.isArray(value)) {
+					if (!value.length) {
+						return;
+					}
+					value = JSON.stringify(value);
+				}
+				query_params.append(field, value);
+			});
+		}
+
+		var full_url = window.location.href.replace(window.location.search, "");
+		if (query_params.toString()) {
+			full_url += "?" + query_params.toString();
+		}
+		return full_url;
+	};
 };
