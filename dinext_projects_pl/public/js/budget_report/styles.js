@@ -349,7 +349,6 @@ br.apply_report_styles = function () {
 		.drillable-amount:hover {
 			text-decoration: underline solid !important;
 			font-weight: 600;
-			background-color: #f5f5f5;
 		}
 
 		.report-wrapper .budget-gl-drillable--active {

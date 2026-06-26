@@ -427,8 +427,57 @@ var BUDGET_REPORT_WIDE_FILTER_FIELDS = [
 	"business_area",
 ];
 
+var BUDGET_REPORT_FILTER_LAYOUT_CLASSES =
+	"budget-report-filters-form budget-report-filter-wide budget-report-filter-check budget-report-filter-company budget-report-filter-period budget-report-filter-select";
+
+br.is_budget_report_view = function (report) {
+	report = report || frappe.query_report;
+	var route = frappe.get_route();
+	return (
+		route[0] === "query-report" &&
+		route[1] === "Project Budget Plan vs Forecast" &&
+		report &&
+		report.report_name === "Project Budget Plan vs Forecast"
+	);
+};
+
+br.cleanup_budget_report_page_layout = function () {
+	var $page = $("#page-query-report");
+	if (!$page.length) {
+		return;
+	}
+
+	$page.removeClass("budget-plan-vs-forecast-page budget-gl-drilldown-mode");
+	$page.find(".page-form").removeClass("budget-report-filters-form");
+	$page
+		.find(
+			".budget-report-filter-wide, .budget-report-filter-check, .budget-report-filter-company, .budget-report-filter-period, .budget-report-filter-select"
+		)
+		.removeClass(BUDGET_REPORT_FILTER_LAYOUT_CLASSES);
+	$page.find(".budget-pl-summary, .budget-summary-overlay").remove();
+};
+
+br.install_budget_page_cleanup_hook = function () {
+	if (br._budget_page_cleanup_hook_installed) {
+		return;
+	}
+	br._budget_page_cleanup_hook_installed = true;
+
+	frappe.router.on("change", function () {
+		var route = frappe.get_route();
+		if (route[0] !== "query-report" || route[1] !== "Project Budget Plan vs Forecast") {
+			br.cleanup_budget_report_page_layout();
+		}
+	});
+};
+
 dinext_projects_pl.budget_plan_vs_forecast.setup_filter_layout = function (report) {
+	if (!br.is_budget_report_view(report)) {
+		return;
+	}
+
 	br.apply_report_translations(report);
+	br.install_budget_page_cleanup_hook();
 
 	var $page = report.page.wrapper.closest("#page-query-report");
 	$page.addClass("budget-plan-vs-forecast-page");
