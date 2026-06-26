@@ -116,6 +116,10 @@ br.get_period_filter_range = function (filters) {
 br.after_datatable_render = function () {
 	setTimeout(function () {
 		var report = frappe.query_report;
+		if (!br.is_budget_report_view(report)) {
+			return;
+		}
+
 		br.setup_budget_summary_hooks(report);
 		if (br.setup_filter_layout) {
 			br.setup_filter_layout(report);
@@ -790,8 +794,7 @@ br.open_account_gl_drilldown = function (account) {
 
 	var period = br.get_report_filter_period();
 	br.resolve_gl_filter_projects().then(function (projects) {
-		frappe.route_options = br.build_gl_route_options(account, period, projects);
-		frappe.set_route("query-report", "General Ledger");
+		br.navigate_to_general_ledger(br.build_gl_route_options(account, period, projects));
 	});
 };
 
@@ -919,17 +922,18 @@ br.resolve_gl_filter_projects = function () {
 
 br.build_gl_route_options = function (account, period, projects) {
 	var filters = frappe.query_report.get_filter_values();
+	var account_value = account;
+	if (account && !Array.isArray(account)) {
+		account_value = [account];
+	}
+
 	var route_options = {
 		company: filters.company,
-		account: account,
+		account: account_value,
 		from_date: period.from_date,
 		to_date: period.to_date,
-		from_fiscal_year: null,
-		to_fiscal_year: null,
 		cost_center: br.normalize_report_filter_array(filters.cost_center),
 		project: projects || [],
-		task: [],
-		project_role: [],
 		include_default_book_entries: 1,
 		include_dimensions: 1,
 	};
@@ -940,6 +944,14 @@ br.build_gl_route_options = function (account, period, projects) {
 	}
 
 	return route_options;
+};
+
+br.navigate_to_general_ledger = function (route_options) {
+	if (typeof br.cleanup_budget_report_page_layout === "function") {
+		br.cleanup_budget_report_page_layout();
+	}
+	frappe.route_options = route_options;
+	frappe.set_route("query-report", "General Ledger");
 };
 
 br.open_general_ledger_drilldown = function (account, fieldname) {
@@ -961,8 +973,7 @@ br.open_general_ledger_drilldown = function (account, fieldname) {
 	}
 
 	br.resolve_gl_filter_projects().then(function (projects) {
-		frappe.route_options = br.build_gl_route_options(account, period, projects);
-		frappe.set_route("query-report", "General Ledger");
+		br.navigate_to_general_ledger(br.build_gl_route_options(account, period, projects));
 	});
 };
 
