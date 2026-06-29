@@ -25,4 +25,4 @@ ACTION_CANCEL = "Cancel"
 
 def is_plan_approval_enabled() -> bool:
     """Return site-level toggle for P&L plan approval flow."""
-    return bool(cint(frappe.conf.get(PLAN_APPROVAL_SITE_CONFIG_KEY, 1)))
+    return bool(cint(frappe.conf.get(PLAN_APPROVAL_SITE_CONFIG_KEY, 0)))
