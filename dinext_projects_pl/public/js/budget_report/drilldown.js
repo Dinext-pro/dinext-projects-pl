@@ -212,7 +212,7 @@ br.install_plan_forecast_drilldown_handler = function () {
 	);
 	$(document).on(
 		"dblclick.budget_plan_forecast_drill",
-		"#page-query-report.budget-plan-vs-forecast-page .budget-plan-forecast-drillable, #page-query-report.budget-plan-vs-forecast-page .budget-summary-drillable",
+		"#page-query-report.budget-plan-vs-forecast-page .budget-plan-forecast-drillable, #page-query-report.budget-plan-vs-forecast-page .budget-summary-drillable:not(.budget-gl-drillable)",
 		function (e) {
 			e.preventDefault();
 			e.stopPropagation();
@@ -1167,7 +1167,7 @@ br.open_profit_gl_drilldown = function (fieldname) {
 	if (!fieldname) {
 		return;
 	}
-	if (fieldname !== "total_fct" && !br.is_gl_drilldown_enabled()) {
+	if (!br.is_actual_cell_gl_drilldown(fieldname) && !br.is_gl_drilldown_enabled()) {
 		frappe.show_alert({
 			message: br.get_gl_drilldown_disabled_message(),
 			indicator: "orange",
@@ -1509,7 +1509,7 @@ br.open_general_ledger_drilldown = function (account, fieldname) {
 
 br.install_gl_drilldown_handler = function () {
 	$(document).off(
-		"dblclick.budget_gl_drill",
+		"click.budget_gl_drill",
 		"#page-query-report.budget-plan-vs-forecast-page .budget-gl-drillable"
 	);
 	$(document).off(
@@ -1522,7 +1522,7 @@ br.install_gl_drilldown_handler = function () {
 	);
 
 	$(document).on(
-		"dblclick.budget_gl_drill",
+		"click.budget_gl_drill",
 		"#page-query-report.budget-plan-vs-forecast-page .budget-gl-drillable",
 		function (event) {
 			event.preventDefault();
@@ -1534,7 +1534,10 @@ br.install_gl_drilldown_handler = function () {
 				return;
 			}
 
-			br.open_general_ledger_drilldown($target.data("account"), $target.data("fieldname"));
+			br.open_general_ledger_drilldown(
+				$target.attr("data-account"),
+				$target.attr("data-fieldname")
+			);
 		}
 	);
 
