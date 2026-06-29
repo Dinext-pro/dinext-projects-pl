@@ -165,6 +165,21 @@ def _period_sort_key(fieldname):
 	return (prefix, 0, 0, 0)
 
 
+def get_sorted_period_fieldnames(columns, prefix, require_period_group=False):
+	"""Return period column fieldnames for a prefix in chronological order."""
+	fieldnames = []
+	for column in columns or []:
+		fieldname = column.get("fieldname")
+		if not fieldname or not fieldname.startswith(prefix):
+			continue
+		if require_period_group and not column.get("period_group"):
+			continue
+		fieldnames.append(fieldname)
+
+	fieldnames.sort(key=_period_sort_key)
+	return fieldnames
+
+
 def apply_accumulated_values(data, columns, filters):
 	"""Convert period columns to running totals per row when accumulated_values is enabled."""
 	if not filters.get("accumulated_values"):

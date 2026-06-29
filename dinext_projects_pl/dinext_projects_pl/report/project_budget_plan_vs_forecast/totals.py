@@ -4,6 +4,8 @@ from frappe import _
 from frappe.utils import flt, cint, today, getdate
 from collections import defaultdict
 
+from .periods import get_sorted_period_fieldnames, _period_sort_key
+
 def apply_forecast_actual_logic(data, filters):
     """
     Применяет логику для режима "Прогноз и факт":
@@ -60,54 +62,55 @@ def add_row_totals(data, filters, columns):
     """Добавляет тоталы по строкам с правильной логикой - только по отображаемым колонкам"""
     view_type = filters.get("view_type", "forecast_actual")
     show_plan = filters.get("show_plan")
+    accumulated = filters.get("accumulated_values")
 
-    plan_columns = []
+    plan_columns = get_sorted_period_fieldnames(columns, "plan_", require_period_group=True)
     display_columns = []
     for col in columns:
         fieldname = col.get("fieldname")
         if not fieldname:
             continue
-        if fieldname.startswith("plan_") and col.get("period_group"):
-            plan_columns.append(fieldname)
-        elif col.get("period_group") and (
+        if col.get("period_group") and (
             fieldname.startswith("forecast_")
             or fieldname.startswith("actual_")
             or col.get("period_role") == "display"
         ):
             display_columns.append(fieldname)
+    display_columns.sort(key=_period_sort_key)
+
+    total_display_field = None
+    if view_type == "forecast_actual":
+        total_display_field = "total_exp_fct"
+    elif view_type == "forecast_only":
+        total_display_field = "total_exp"
+    elif view_type == "actual_only":
+        total_display_field = "total_fct"
 
     for row in data:
+        if accumulated:
+            if show_plan and plan_columns:
+                row["total_plan"] = flt(row.get(plan_columns[-1], 0))
+            if total_display_field and display_columns:
+                row[total_display_field] = flt(row.get(display_columns[-1], 0))
+            continue
+
         total_plan = sum(flt(row.get(fieldname, 0)) for fieldname in plan_columns)
         total_exp_fct = sum(flt(row.get(fieldname, 0)) for fieldname in display_columns)
 
         if show_plan:
             row["total_plan"] = total_plan
 
-        if view_type == "forecast_actual":
-            row["total_exp_fct"] = total_exp_fct
-        elif view_type == "forecast_only":
-            row["total_exp"] = total_exp_fct
-        elif view_type == "actual_only":
-            row["total_fct"] = total_exp_fct
+        if total_display_field:
+            row[total_display_field] = total_exp_fct
 
     return data
 
-def add_profit_row(data, columns, filters):
-    """Добавляет строку с прибылью и рентабельностью с расчетом по месяцам"""
-    if not data:
-        return data
-    
-    view_type = filters.get("view_type", "forecast_actual")
-    show_plan = filters.get("show_plan")
-    
-    # Создаем словарь для быстрого доступа
-    data_by_account = {row["account"]: row for row in data}
-    
-    # Корневые узлы отчёта — строки верхнего уровня дерева после rollup (indent 0).
+def get_root_financial_nodes(data):
+    """Корневые узлы дохода/расхода отчёта (indent 0 после rollup)."""
     root_income_nodes = []
     root_expense_nodes = []
 
-    for row in data:
+    for row in data or []:
         if row.get("is_profit_row") or row.get("is_profitability_row"):
             continue
 
@@ -118,27 +121,35 @@ def add_profit_row(data, columns, filters):
             root_income_nodes.append(row["account"])
         elif row.get("root_type") == "Expense":
             root_expense_nodes.append(row["account"])
+
+    return root_income_nodes, root_expense_nodes
+
+
+def add_profit_row(data, columns, filters):
+    """Добавляет строку с прибылью и рентабельностью с расчетом по месяцам"""
+    if not data:
+        return data
+    
+    view_type = filters.get("view_type", "forecast_actual")
+    show_plan = filters.get("show_plan")
+    accumulated = filters.get("accumulated_values")
+    
+    # Создаем словарь для быстрого доступа
+    data_by_account = {row["account"]: row for row in data}
+    
+    root_income_nodes, root_expense_nodes = get_root_financial_nodes(data)
     
     frappe.log(f"Root income nodes: {root_income_nodes}")
     frappe.log(f"Root expense nodes: {root_expense_nodes}")
     
-    # Собираем все возможные месячные колонки
-    monthly_columns = []
-    plan_columns = []
-    forecast_columns = []
-    actual_columns = []
-    
-    for col in columns:
-        fieldname = col["fieldname"]
-        if fieldname.startswith('plan_'):
-            monthly_columns.append(fieldname)
-            plan_columns.append(fieldname)
-        elif fieldname.startswith('forecast_'):
-            monthly_columns.append(fieldname)
-            forecast_columns.append(fieldname)
-        elif fieldname.startswith('actual_'):
-            monthly_columns.append(fieldname)
-            actual_columns.append(fieldname)
+    monthly_columns = get_sorted_period_fieldnames(columns, "plan_")
+    monthly_columns.extend(get_sorted_period_fieldnames(columns, "forecast_"))
+    monthly_columns.extend(get_sorted_period_fieldnames(columns, "actual_"))
+    monthly_columns = sorted(set(monthly_columns), key=_period_sort_key)
+
+    plan_columns = get_sorted_period_fieldnames(columns, "plan_")
+    forecast_columns = get_sorted_period_fieldnames(columns, "forecast_")
+    actual_columns = get_sorted_period_fieldnames(columns, "actual_")
     
     # Словари для суммирования по месяцам
     income_by_column = defaultdict(float)
@@ -198,16 +209,23 @@ def add_profit_row(data, columns, filters):
         
         profitability_row[col] = flt(profitability, 1)
     
-    # Рассчитываем тоталы
-    total_income_plan = sum(income_by_column.get(col, 0) for col in plan_columns)
-    total_expense_plan = sum(expense_by_column.get(col, 0) for col in plan_columns)
+    display_period_columns = forecast_columns + actual_columns
+    display_period_columns.sort(key=_period_sort_key)
 
-    display_period_columns = [
-        col for col in monthly_columns
-        if col.startswith("forecast_") or col.startswith("actual_")
-    ]
-    total_income_exp_fct = sum(income_by_column.get(col, 0) for col in display_period_columns)
-    total_expense_exp_fct = sum(expense_by_column.get(col, 0) for col in display_period_columns)
+    if accumulated:
+        total_income_plan = income_by_column.get(plan_columns[-1], 0) if plan_columns else 0
+        total_expense_plan = expense_by_column.get(plan_columns[-1], 0) if plan_columns else 0
+        total_income_exp_fct = (
+            income_by_column.get(display_period_columns[-1], 0) if display_period_columns else 0
+        )
+        total_expense_exp_fct = (
+            expense_by_column.get(display_period_columns[-1], 0) if display_period_columns else 0
+        )
+    else:
+        total_income_plan = sum(income_by_column.get(col, 0) for col in plan_columns)
+        total_expense_plan = sum(expense_by_column.get(col, 0) for col in plan_columns)
+        total_income_exp_fct = sum(income_by_column.get(col, 0) for col in display_period_columns)
+        total_expense_exp_fct = sum(expense_by_column.get(col, 0) for col in display_period_columns)
     
     # Устанавливаем тоталы для строки прибыли
     if show_plan:

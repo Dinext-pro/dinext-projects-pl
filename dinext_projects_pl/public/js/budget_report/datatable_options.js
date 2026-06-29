@@ -61,9 +61,17 @@ br.prepare_sticky_summary_rows = function (report) {
 
 	var profit_row = null;
 	var profitability_row = null;
+	var root_income_accounts = [];
+	var root_expense_accounts = [];
 	var filtered = [];
 
 	report.data.forEach(function (row) {
+		if (row && cint(row.indent, 0) === 0 && row.root_type === "Income" && row.account) {
+			root_income_accounts.push(row.account);
+		}
+		if (row && cint(row.indent, 0) === 0 && row.root_type === "Expense" && row.account) {
+			root_expense_accounts.push(row.account);
+		}
 		if (row && row.is_profit_row) {
 			profit_row = row;
 			return;
@@ -79,6 +87,8 @@ br.prepare_sticky_summary_rows = function (report) {
 		report._budget_summary_rows = {
 			profit: profit_row,
 			profitability: profitability_row,
+			root_income_accounts: root_income_accounts,
+			root_expense_accounts: root_expense_accounts,
 		};
 		report.data = filtered;
 	}
@@ -257,5 +267,6 @@ br.format_summary_value = function (row, column, row_type) {
 		display_value = dinext_projects_pl.budget_plan_vs_forecast.period_cells.format_amount(value);
 	}
 
-	return '<span class="' + css_class + '">' + display_value + "</span>";
+	var inner_html = '<span class="' + css_class + '">' + display_value + "</span>";
+	return br.wrap_summary_drilldown_value(inner_html, row_type, fieldname, value);
 };
