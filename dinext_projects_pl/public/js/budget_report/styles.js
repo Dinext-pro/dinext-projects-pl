@@ -340,32 +340,14 @@ br.apply_report_styles = function () {
 		}
 
 		.drillable-amount {
-			cursor: pointer !important;
-			text-decoration: underline dotted !important;
-			color: inherit !important;
-			border-bottom: 1px dashed #aaa;
-		}
-
-		.drillable-amount:hover {
-			text-decoration: underline solid !important;
-			font-weight: 600;
+			cursor: pointer;
+			color: inherit;
+			text-decoration: none;
 		}
 
 		.report-wrapper .budget-gl-drillable--active {
 			cursor: pointer;
-			text-decoration: underline dotted;
-			border-bottom: 1px dashed var(--gray-500, #868e96);
-		}
-
-		.report-wrapper .budget-gl-drillable--active:hover {
-			text-decoration: underline solid;
-			font-weight: 600;
-			background-color: var(--highlight-color, #f5f5f5);
-		}
-
-		html[data-theme="dark"] .report-wrapper .budget-gl-drillable--active:hover,
-		html[data-theme-mode="dark"] .report-wrapper .budget-gl-drillable--active:hover {
-			background-color: var(--gray-800, #2a2a2a);
+			text-decoration: none;
 		}
 
 		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form {
@@ -489,11 +471,6 @@ br.apply_report_styles = function () {
 		.budget-plan-vs-forecast-page.budget-gl-drilldown-mode .dt-scrollable .dt-row:not(.dt-row-header):not(.dt-row-totalRow) .dt-cell--col-0:hover .dt-cell__content,
 		.budget-plan-vs-forecast-page.budget-gl-drilldown-mode .dt-scrollable .dt-row:not(.dt-row-header):not(.dt-row-totalRow) .dt-cell--col-0:hover .dt-tree-node,
 		.budget-plan-vs-forecast-page.budget-gl-drilldown-mode .dt-scrollable .dt-row:not(.dt-row-header):not(.dt-row-totalRow) .dt-cell--col-0:hover .budget-account-label {
-			color: var(--text-muted, #2490ef) !important;
-			text-decoration: underline !important;
-			text-decoration-thickness: 1px;
-			text-underline-offset: 2px;
-			text-decoration-color: var(--text-muted, #2490ef) !important;
 			background-color: transparent !important;
 		}
 
@@ -510,12 +487,13 @@ br.apply_report_styles = function () {
 
 		.budget-plan-vs-forecast-page .budget-plan-forecast-drillable {
 			cursor: pointer;
-			text-decoration: underline dotted;
+			text-decoration: none;
 			color: inherit;
 		}
 
-		.budget-plan-vs-forecast-page .budget-plan-forecast-drillable:hover {
-			color: var(--primary, #2490ef);
+		.budget-plan-vs-forecast-page .budget-summary-drillable {
+			cursor: pointer;
+			display: block;
 		}
 
 		.budget-plan-vs-forecast-page .budget-report-chart {

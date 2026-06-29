@@ -117,13 +117,22 @@ br.build_budget_chart_data = function (report) {
 
 	var cumulative_profit_plan = [];
 	var cumulative_profit_actual = [];
-	var cum_plan = 0;
-	var cum_actual = 0;
-	for (var i = 0; i < profit_plan.length; i++) {
-		cum_plan += profit_plan[i];
-		cum_actual += profit_actual[i];
-		cumulative_profit_plan.push(parseFloat(cum_plan.toFixed(2)));
-		cumulative_profit_actual.push(parseFloat(cum_actual.toFixed(2)));
+	var accumulated_values = cint(
+		report.get_filter_value && report.get_filter_value("accumulated_values")
+	);
+
+	if (accumulated_values) {
+		cumulative_profit_plan = profit_plan.slice();
+		cumulative_profit_actual = profit_actual.slice();
+	} else {
+		var cum_plan = 0;
+		var cum_actual = 0;
+		for (var i = 0; i < profit_plan.length; i++) {
+			cum_plan += profit_plan[i];
+			cum_actual += profit_actual[i];
+			cumulative_profit_plan.push(parseFloat(cum_plan.toFixed(2)));
+			cumulative_profit_actual.push(parseFloat(cum_actual.toFixed(2)));
+		}
 	}
 
 	return {
@@ -204,6 +213,7 @@ br.build_budget_chart_frm = function (report) {
 		doc: { company: filters.company },
 		bg_hide_plan: !filters.show_plan,
 		pl_chart_expanded: false,
+		hide_pl_chart_expanded_toggle: true,
 		budget_view_options: budget_view_options,
 	};
 };

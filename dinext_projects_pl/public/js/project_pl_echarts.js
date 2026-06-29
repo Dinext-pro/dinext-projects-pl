@@ -135,7 +135,7 @@ function build_pl_chart_toolbox(themeColors, frm) {
         },
         feature: {
             myToggleExpandedMetrics: {
-                show: true,
+                show: !frm?.hide_pl_chart_expanded_toggle,
                 title: is_pl_chart_expanded(frm)
                     ? __("Hide expanded metrics")
                     : __("Show expanded metrics"),
