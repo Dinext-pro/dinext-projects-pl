@@ -72,7 +72,7 @@ dinext_projects_pl.budget_plan_vs_forecast.formatter = function (
 		value = pc.format_amount(raw);
 		if (raw === 0) {
 			value = `<span class="zero">${value}</span>`;
-		} else if (fieldname.startsWith("actual_")) {
+		} else if (fieldname.startsWith("actual_") || fieldname === "total_fct") {
 			value = br.wrap_gl_drilldown_value(value, data, fieldname, raw);
 		}
 	}

@@ -1164,7 +1164,10 @@ br.renderTotalProfitDetails = function (details, dialog, type) {
 };
 
 br.open_profit_gl_drilldown = function (fieldname) {
-	if (!fieldname || !br.is_gl_drilldown_enabled()) {
+	if (!fieldname) {
+		return;
+	}
+	if (fieldname !== "total_fct" && !br.is_gl_drilldown_enabled()) {
 		frappe.show_alert({
 			message: br.get_gl_drilldown_disabled_message(),
 			indicator: "orange",
@@ -1362,6 +1365,14 @@ br.get_gl_drilldown_disabled_message = function () {
 };
 
 br.parse_gl_drilldown_period = function (fieldname) {
+	if (fieldname === "total_fct") {
+		var filter_period = br.get_report_filter_period();
+		return {
+			from_date: filter_period.from_date,
+			to_date: filter_period.to_date,
+		};
+	}
+
 	var parsed = pc.parse_period_fieldname(fieldname);
 	if (!parsed || parsed.type !== "actual") {
 		return null;
@@ -1461,14 +1472,16 @@ br.build_gl_route_options = function (account, period, projects) {
 
 br.navigate_to_general_ledger = function (route_options) {
 	if (typeof br.cleanup_budget_report_page_layout === "function") {
-		br.cleanup_budget_report_page_layout({ remove_summary: false });
+		br.cleanup_budget_report_page_layout();
 	}
 	frappe.route_options = route_options;
 	frappe.set_route("query-report", "General Ledger");
 };
 
 br.is_actual_cell_gl_drilldown = function (fieldname) {
-	return Boolean(fieldname && fieldname.startsWith("actual_"));
+	return Boolean(
+		fieldname && (fieldname.startsWith("actual_") || fieldname === "total_fct")
+	);
 };
 
 br.open_general_ledger_drilldown = function (account, fieldname) {
@@ -1535,7 +1548,12 @@ br.install_gl_drilldown_handler = function () {
 };
 
 br.wrap_gl_drilldown_value = function (value, data, fieldname, raw) {
-	if (!fieldname || !fieldname.startsWith("actual_") || !data || !data.account) {
+	if (
+		!fieldname ||
+		(!fieldname.startsWith("actual_") && fieldname !== "total_fct") ||
+		!data ||
+		!data.account
+	) {
 		return value;
 	}
 	if (data.is_profit_row || data.is_profitability_row || flt(raw) === 0) {
@@ -1603,6 +1621,10 @@ br.get_report_company_currency = function (company) {
 };
 
 br.ensure_budget_pl_summary = function (report) {
+	if (!br.is_budget_report_view(report)) {
+		return null;
+	}
+
 	var $page = $("#page-query-report");
 	if (!$page.length && report && report.page && report.page.wrapper) {
 		$page = report.page.wrapper.closest("#page-query-report");
@@ -1710,7 +1732,7 @@ br.build_pl_report_summary = function (totals, currency) {
 
 br.render_budget_summary = function (report) {
 	report = report || frappe.query_report;
-	if (!report) {
+	if (!report || !br.is_budget_report_view(report)) {
 		return;
 	}
 
@@ -1746,7 +1768,9 @@ br.setup_budget_summary_hooks = function (report) {
 	var original_refresh = report.refresh.bind(report);
 	report.refresh = function (have_filters_changed) {
 		return original_refresh(have_filters_changed).then(function (result) {
-			br.render_budget_summary(report);
+			if (br.is_budget_report_view(report)) {
+				br.render_budget_summary(report);
+			}
 			return result;
 		});
 	};
