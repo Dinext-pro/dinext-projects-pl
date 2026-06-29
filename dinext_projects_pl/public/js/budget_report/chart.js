@@ -155,7 +155,7 @@ br.get_budget_chart_presentation = function (report) {
 	var view = br.get_budget_chart_view_label(filters);
 	var datasets = [];
 
-	if (filters.show_plan) {
+	if (cint(filters.show_plan)) {
 		datasets.push({ name: br.__("Income - plan"), values: raw.plan_income, chartType: "bar" });
 	}
 	datasets.push({
@@ -163,7 +163,7 @@ br.get_budget_chart_presentation = function (report) {
 		values: raw.actual_income,
 		chartType: "bar",
 	});
-	if (filters.show_plan) {
+	if (cint(filters.show_plan)) {
 		datasets.push({ name: br.__("Expenses - plan"), values: raw.plan_expenses, chartType: "bar" });
 	}
 	datasets.push({
@@ -171,7 +171,7 @@ br.get_budget_chart_presentation = function (report) {
 		values: raw.actual_expenses,
 		chartType: "bar",
 	});
-	if (filters.show_plan) {
+	if (cint(filters.show_plan)) {
 		datasets.push({ name: br.__("Profit - plan"), values: raw.profit_plan, chartType: "line" });
 	}
 	datasets.push({
@@ -179,7 +179,7 @@ br.get_budget_chart_presentation = function (report) {
 		values: raw.profit_actual,
 		chartType: "line",
 	});
-	if (filters.show_plan) {
+	if (cint(filters.show_plan)) {
 		datasets.push({
 			name: br.__("Cumulative profit - plan"),
 			values: raw.cumulative_profit_plan,
@@ -211,7 +211,7 @@ br.build_budget_chart_frm = function (report) {
 
 	return {
 		doc: { company: filters.company },
-		bg_hide_plan: !filters.show_plan,
+		bg_hide_plan: !cint(filters.show_plan),
 		pl_chart_expanded: false,
 		hide_pl_chart_expanded_toggle: true,
 		budget_view_options: budget_view_options,

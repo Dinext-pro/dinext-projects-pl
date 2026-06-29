@@ -112,7 +112,9 @@ dinext_projects_pl.budget_plan_vs_forecast.formatter = function (
 			}
 		} else if (
 			plan_forecast_drill &&
-			(fieldname === "total_plan" || fieldname === "total_exp_fct") &&
+			(fieldname === "total_plan" ||
+				fieldname === "total_exp_fct" ||
+				fieldname === "total_exp") &&
 			drill_amount !== 0
 		) {
 			var total_type = fieldname === "total_plan" ? "plan" : "forecast";

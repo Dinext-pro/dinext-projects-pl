@@ -754,7 +754,11 @@ br.wrap_summary_drilldown_value = function (inner_html, row_type, fieldname, raw
 	if (drill_meta.drillKind === "profit" && !br.is_plan_forecast_drill_enabled()) {
 		return inner_html;
 	}
-	if (drill_meta.drillKind === "gl" && !br.is_gl_drilldown_enabled()) {
+	if (
+		drill_meta.drillKind === "gl" &&
+		!br.is_gl_drilldown_enabled() &&
+		!br.is_actual_cell_gl_drilldown(fieldname)
+	) {
 		return inner_html;
 	}
 
@@ -1457,10 +1461,14 @@ br.build_gl_route_options = function (account, period, projects) {
 
 br.navigate_to_general_ledger = function (route_options) {
 	if (typeof br.cleanup_budget_report_page_layout === "function") {
-		br.cleanup_budget_report_page_layout();
+		br.cleanup_budget_report_page_layout({ remove_summary: false });
 	}
 	frappe.route_options = route_options;
 	frappe.set_route("query-report", "General Ledger");
+};
+
+br.is_actual_cell_gl_drilldown = function (fieldname) {
+	return Boolean(fieldname && fieldname.startsWith("actual_"));
 };
 
 br.open_general_ledger_drilldown = function (account, fieldname) {
@@ -1468,7 +1476,7 @@ br.open_general_ledger_drilldown = function (account, fieldname) {
 		return;
 	}
 
-	if (!br.is_gl_drilldown_enabled()) {
+	if (!br.is_actual_cell_gl_drilldown(fieldname) && !br.is_gl_drilldown_enabled()) {
 		frappe.show_alert({
 			message: br.get_gl_drilldown_disabled_message(),
 			indicator: "orange",
@@ -1534,11 +1542,8 @@ br.wrap_gl_drilldown_value = function (value, data, fieldname, raw) {
 		return value;
 	}
 
-	var active_class = br.is_gl_drilldown_enabled() ? " budget-gl-drillable--active" : "";
-
 	return (
-		'<span class="budget-gl-drillable' +
-		active_class +
+		'<span class="budget-gl-drillable budget-gl-drillable--active' +
 		'" data-account="' +
 		frappe.utils.escape_html(data.account) +
 		'" data-fieldname="' +
