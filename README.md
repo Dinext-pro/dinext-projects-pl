@@ -97,7 +97,7 @@ frappe.call({
 ### Согласование бюджета
 
 - Режим согласования управляется site config ключом `dinext_projects_pl_enable_plan_approval`.
-- Если ключ отсутствует или равен `1`, используется текущий approval flow через `Budget`.
+- Если ключ равен `1`, используется approval flow через `Budget`.
 - Если ключ равен `0`, план сохраняется напрямую в `Project Budget`, а workflow согласования не запускается.
 - Pending budgets находятся в состоянии `Pending Approval`.
 - При `Approve` бюджет submit'ится и синхронизируется в `Project Budget`.
@@ -141,7 +141,7 @@ dinext_projects.project_pl_forecast_menu.push({
 Приложение не вводит собственные environment variables. Основная конфигурация выполняется через метаданные Frappe, `site_config.json` и стандартные ERPNext-сущности:
 
 - `site_config.json`:
-  - `dinext_projects_pl_enable_plan_approval` — включает (`1`, default) или отключает (`0`) сохранение плана через `Budget` workflow.
+  - `dinext_projects_pl_enable_plan_approval` — включает (`1`) или отключает (`0`, default) сохранение плана через `Budget` workflow.
 - Пример настройки:
 
 ```bash

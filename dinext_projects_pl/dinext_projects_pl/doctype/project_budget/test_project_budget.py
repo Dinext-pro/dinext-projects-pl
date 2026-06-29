@@ -36,10 +36,17 @@ class TestProjectBudget(FrappeTestCase):
     def setUp(self):
         self.project = self._make_project()
         self.task = self._make_task(self.project.name)
+        self._old_plan_approval_config = getattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY, None)
+        self._had_plan_approval_config = hasattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY)
+        setattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY, 1)
 
     def tearDown(self):
         frappe.set_user("Administrator")
         self._cleanup_project_data(self.project.name)
+        if self._had_plan_approval_config:
+            setattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY, self._old_plan_approval_config)
+        elif hasattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY):
+            delattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY)
 
     def test_save_plan_creates_pending_budget_and_monthly_distribution(self):
         period_a = self._current_period()

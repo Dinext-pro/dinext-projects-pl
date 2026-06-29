@@ -1463,13 +1463,14 @@ $(document).on('dblclick', '.budget-row-link', function(e) {
     frappe.set_route('List', 'Budget');
 });
 
-$(document).on('dblclick', '.bg-group-plan:not(.zero)', function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const $group = $(e.currentTarget).closest('.budget-group');
-    open_approved_budget_for_group($group);
-});
+// TODO: вернуть после включения approval flow (dinext_projects_pl_enable_plan_approval = 1)
+// $(document).on('dblclick', '.bg-group-plan:not(.zero)', function(e) {
+//     e.preventDefault();
+//     e.stopPropagation();
+//
+//     const $group = $(e.currentTarget).closest('.budget-group');
+//     open_approved_budget_for_group($group);
+// });
 
 // При двойном клике по значению "факт"
 // https://erp.dinord.ru/app/issue/ISS-2025-01237
