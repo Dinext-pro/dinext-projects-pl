@@ -291,6 +291,16 @@ br.apply_report_styles = function () {
 			text-align: left !important;
 		}
 
+		.budget-detail-dialog .budget-detail-project-link {
+			color: var(--text-color, #212529);
+			text-decoration: underline;
+			cursor: pointer;
+		}
+
+		.budget-detail-dialog .budget-detail-project-link:hover {
+			color: var(--primary, #2490ef);
+		}
+
 		.budget-detail-dialog .budget-detail-table__amount-head,
 		.budget-detail-dialog .budget-detail-table__amount {
 			text-align: right !important;
@@ -437,6 +447,20 @@ br.apply_report_styles = function () {
 			white-space: nowrap !important;
 			overflow: visible !important;
 			text-overflow: clip !important;
+		}
+
+		.budget-plan-vs-forecast-page .budget-report-insights {
+			padding: 16px 32px 0 32px;
+			box-sizing: border-box;
+		}
+
+		.budget-plan-vs-forecast-page .budget-report-insights .budget-report-chart-container {
+			margin: 0 0 8px 0;
+			padding: 0;
+		}
+
+		.budget-plan-vs-forecast-page .budget-report-insights .report-summary.budget-pl-summary {
+			margin: 0 0 12px 0;
 		}
 
 		.budget-plan-vs-forecast-page .budget-report-chart-container {

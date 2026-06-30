@@ -3,6 +3,15 @@ import frappe
 import traceback
 from frappe.utils import flt, today, getdate, add_days, get_last_day, date_diff
 
+from .allocation_cache import (
+	_filter_history_on_date,
+	get_cached_business_area_history,
+	get_cached_cost_center_allocation,
+	get_cached_cost_center_history,
+	get_cached_month_periods,
+	get_report_cache,
+)
+
 def normalize_match_values(value):
     """Return a set of selected filter values for scalar or multi-select filters."""
     if not value:
@@ -21,7 +30,24 @@ def get_cost_center_history(project, as_of_date=None):
     
     if as_of_date is None:
         as_of_date = today()
-    
+
+    cached = get_cached_cost_center_history(project, as_of_date)
+    if cached is not None:
+        return cached
+
+    report_cache = get_report_cache()
+    if report_cache is not None and project not in report_cache.cc_by_project:
+        full_history = frappe.db.sql("""
+            SELECT
+                cct_cost_center as cost_center,
+                cct_valid_from as valid_from
+            FROM `tabCost Center Table`
+            WHERE parent = %s
+            ORDER BY cct_valid_from DESC
+        """, (project,), as_dict=1)
+        report_cache.cc_by_project[project] = full_history
+        return _filter_history_on_date(full_history, as_of_date)
+
     history = frappe.db.sql("""
         SELECT 
             cct_cost_center as cost_center,
@@ -31,7 +57,7 @@ def get_cost_center_history(project, as_of_date=None):
             AND cct_valid_from <= %s
         ORDER BY cct_valid_from DESC
     """, (project, as_of_date), as_dict=1)
-    
+
     return history
 
 def get_business_area_history(project, as_of_date=None):
@@ -44,7 +70,25 @@ def get_business_area_history(project, as_of_date=None):
     
     if as_of_date is None:
         as_of_date = today()
-    
+
+    cached = get_cached_business_area_history(project, as_of_date)
+    if cached is not None:
+        return cached
+
+    report_cache = get_report_cache()
+    if report_cache is not None and project not in report_cache.ba_by_project:
+        full_history = frappe.db.sql("""
+            SELECT
+                business_area,
+                percent,
+                valid_from
+            FROM `tabCost Business Area`
+            WHERE parent = %s
+            ORDER BY valid_from DESC, creation DESC
+        """, (project,), as_dict=1)
+        report_cache.ba_by_project[project] = full_history
+        return _filter_history_on_date(full_history, as_of_date)
+
     history = frappe.db.sql("""
         SELECT 
             business_area,
@@ -55,7 +99,7 @@ def get_business_area_history(project, as_of_date=None):
             AND valid_from <= %s
         ORDER BY valid_from DESC, creation DESC
     """, (project, as_of_date), as_dict=1)
-    
+
     return history
 
 def get_active_settings_for_date(project, target_date):
@@ -119,7 +163,10 @@ def get_cost_center_allocation(main_cost_center, target_date):
     """
     if not main_cost_center:
         return None
-    
+
+    if get_report_cache() is not None:
+        return get_cached_cost_center_allocation(main_cost_center, target_date)
+
     allocation = frappe.db.sql("""
         SELECT name, valid_from
         FROM `tabCost Center Allocation`
@@ -129,19 +176,19 @@ def get_cost_center_allocation(main_cost_center, target_date):
         ORDER BY valid_from DESC
         LIMIT 1
     """, (main_cost_center, target_date), as_dict=1)
-    
+
     if not allocation:
         return None
-    
+
     children = frappe.db.sql("""
         SELECT cost_center, percentage
         FROM `tabCost Center Allocation Percentage`
         WHERE parent = %s
     """, allocation[0].name, as_dict=1)
-    
+
     if not children:
         return None
-    
+
     return {
         'name': allocation[0].name,
         'valid_from': allocation[0].valid_from,
@@ -155,71 +202,27 @@ def split_month_into_periods(project, year, month):
     try:
         year_int = int(year) if year else 0
         month_int = int(month) if month else 0
-        
+
         if year_int == 0 or month_int == 0:
             return []
-            
-        month_start = f"{year_int}-{month_int:02d}-01"
-        month_end = get_last_day(month_start)
-        
-        current_date = getdate(month_start)
-        end_date = getdate(month_end)
-        
-        periods = []
-        current_ba_settings = None
-        current_cc = None
-        
-        while current_date <= end_date:
-            current_date_str = str(current_date)
-            
-            # Получаем настройки на текущую дату
-            ba_settings = get_active_settings_for_date(project, current_date_str)
-            cc = get_active_cost_center_for_date(project, current_date_str)
-            
-            # Если настройки изменились или это первый день
-            if (current_ba_settings is None or current_cc is None or 
-                not are_settings_equal(current_ba_settings, ba_settings) or
-                current_cc != cc):
-                
-                if len(periods) > 0:
-                    # Завершаем предыдущий период
-                    periods[-1]['end_date'] = str(add_days(current_date, -1))
-                    periods[-1]['days'] = date_diff(
-                        getdate(periods[-1]['end_date']), 
-                        getdate(periods[-1]['start_date'])
-                    ) + 1
-                
-                # Начинаем новый период
-                periods.append({
-                    'start_date': current_date_str,
-                    'end_date': str(end_date),  # временно до конца месяца
-                    'business_areas': ba_settings.get('business_areas', []),
-                    'cost_center': cc,  # Добавляем Cost Center
-                    'days': 0
-                })
-                current_ba_settings = ba_settings
-                current_cc = cc
-            
-            current_date = add_days(current_date, 1)
-        
-        # Завершаем последний период
-        if periods:
-            periods[-1]['end_date'] = str(end_date)
-            periods[-1]['days'] = date_diff(
-                getdate(periods[-1]['end_date']), 
-                getdate(periods[-1]['start_date'])
-            ) + 1
-        
-        # Удаляем периоды без данных (ни BA ни CC могут быть важны в зависимости от фильтра)
-        periods = [p for p in periods if p.get('business_areas') or p.get('cost_center')]
-        
-        return periods
-        
+
+        month_end = get_last_day(f"{year_int}-{month_int:02d}-01")
+        cc_history = get_cost_center_history(project, month_end)
+        ba_history = get_business_area_history(project, month_end)
+
+        return get_cached_month_periods(
+            project,
+            year_int,
+            month_int,
+            cc_history=cc_history,
+            ba_history=ba_history,
+        )
+
     except Exception as e:
         frappe.log(f"Error in split_month_into_periods: {str(e)}")
         frappe.log(traceback.format_exc())
         return []
-        
+
 def are_settings_equal(settings1, settings2):
     """
     Проверяет, одинаковы ли настройки Business Area

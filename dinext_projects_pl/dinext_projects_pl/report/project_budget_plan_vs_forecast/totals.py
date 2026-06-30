@@ -4,7 +4,23 @@ from frappe import _
 from frappe.utils import flt, cint, today, getdate
 from collections import defaultdict
 
-from .periods import get_sorted_period_fieldnames, _period_sort_key
+from .periods import apply_accumulated_values, get_sorted_period_fieldnames, _period_sort_key
+
+
+def apply_accumulated_presentation(data, columns, filters):
+	"""Strip profit rows, accumulate period values, then recompute totals and profit."""
+	data = [
+		row
+		for row in (data or [])
+		if not row.get("is_profit_row") and not row.get("is_profitability_row")
+	]
+
+	acc_filters = dict(filters or {})
+	acc_filters["accumulated_values"] = 1
+
+	data = apply_accumulated_values(data, columns, acc_filters)
+	data = add_row_totals(data, acc_filters, columns)
+	return add_profit_row(data, columns, acc_filters)
 
 def apply_forecast_actual_logic(data, filters):
     """

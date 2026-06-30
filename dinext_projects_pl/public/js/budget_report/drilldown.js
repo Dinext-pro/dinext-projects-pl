@@ -141,12 +141,13 @@ br.after_datatable_render = function () {
 		if (br.fix_table_horizontal_layout) {
 			br.fix_table_horizontal_layout();
 		}
+		br.render_budget_chart(report);
 		br.render_budget_summary(report);
 		if (br.render_sticky_summary_footer) {
 			br.render_sticky_summary_footer(report);
 		}
-		if (br.render_budget_chart) {
-			br.render_budget_chart(report);
+		if (typeof br.sync_budget_insights_layout === "function") {
+			br.sync_budget_insights_layout(report);
 		}
 
 		if (cg && cg.apply_period_boundary_classes && report.columns) {
@@ -285,6 +286,37 @@ br.decorate_budget_details_dialog = function (dialog) {
 	}
 };
 
+br.format_budget_detail_project_cell = function (project) {
+	if (!project) {
+		return "";
+	}
+	return (
+		'<a href="#" class="budget-detail-project-link" data-project="' +
+		frappe.utils.escape_html(project) +
+		'">' +
+		frappe.utils.escape_html(project) +
+		"</a>"
+	);
+};
+
+br.bind_budget_detail_project_links = function (dialog) {
+	if (!dialog || !dialog.$wrapper) {
+		return;
+	}
+	if (dialog._budget_project_links_bound) {
+		return;
+	}
+	dialog._budget_project_links_bound = true;
+	dialog.$wrapper.on("click.budget-detail-project", ".budget-detail-project-link", function (event) {
+		event.preventDefault();
+		var project = $(this).attr("data-project");
+		if (!project) {
+			return;
+		}
+		frappe.set_route("Form", "Project", project);
+	});
+};
+
 br.get_report_filter_args = function () {
 	var report = frappe.query_report;
 	var filters = report && report.get_filter_values ? report.get_filter_values() : {};
@@ -374,7 +406,7 @@ br.renderBudgetDetails = function (details, dialog) {
 			html += "<tr>";
 			html +=
 				'<td class="budget-detail-table__text-left">' +
-				frappe.utils.escape_html(row.project || "") +
+				br.format_budget_detail_project_cell(row.project) +
 				"</td>";
 			html +=
 				'<td class="budget-detail-table__text-left">' +
@@ -418,6 +450,7 @@ br.renderBudgetDetails = function (details, dialog) {
 	}
 
 	dialog.fields_dict.html_details.set_value(html);
+	br.bind_budget_detail_project_links(dialog);
 };
 
 br.showNoDataMessage = function (dialog) {
@@ -650,7 +683,7 @@ br.renderTotalBudgetDetails = function (details, dialog, type) {
 			html += "<tr>";
 			html +=
 				'<td class="budget-detail-table__text-left">' +
-				frappe.utils.escape_html(row.project || "") +
+				br.format_budget_detail_project_cell(row.project) +
 				"</td>";
 			html +=
 				'<td class="budget-detail-table__text-left">' +
@@ -694,6 +727,7 @@ br.renderTotalBudgetDetails = function (details, dialog, type) {
 	}
 
 	dialog.fields_dict.html_details.set_value(html);
+	br.bind_budget_detail_project_links(dialog);
 };
 
 br.resolve_summary_drill_meta = function (fieldname) {
@@ -949,7 +983,7 @@ br.renderProfitDetails = function (details, dialog) {
 			html += "<tr>";
 			html +=
 				'<td class="budget-detail-table__text-left">' +
-				frappe.utils.escape_html(row.project || "") +
+				br.format_budget_detail_project_cell(row.project) +
 				"</td>";
 			html +=
 				'<td class="budget-detail-table__amount">' + br.formatCurrency(row.income) + "</td>";
@@ -996,6 +1030,7 @@ br.renderProfitDetails = function (details, dialog) {
 	}
 
 	dialog.fields_dict.html_details.set_value(html);
+	br.bind_budget_detail_project_links(dialog);
 };
 
 br.showTotalProfitDetails = function (type) {
@@ -1120,7 +1155,7 @@ br.renderTotalProfitDetails = function (details, dialog, type) {
 			html += "<tr>";
 			html +=
 				'<td class="budget-detail-table__text-left">' +
-				frappe.utils.escape_html(row.project || "") +
+				br.format_budget_detail_project_cell(row.project) +
 				"</td>";
 			html += '<td class="budget-detail-table__amount">' + br.formatCurrency(income) + "</td>";
 			html += '<td class="budget-detail-table__amount">' + br.formatCurrency(expense) + "</td>";
@@ -1161,6 +1196,7 @@ br.renderTotalProfitDetails = function (details, dialog, type) {
 	}
 
 	dialog.fields_dict.html_details.set_value(html);
+	br.bind_budget_detail_project_links(dialog);
 };
 
 br.open_profit_gl_drilldown = function (fieldname) {
@@ -1431,16 +1467,33 @@ br.resolve_gl_filter_projects = function () {
 		return Promise.resolve([]);
 	}
 
-	return frappe.db
-		.get_list("Project", {
-			filters: { custom_project_portfolio: ["in", portfolios] },
-			fields: ["name"],
-			limit: 0,
+	return frappe
+		.call({
+			method:
+				"dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.project_budget_plan_vs_forecast.get_report_project_options",
+			args: {
+				txt: "",
+				company: filters.company,
+			},
 		})
-		.then(function (rows) {
-			return (rows || []).map(function (row) {
-				return row.name;
+		.then(function (response) {
+			var writable = (response.message || []).map(function (row) {
+				return row.value;
 			});
+			if (!portfolios.length) {
+				return writable;
+			}
+			return frappe.db
+				.get_list("Project", {
+					filters: { custom_project_portfolio: ["in", portfolios], name: ["in", writable] },
+					fields: ["name"],
+					limit: 0,
+				})
+				.then(function (rows) {
+					return (rows || []).map(function (row) {
+						return row.name;
+					});
+				});
 		});
 };
 
@@ -1474,8 +1527,31 @@ br.navigate_to_general_ledger = function (route_options) {
 	if (typeof br.cleanup_budget_report_page_layout === "function") {
 		br.cleanup_budget_report_page_layout();
 	}
+	br.maybe_show_allocation_gl_disclaimer();
 	frappe.route_options = route_options;
 	frappe.set_route("query-report", "General Ledger");
+};
+
+br.maybe_show_allocation_gl_disclaimer = function () {
+	var report = frappe.query_report;
+	if (!report || !report.get_filter_value) {
+		return;
+	}
+	if (!cint(report.get_filter_value("apply_cc_allocation"))) {
+		return;
+	}
+	var filters = report.get_filter_values ? report.get_filter_values() : {};
+	var has_cc = br.normalize_report_filter_array(filters.cost_center).length;
+	var has_ba = br.normalize_report_filter_array(filters.business_area).length;
+	if (!has_cc && !has_ba) {
+		return;
+	}
+	frappe.show_alert({
+		message: __(
+			"Report actuals use cost center allocation; GL drill shows direct postings."
+		),
+		indicator: "orange",
+	});
 };
 
 br.is_actual_cell_gl_drilldown = function (fieldname) {
@@ -1646,18 +1722,32 @@ br.ensure_budget_pl_summary = function (report) {
 	}
 	if ($existing.length) {
 		report.$budget_pl_summary = $existing;
+		if (typeof br.sync_budget_insights_layout === "function") {
+			br.sync_budget_insights_layout(report);
+		}
 		return $existing;
 	}
 
 	var $summary = $('<div class="report-summary budget-pl-summary"></div>');
+	var $insights = br.ensure_budget_report_insights_header(report);
 	var $filters = $page.find(".page-form.budget-report-filters-form").first();
 	if (!$filters.length) {
 		$filters = $page.find(".page-form").first();
 	}
 	var $report = (report && report.$report) || $page.find(".report-wrapper").first();
 
-	if ($filters.length) {
-		$summary.insertAfter($filters);
+	if ($insights && $insights.length) {
+		var $chart = $insights.find(".budget-report-chart-container").first();
+		if ($chart.length) {
+			$summary.insertAfter($chart);
+		} else {
+			$summary.appendTo($insights);
+		}
+		if (typeof br.sync_budget_insights_layout === "function") {
+			br.sync_budget_insights_layout(report);
+		}
+	} else if ($filters.length) {
+		$summary.insertBefore($filters);
 	} else if ($report.length) {
 		$summary.insertBefore($report);
 	} else {
@@ -1694,11 +1784,20 @@ br.build_budget_summary_totals = function (report) {
 
 	var income_display = 0;
 	var expense_display = 0;
+	var accumulated_values = cint(
+		report.get_filter_value && report.get_filter_value("accumulated_values")
+	);
 
-	period_groups.forEach(function (group) {
-		income_display += br.sum_row_fields(income_roots, group.display);
-		expense_display += br.sum_row_fields(expense_roots, group.display);
-	});
+	if (accumulated_values && period_groups.length) {
+		var last_group = period_groups[period_groups.length - 1];
+		income_display = br.sum_row_fields(income_roots, last_group.display);
+		expense_display = br.sum_row_fields(expense_roots, last_group.display);
+	} else {
+		period_groups.forEach(function (group) {
+			income_display += br.sum_row_fields(income_roots, group.display);
+			expense_display += br.sum_row_fields(expense_roots, group.display);
+		});
+	}
 
 	return {
 		income: income_display,
@@ -1760,6 +1859,10 @@ br.render_budget_summary = function (report) {
 	});
 
 	$summary.css("display", "flex").show();
+
+	if (typeof br.sync_budget_insights_layout === "function") {
+		br.sync_budget_insights_layout(report);
+	}
 };
 
 br.setup_budget_summary_hooks = function (report) {
