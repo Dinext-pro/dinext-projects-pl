@@ -6,6 +6,8 @@ from frappe.tests.utils import FrappeTestCase
 
 from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.permissions import (
 	apply_report_project_permissions,
+	get_report_project_options,
+	get_writable_report_project_names,
 	get_writable_report_projects,
 )
 from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.project_budget_plan_vs_forecast import (
@@ -67,6 +69,24 @@ class TestProjectBudgetPlanVsForecastPermissions(FrappeTestCase):
 		apply_report_project_permissions(filters)
 		self.assertEqual(filters.get("project"), self.writable_project.name)
 		self.assertEqual(filters.get("_report_writable_projects"), [self.writable_project.name])
+
+	def test_get_writable_report_project_names_requires_write_permission(self):
+		frappe.set_user(self.test_user)
+		writable = get_writable_report_project_names(company=self.company)
+		self.assertIn(self.writable_project.name, writable)
+		self.assertNotIn(self.readonly_project.name, writable)
+
+	def test_get_report_project_options_shows_project_name(self):
+		frappe.set_user(self.test_user)
+		options = get_report_project_options(company=self.company)
+		writable_option = next(
+			(option for option in options if option["value"] == self.writable_project.name),
+			None,
+		)
+		self.assertIsNotNone(writable_option)
+		self.assertEqual(writable_option["label"], self.writable_project.project_name)
+		self.assertIn(self.writable_project.name, writable_option["description"])
+		self.assertNotIn(self.readonly_project.name, [option["value"] for option in options])
 
 	def test_execute_excludes_projects_without_write_permission(self):
 		self._seed_project_budget(self.writable_project.name, 1000)

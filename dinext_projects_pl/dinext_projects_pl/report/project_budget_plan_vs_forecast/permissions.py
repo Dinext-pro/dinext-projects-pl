@@ -78,57 +78,37 @@ def apply_report_project_permissions(filters) -> None:
 		filters["project"] = allowed
 
 
-def append_writable_projects_sql(conditions, filter_values, filters, project_column: str) -> None:
-	"""Restrict SQL to writable projects when report is not scoped to explicit project filter."""
-	if filters.get("project"):
-		return
-
-	writable = filters.get("_report_writable_projects")
-	if writable is None:
-		writable = get_writable_report_projects(filters)
-		filters["_report_writable_projects"] = writable
-
-	if not writable:
-		conditions.append("1=0")
-		return
-
-	conditions.append(f"{project_column} IN %(report_writable_projects)s")
-	filter_values["report_writable_projects"] = tuple(writable)
-
-
-def append_writable_projects_query(query: str, params: dict, filters, project_column: str) -> str:
-	"""String-builder variant for draft-invoice SQL fragments."""
-	if filters.get("project"):
-		return query
-
-	writable = filters.get("_report_writable_projects")
-	if writable is None:
-		writable = get_writable_report_projects(filters)
-		filters["_report_writable_projects"] = writable
-
-	if not writable:
-		return query + " AND 1=0"
-
-	params["report_writable_projects"] = tuple(writable)
-	return query + f" AND {project_column} IN %(report_writable_projects)s"
-
-
 def restrict_to_writable_projects(projects: list[str], filters) -> list[str]:
 	writable = set(filters.get("_report_writable_projects") or get_writable_report_projects(filters))
 	return [project for project in projects if project in writable]
 
 
+def get_writable_report_project_names(company: str | None = None) -> list[str]:
+	"""Return project names the current user can read and write for the report."""
+	company = company or frappe.defaults.get_user_default("Company")
+	return get_writable_report_projects({"company": company})
+
+
 def get_report_project_options(txt: str = "", company: str | None = None) -> list[dict]:
-	"""MultiSelectList options: only projects with read + write access."""
-	filters = {"company": company or frappe.defaults.get_user_default("Company")}
-	projects = get_writable_report_projects(filters)
-	search = (txt or "").strip().lower()
+	"""MultiSelectList options: search_link format, limited to read + write projects."""
+	from frappe.desk.search import search_link
+
+	company = company or frappe.defaults.get_user_default("Company")
+	scope = {"company": company}
+	writable = set(get_writable_report_projects(scope))
+	if not writable:
+		return []
 
 	options = []
-	for project in projects:
-		if search and search not in project.lower():
+	for option in search_link(
+		"Project",
+		(txt or "").strip(),
+		filters=scope,
+		page_length=50,
+	):
+		if option.get("value") not in writable:
 			continue
-		options.append({"value": project, "description": project})
+		options.append(option)
 		if len(options) >= 20:
 			break
 

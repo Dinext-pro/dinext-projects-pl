@@ -1,5 +1,6 @@
 # Copyright (c) 2025, Dinord and contributors
 import frappe
+from .debug_utils import _report_debug
 from frappe.utils import flt
 from collections import defaultdict
 
@@ -8,7 +9,7 @@ def build_hierarchy_for_project(project_data, accounts, parent_children_map):
     Строит иерархию для одного проекта
     Возвращает словарь {account: {period_key: {'plan': value, 'forecast': value}}}
     """
-    frappe.log(f"=== BUILD HIERARCHY FOR PROJECT START ===")
+    _report_debug(f"=== BUILD HIERARCHY FOR PROJECT START ===")
     
     # Создаем структуру для хранения данных проекта
     project_hierarchy = {}
@@ -34,7 +35,7 @@ def build_hierarchy_for_project(project_data, accounts, parent_children_map):
             project_hierarchy[account]['data'][period_key]['forecast'] = flt(row['forecast'])
             # Отмечаем, что у этого счета есть СВОИ данные за этот период
             project_hierarchy[account]['has_own_data'][period_key] = True
-            frappe.log(f"  Added OWN data to {account}: {period_key} plan={row['plan']}, forecast={row['forecast']}")
+            _report_debug(f"  Added OWN data to {account}: {period_key} plan={row['plan']}, forecast={row['forecast']}")
     
     # 3. Находим максимальный уровень вложенности
     max_indent = 0
@@ -55,13 +56,13 @@ def build_hierarchy_for_project(project_data, accounts, parent_children_map):
         account_indent[acc.name] = indent
         max_indent = max(max_indent, indent)
     
-    frappe.log(f"Account indents: {account_indent}")
-    frappe.log(f"Starting aggregation from level {max_indent} to 0")
+    _report_debug(f"Account indents: {account_indent}")
+    _report_debug(f"Starting aggregation from level {max_indent} to 0")
     
     # 4. Агрегируем снизу вверх
     for current_indent in range(max_indent, -1, -1):
         accounts_at_level = [acc.name for acc in accounts if account_indent.get(acc.name, 0) == current_indent]
-        frappe.log(f"Processing level {current_indent}, accounts: {accounts_at_level}")
+        _report_debug(f"Processing level {current_indent}, accounts: {accounts_at_level}")
         
         for account_name in accounts_at_level:
             account_info = project_hierarchy.get(account_name)
@@ -79,8 +80,8 @@ def build_hierarchy_for_project(project_data, accounts, parent_children_map):
                 if child in project_hierarchy:
                     all_child_periods.update(project_hierarchy[child]['data'].keys())
             
-            frappe.log(f"  Account {account_name}, children: {children}")
-            frappe.log(f"  Child periods: {all_child_periods}")
+            _report_debug(f"  Account {account_name}, children: {children}")
+            _report_debug(f"  Child periods: {all_child_periods}")
             
             for period_key in all_child_periods:
                 # P&L semantics: for each value type, own value takes precedence.
@@ -107,13 +108,13 @@ def build_hierarchy_for_project(project_data, accounts, parent_children_map):
                     updated = True
 
                 if updated:
-                    frappe.log(
+                    _report_debug(
                         f"  {account_name} filled missing values from children for {period_key}: "
                         f"own plan={current_plan}, children plan={total_plan}, "
                         f"own forecast={current_forecast}, children forecast={total_forecast}"
                     )
     
-    frappe.log(f"=== BUILD HIERARCHY FOR PROJECT END ===")
+    _report_debug(f"=== BUILD HIERARCHY FOR PROJECT END ===")
     return project_hierarchy
 
 def add_account_hierarchy(account, all_accounts, combined_data, data, indent):
@@ -146,7 +147,7 @@ def accumulate_all_values_upwards(data, parent_children_map, filters):
     Аккумулирует ВСЕ типы данных (plan, forecast, actual) вверх по иерархии
     Как в старой версии кода
     """
-    frappe.log("=== ACCUMULATE ALL VALUES UPWARDS START ===")
+    _report_debug("=== ACCUMULATE ALL VALUES UPWARDS START ===", filters)
     
     if not data:
         return data
@@ -214,5 +215,5 @@ def accumulate_all_values_upwards(data, parent_children_map, filters):
                         if not row.get("has_own_data"):
                             row["is_aggregated"] = True
     
-    frappe.log("=== ACCUMULATE ALL VALUES UPWARDS END ===")
+    _report_debug("=== ACCUMULATE ALL VALUES UPWARDS END ===", filters)
     return data

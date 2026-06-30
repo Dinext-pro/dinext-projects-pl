@@ -17,8 +17,9 @@ from .totals import apply_forecast_actual_logic, add_row_totals, add_profit_row
 from .periods import aggregate_data_by_granularity
 from . import drilldown as budget_drilldown
 from . import permissions as budget_permissions
+from .debug_utils import _report_debug
 
-__all__ = ["execute", "get_data", "get_budget_details", "get_profit_details", "get_report_project_options"]
+__all__ = ["execute", "get_data", "get_budget_details", "get_profit_details", "get_report_project_options", "get_writable_report_project_names"]
 
 
 @frappe.whitelist()
@@ -86,6 +87,11 @@ def get_profit_details(
 
 
 @frappe.whitelist()
+def get_writable_report_project_names(company=None):
+	return budget_permissions.get_writable_report_project_names(company=company)
+
+
+@frappe.whitelist()
 def get_report_project_options(txt="", company=None):
 	return budget_permissions.get_report_project_options(txt=txt, company=company)
 
@@ -94,14 +100,14 @@ def execute(filters=None):
     if not filters:
         filters = {}
 
-    frappe.log("=== START REPORT EXECUTION ===")
-    frappe.log(f"ALL FILTERS: {filters}")
+    _report_debug("=== START REPORT EXECUTION ===", filters)
+    _report_debug(f"ALL FILTERS: {filters}", filters)
 
     validate_filters(filters)
     data = get_data(filters)
     data = aggregate_data_by_granularity(data, filters)
 
-    frappe.log(f"Total data rows after get_data: {len(data)}")
+    _report_debug(f"Total data rows after get_data: {len(data)}", filters)
 
     columns = get_columns(filters, data)
 
@@ -117,9 +123,9 @@ def execute(filters=None):
     data = add_row_totals(data, period_filters, columns)
     data = add_profit_row(data, columns, period_filters)
 
-    frappe.log(f"Final data rows: {len(data)}")
-    frappe.log(f"Final columns: {[col['fieldname'] for col in columns]}")
-    frappe.log("=== END REPORT EXECUTION ===")
+    _report_debug(f"Final data rows: {len(data)}", filters)
+    _report_debug(f"Final columns: {[col['fieldname'] for col in columns]}", filters)
+    _report_debug("=== END REPORT EXECUTION ===", filters)
 
     return columns, data
 
@@ -207,6 +213,6 @@ def get_data(filters):
 
         return data
     except Exception as e:
-        frappe.log(f"Error in get_data: {str(e)}")
+        _report_debug(f"Error in get_data: {str(e)}", filters)
         frappe.log_error(f"Error in get_data: {traceback.format_exc()}")
         return []

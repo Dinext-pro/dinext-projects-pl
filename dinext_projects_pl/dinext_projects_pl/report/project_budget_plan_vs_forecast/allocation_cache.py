@@ -4,6 +4,12 @@
 import frappe
 from frappe.utils import flt, getdate, add_days, get_last_day, date_diff
 
+from .query_builder import (
+	allocation_history_queries,
+	build_cost_center_allocation_children_query,
+	build_cost_center_allocation_query,
+)
+
 
 class ReportAllocationCache:
 	__slots__ = (
@@ -43,19 +49,8 @@ def prefetch_allocation_histories(projects):
 
 	missing_cc = [p for p in projects if p not in cache.cc_by_project]
 	if missing_cc:
-		rows = frappe.db.sql(
-			"""
-			SELECT
-				parent AS project,
-				cct_cost_center AS cost_center,
-				cct_valid_from AS valid_from
-			FROM `tabCost Center Table`
-			WHERE parent IN %(projects)s
-			ORDER BY parent, cct_valid_from DESC
-			""",
-			{"projects": tuple(missing_cc)},
-			as_dict=1,
-		)
+		cc_query, _ = allocation_history_queries(missing_cc)
+		rows = cc_query.run(as_dict=True)
 		for row in rows:
 			cache.cc_by_project.setdefault(row.project, []).append(row)
 		for project in missing_cc:
@@ -63,20 +58,8 @@ def prefetch_allocation_histories(projects):
 
 	missing_ba = [p for p in projects if p not in cache.ba_by_project]
 	if missing_ba:
-		rows = frappe.db.sql(
-			"""
-			SELECT
-				parent AS project,
-				business_area,
-				percent,
-				valid_from
-			FROM `tabCost Business Area`
-			WHERE parent IN %(projects)s
-			ORDER BY parent, valid_from DESC, creation DESC
-			""",
-			{"projects": tuple(missing_ba)},
-			as_dict=1,
-		)
+		_, ba_query = allocation_history_queries(missing_ba)
+		rows = ba_query.run(as_dict=True)
 		for row in rows:
 			cache.ba_by_project.setdefault(row.project, []).append(row)
 		for project in missing_ba:
@@ -225,31 +208,13 @@ def get_cached_cost_center_allocation(main_cost_center, target_date):
 	if cache and cache_key in cache.cc_allocation:
 		return cache.cc_allocation[cache_key]
 
-	allocation = frappe.db.sql(
-		"""
-		SELECT name, valid_from
-		FROM `tabCost Center Allocation`
-		WHERE main_cost_center = %s
-			AND docstatus = 1
-			AND valid_from <= %s
-		ORDER BY valid_from DESC
-		LIMIT 1
-		""",
-		(main_cost_center, target_date),
-		as_dict=1,
-	)
+	allocation = build_cost_center_allocation_query(main_cost_center, target_date).run(as_dict=True)
 
 	if not allocation:
 		result = None
 	else:
-		children = frappe.db.sql(
-			"""
-			SELECT cost_center, percentage
-			FROM `tabCost Center Allocation Percentage`
-			WHERE parent = %s
-			""",
-			allocation[0].name,
-			as_dict=1,
+		children = build_cost_center_allocation_children_query(allocation[0].name).run(
+			as_dict=True
 		)
 		if not children:
 			result = None
