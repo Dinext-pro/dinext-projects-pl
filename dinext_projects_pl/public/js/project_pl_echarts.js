@@ -414,6 +414,10 @@ function get_pl_profit_label_layout(profitValue, lineY, gapPx = PL_CHART_PROFIT_
 }
 
 function get_pl_chart_dataset_layer(dataset) {
+    if (dataset.plLayer) {
+        return dataset.plLayer;
+    }
+
     const name = String(dataset.name || "");
     if (name.includes(__("Cumulative"))) {
         return "cumulative";
@@ -425,10 +429,20 @@ function get_pl_chart_dataset_layer(dataset) {
 }
 
 function is_pl_cumulative_profit_series(dataset) {
+    if (dataset.plSeriesKind === "cumulative_profit") {
+        return true;
+    }
     return String(dataset.name || "").includes(__("Cumulative profit"));
 }
 
 function is_pl_cumulative_volume_series(dataset) {
+    if (
+        dataset.plSeriesKind === "cumulative_income" ||
+        dataset.plSeriesKind === "cumulative_expense"
+    ) {
+        return true;
+    }
+
     const name = String(dataset.name || "");
     return (
         name.includes(__("Cumulative income")) || name.includes(__("Cumulative expenses"))
@@ -436,6 +450,27 @@ function is_pl_cumulative_volume_series(dataset) {
 }
 
 function get_pl_chart_dataset_color(dataset, index, palette, frm) {
+    if (dataset.plSeriesKind === "cumulative_income") {
+        if (frm.bg_hide_plan) {
+            return palette[0];
+        }
+        return palette[dataset.plIsPlan ? 0 : 1];
+    }
+
+    if (dataset.plSeriesKind === "cumulative_expense") {
+        if (frm.bg_hide_plan) {
+            return palette[1];
+        }
+        return palette[dataset.plIsPlan ? 2 : 3];
+    }
+
+    if (dataset.plSeriesKind === "cumulative_profit") {
+        if (frm.bg_hide_plan) {
+            return palette[3];
+        }
+        return palette[dataset.plIsPlan ? 4 : 5];
+    }
+
     if (!is_pl_cumulative_volume_series(dataset)) {
         return palette[index] || palette[palette.length - 1];
     }
@@ -536,11 +571,14 @@ function build_pl_chart_series_item(dataset, color, layer, frm) {
         };
     } else if (layer === "cumulative") {
         const isProfitSeries = is_pl_cumulative_profit_series(dataset);
+        const useArea =
+            isProfitSeries ||
+            (frm.budget_accumulated_values && is_pl_cumulative_volume_series(dataset));
         series = {
             ...build_pl_line_series(dataset.name, dataset.values, color, {
                 showLine: true,
                 showSymbol: false,
-                area: isProfitSeries,
+                area: useArea,
                 lineWidth: isProfitSeries ? 2 : 1,
             }),
             z: PL_CHART_LAYER_Z.cumulative,

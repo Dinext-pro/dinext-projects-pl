@@ -185,10 +185,6 @@ def accumulate_all_values_upwards(data, parent_children_map, filters):
                     
                     current_value = flt(row.get(key, 0))
                     
-                    # Если у узла уже есть собственные данные, не перезаписываем их
-                    if current_value != 0 and row.get("has_own_data"):
-                        continue
-                    
                     # Суммируем от детей
                     total_from_children = 0
                     for child in children:
@@ -196,8 +192,21 @@ def accumulate_all_values_upwards(data, parent_children_map, filters):
                         child_row = data_by_account.get(child_name)
                         if child_row:
                             total_from_children += flt(child_row.get(key, 0))
+
+                    # P&L rollup_fact_budget: actual = own + children
+                    if prefix == "actual_":
+                        combined = current_value + total_from_children
+                        if combined != 0:
+                            row[key] = combined
+                            row["has_value"] = True
+                            if total_from_children != 0:
+                                row["is_aggregated"] = True
+                        continue
+
+                    # plan_/forecast_: own non-zero is not overwritten by children
+                    if current_value != 0 and row.get("has_own_data"):
+                        continue
                     
-                    # Обновляем значение
                     if total_from_children != 0:
                         row[key] = total_from_children
                         row["has_value"] = True

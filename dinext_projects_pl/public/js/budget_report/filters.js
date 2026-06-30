@@ -31,12 +31,19 @@ br.ru_fallback_translations = {
 	"Project Budget Plan vs Forecast": "План-Факт-Прогноз Бюджета",
 	"Project Portfolio": "Портфель проекта",
 	"Show Future Fact": "Показывать будущий факт",
+	"GL drill-down does not include draft invoices.": "Детализация в GL не включает черновики.",
 	"Show Plan": "Показывать план",
 	"Show Zero Columns": "Показывать нулевые колонки",
 	"Show Zero Rows": "Показывать нулевые строки",
 	"Total Expense": "Всего расходов",
 	"Total Income": "Суммарный доход",
 	"Net Profit": "Чистая прибыль",
+	"Cumulative income - plan": "Накопленный доход - план",
+	"Cumulative income": "Накопленный доход",
+	"Cumulative expenses - plan": "Накопленные расходы - план",
+	"Cumulative expenses": "Накопленные расходы",
+	"Cumulative profit - plan": "Накопленная прибыль - план",
+	"Cumulative profit": "Накопленная прибыль",
 	"To Period": "Период по",
 	"To view GL entries, select Fact Only and disable Show Plan.": "Для просмотра проводок выберите режим «Только факт» и отключите «Показывать план».",
 	"Quarter": "Квартал",
@@ -70,7 +77,19 @@ dinext_projects_pl.budget_plan_vs_forecast.filters = [
 		label: br.__("Project"),
 		fieldtype: "MultiSelectList",
 		get_data: function (txt) {
-			return budget_report_link_options("Project", txt);
+			var company = frappe.query_report.get_filter_value("company");
+			return frappe
+				.call({
+					method:
+						"dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.project_budget_plan_vs_forecast.get_report_project_options",
+					args: {
+						txt: txt || "",
+						company: company,
+					},
+				})
+				.then(function (response) {
+					return response.message || [];
+				});
 		},
 		options: "Project",
 	},
@@ -176,6 +195,14 @@ dinext_projects_pl.budget_plan_vs_forecast.filters = [
 		label: br.__("Accumulated Values"),
 		fieldtype: "Check",
 		default: 0,
+		on_change: function (report) {
+			report = report || frappe.query_report;
+			if (!report || !report._budget_source_snapshot) {
+				return;
+			}
+			br.apply_budget_presentation(report);
+			br.rerender_budget_presentation(report);
+		},
 	},
 	{
 		fieldname: "enable_drill_down",
@@ -187,6 +214,7 @@ dinext_projects_pl.budget_plan_vs_forecast.filters = [
 	{
 		fieldname: "include_future_actual",
 		label: br.__("Show Future Fact"),
+		description: br.__("GL drill-down does not include draft invoices."),
 		fieldtype: "Check",
 		default: 0,
 	},
@@ -457,10 +485,11 @@ br.cleanup_budget_report_page_layout = function (options) {
 		.removeClass(BUDGET_REPORT_FILTER_LAYOUT_CLASSES);
 
 	if (options.remove_summary !== false) {
-		$page.find(".budget-pl-summary, .budget-summary-overlay").remove();
+		$page.find(".budget-pl-summary, .budget-summary-overlay, .budget-report-insights").remove();
 		var report = frappe.query_report;
 		if (report) {
 			report.$budget_pl_summary = null;
+			report.$budget_report_insights = null;
 		}
 	}
 };
@@ -507,6 +536,7 @@ dinext_projects_pl.budget_plan_vs_forecast.setup_filter_layout = function (repor
 		: report.page.wrapper.find(".page-form");
 
 	$form.addClass("budget-report-filters-form");
+	br.ensure_budget_report_insights_header(report);
 
 	$form.children(".form-group, .frappe-control").each(function () {
 		var $field = $(this);

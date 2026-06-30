@@ -4,6 +4,7 @@ from frappe import _
 from frappe.utils import cint, flt
 
 from .validate import validate_filters
+from .totals import apply_accumulated_presentation
 
 
 @frappe.whitelist()
@@ -17,6 +18,9 @@ def export_budget_report(filters=None):
 	filters = filters or {}
 	validate_filters(filters)
 	columns, data = execute(filters)
+
+	if filters.get("accumulated_values"):
+		data = apply_accumulated_presentation(data, columns, filters)
 
 	xlsx_data, column_widths = build_grouped_xlsx_data(columns, data)
 

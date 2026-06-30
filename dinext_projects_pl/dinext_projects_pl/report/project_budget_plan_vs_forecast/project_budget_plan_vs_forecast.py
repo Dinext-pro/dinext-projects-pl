@@ -10,12 +10,15 @@ from .validate import validate_filters
 from .columns import get_columns, add_total_columns, filter_zero_columns
 from .budget_loader import get_accounts, get_budget_data
 from .actual_loader import get_actual_data_simple
+from .allocation_cache import clear_report_cache, init_report_cache, prefetch_allocation_histories
+from .permissions import get_writable_report_projects
 from .hierarchy import add_account_hierarchy, accumulate_all_values_upwards
 from .totals import apply_forecast_actual_logic, add_row_totals, add_profit_row
-from .periods import apply_accumulated_values, aggregate_data_by_granularity
+from .periods import aggregate_data_by_granularity
 from . import drilldown as budget_drilldown
+from . import permissions as budget_permissions
 
-__all__ = ["execute", "get_data", "get_budget_details", "get_profit_details"]
+__all__ = ["execute", "get_data", "get_budget_details", "get_profit_details", "get_report_project_options"]
 
 
 @frappe.whitelist()
@@ -82,6 +85,11 @@ def get_profit_details(
 	)
 
 
+@frappe.whitelist()
+def get_report_project_options(txt="", company=None):
+	return budget_permissions.get_report_project_options(txt=txt, company=company)
+
+
 def execute(filters=None):
     if not filters:
         filters = {}
@@ -102,11 +110,12 @@ def execute(filters=None):
 
     columns = add_total_columns(columns, filters)
 
-    if filters.get("accumulated_values"):
-        data = apply_accumulated_values(data, columns, filters)
+    # Period-mode totals only; accumulated presentation is client-side (export uses apply_accumulated_presentation).
+    period_filters = dict(filters)
+    period_filters["accumulated_values"] = 0
 
-    data = add_row_totals(data, filters, columns)
-    data = add_profit_row(data, columns, filters)
+    data = add_row_totals(data, period_filters, columns)
+    data = add_profit_row(data, columns, period_filters)
 
     frappe.log(f"Final data rows: {len(data)}")
     frappe.log(f"Final columns: {[col['fieldname'] for col in columns]}")
@@ -115,10 +124,24 @@ def execute(filters=None):
     return columns, data
 
 
+def _prepare_report_cache(filters):
+    clear_report_cache()
+    init_report_cache()
+
+    if not (filters.get("cost_center") or filters.get("business_area")):
+        return
+
+    projects = filters.get("_report_writable_projects")
+    if projects is None:
+        projects = get_writable_report_projects(filters)
+        filters["_report_writable_projects"] = projects
+
+    prefetch_allocation_histories(projects)
+
+
 def get_data(filters):
     try:
-        frappe.log("=== GET DATA START ===")
-        frappe.log(f"ALL FILTERS RECEIVED: {filters}")
+        _prepare_report_cache(filters)
 
         accounts = get_accounts(filters)
         accounts_by_name = {acc.name: acc for acc in accounts}
@@ -127,10 +150,7 @@ def get_data(filters):
             parent_children_map[acc.parent_account or None].append(acc)
 
         budget_data = get_budget_data(filters, accounts)
-        frappe.log(f"Budget data rows: {len(budget_data)}")
-
         actual_data = get_actual_data_simple(filters)
-        frappe.log(f"Actual data rows: {len(actual_data) if actual_data else 0}")
 
         combined_data = {}
 
@@ -184,9 +204,6 @@ def get_data(filters):
 
         if not filters.get("show_zero_rows"):
             data = filter_out_zero_value_rows(data, parent_children_map, show_zero_values=False)
-
-        frappe.log(f"Final data rows: {len(data)}")
-        frappe.log("=== GET DATA END ===")
 
         return data
     except Exception as e:

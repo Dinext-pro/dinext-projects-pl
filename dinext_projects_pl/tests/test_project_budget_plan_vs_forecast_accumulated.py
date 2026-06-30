@@ -2,6 +2,7 @@
 # See license.txt
 
 import copy
+from unittest.mock import patch
 
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import flt
@@ -14,9 +15,13 @@ from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecas
 	aggregate_data_by_granularity,
 	apply_accumulated_values,
 )
+from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.project_budget_plan_vs_forecast import (
+	execute,
+)
 from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.totals import (
 	add_profit_row,
 	add_row_totals,
+	apply_accumulated_presentation,
 )
 
 
@@ -130,10 +135,11 @@ def _run_accumulated_pipeline(data, columns, filters):
 	data = copy.deepcopy(data)
 	if filters.get("period_granularity") not in (None, "", "month"):
 		data = aggregate_data_by_granularity(data, filters)
-	if filters.get("accumulated_values"):
-		data = apply_accumulated_values(data, columns, filters)
-	data = add_row_totals(data, filters, columns)
-	return add_profit_row(data, columns, filters)
+	period_filters = dict(filters)
+	period_filters["accumulated_values"] = 0
+	data = add_row_totals(data, period_filters, columns)
+	data = add_profit_row(data, columns, period_filters)
+	return apply_accumulated_presentation(data, columns, filters)
 
 
 def _build_columns_from_filters(filters):
@@ -142,6 +148,31 @@ def _build_columns_from_filters(filters):
 
 
 class TestProjectBudgetPlanVsForecastAccumulated(FrappeTestCase):
+	def test_execute_with_accumulated_values_returns_period_data(self):
+		year = 2026
+		sample_data = _sample_root_rows(year)
+		filters = {
+			"from_year": year,
+			"to_year": year,
+			"from_month": 1,
+			"to_month": 3,
+			"accumulated_values": 1,
+			"show_plan": 1,
+			"view_type": "plan_only",
+		}
+
+		with patch(
+			"dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.project_budget_plan_vs_forecast.get_data",
+			return_value=copy.deepcopy(sample_data),
+		):
+			_columns, data = execute(filters)
+
+		income = next(row for row in data if row.get("account") == "Income Root")
+
+		self.assertEqual(income[f"plan_{year}_01"], 100)
+		self.assertEqual(income[f"plan_{year}_02"], 50)
+		self.assertEqual(income[f"plan_{year}_03"], 30)
+
 	def test_apply_accumulated_values_builds_running_totals(self):
 		year = 2026
 		columns = _month_columns(year)

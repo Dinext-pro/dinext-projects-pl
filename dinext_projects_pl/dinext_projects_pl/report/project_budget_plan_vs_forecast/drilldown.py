@@ -6,7 +6,13 @@ from frappe import _
 from frappe.utils import cint, flt
 
 from .budget_loader import get_accounts, process_project_data
-from .filter_utils import normalize_filters, normalize_list_filter
+from .filter_utils import (
+	SQL_EXCLUDE_PROJECT_RISK_BUDGET,
+	normalize_filters,
+	normalize_list_filter,
+	risk_budget_sql_params,
+)
+from .permissions import filter_writable_report_projects, restrict_to_writable_projects
 from .hierarchy import build_hierarchy_for_project
 
 
@@ -169,8 +175,9 @@ def get_budget_details(
 			LEFT JOIN `tabProject` p ON pb.pb_project = p.name
 			WHERE pb.pb_account IN %(accounts)s
 				AND ({" OR ".join(formatted_conditions)})
+				{SQL_EXCLUDE_PROJECT_RISK_BUDGET}
 		"""
-		params = {"accounts": tuple(account_names)}
+		params = {"accounts": tuple(account_names), **risk_budget_sql_params()}
 
 		if project:
 			if isinstance(project, (list, tuple)):
@@ -197,7 +204,10 @@ def get_budget_details(
 				params["project_portfolio"] = project_portfolio
 
 		project_results = frappe.db.sql(projects_query, params, as_dict=1)
-		projects_to_process = [row["project"] for row in project_results if row.get("project")]
+		projects_to_process = restrict_to_writable_projects(
+			[row["project"] for row in project_results if row.get("project")],
+			filters,
+		)
 		if not projects_to_process:
 			return []
 
@@ -299,8 +309,9 @@ def _get_drill_projects_for_accounts(filters, account_names, month_periods):
 		LEFT JOIN `tabProject` p ON pb.pb_project = p.name
 		WHERE pb.pb_account IN %(accounts)s
 			AND ({" OR ".join(formatted_conditions)})
+			{SQL_EXCLUDE_PROJECT_RISK_BUDGET}
 	"""
-	params = {"accounts": tuple(account_names)}
+	params = {"accounts": tuple(account_names), **risk_budget_sql_params()}
 	project = normalize_list_filter(filters.get("project"))
 	project_portfolio = normalize_list_filter(filters.get("project_portfolio"))
 
@@ -320,7 +331,10 @@ def _get_drill_projects_for_accounts(filters, account_names, month_periods):
 			params["project_portfolio"] = tuple(project_portfolio)
 
 	project_results = frappe.db.sql(projects_query, params, as_dict=1)
-	return [row["project"] for row in project_results if row.get("project")]
+	return restrict_to_writable_projects(
+		[row["project"] for row in project_results if row.get("project")],
+		filters,
+	)
 
 
 def get_profit_details(

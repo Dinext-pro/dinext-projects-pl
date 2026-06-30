@@ -153,43 +153,144 @@ br.get_budget_chart_presentation = function (report) {
 	var filters = report.get_filter_values();
 	var raw = br.build_budget_chart_data(report);
 	var view = br.get_budget_chart_view_label(filters);
+	var accumulated = cint(filters.accumulated_values);
 	var datasets = [];
 
+	if (accumulated) {
+		if (cint(filters.show_plan)) {
+			datasets.push({
+				name: br.__("Cumulative income - plan"),
+				values: raw.plan_income,
+				chartType: "line",
+				plLayer: "cumulative",
+				plSeriesKind: "cumulative_income",
+				plIsPlan: true,
+			});
+		}
+		datasets.push({
+			name: br.__("Cumulative income") + " - " + view,
+			values: raw.actual_income,
+			chartType: "line",
+			plLayer: "cumulative",
+			plSeriesKind: "cumulative_income",
+			plIsPlan: false,
+		});
+		if (cint(filters.show_plan)) {
+			datasets.push({
+				name: br.__("Cumulative expenses - plan"),
+				values: raw.plan_expenses,
+				chartType: "line",
+				plLayer: "cumulative",
+				plSeriesKind: "cumulative_expense",
+				plIsPlan: true,
+			});
+		}
+		datasets.push({
+			name: br.__("Cumulative expenses") + " - " + view,
+			values: raw.actual_expenses,
+			chartType: "line",
+			plLayer: "cumulative",
+			plSeriesKind: "cumulative_expense",
+			plIsPlan: false,
+		});
+		if (cint(filters.show_plan)) {
+			datasets.push({
+				name: br.__("Cumulative profit - plan"),
+				values: raw.cumulative_profit_plan,
+				chartType: "line",
+				plLayer: "cumulative",
+				plSeriesKind: "cumulative_profit",
+				plIsPlan: true,
+			});
+		}
+		datasets.push({
+			name: br.__("Cumulative profit") + " - " + view,
+			values: raw.cumulative_profit_actual,
+			chartType: "line",
+			plLayer: "cumulative",
+			plSeriesKind: "cumulative_profit",
+			plIsPlan: false,
+		});
+
+		return {
+			labels: raw.labels,
+			datasets: datasets,
+			yMarkers: null,
+			dataObj: raw,
+		};
+	}
+
 	if (cint(filters.show_plan)) {
-		datasets.push({ name: br.__("Income - plan"), values: raw.plan_income, chartType: "bar" });
+		datasets.push({
+			name: br.__("Income - plan"),
+			values: raw.plan_income,
+			chartType: "bar",
+			plLayer: "bar",
+			plSeriesKind: "income",
+			plIsPlan: true,
+		});
 	}
 	datasets.push({
 		name: br.__("Income") + " - " + view,
 		values: raw.actual_income,
 		chartType: "bar",
+		plLayer: "bar",
+		plSeriesKind: "income",
+		plIsPlan: false,
 	});
 	if (cint(filters.show_plan)) {
-		datasets.push({ name: br.__("Expenses - plan"), values: raw.plan_expenses, chartType: "bar" });
+		datasets.push({
+			name: br.__("Expenses - plan"),
+			values: raw.plan_expenses,
+			chartType: "bar",
+			plLayer: "bar",
+			plSeriesKind: "expense",
+			plIsPlan: true,
+		});
 	}
 	datasets.push({
 		name: br.__("Expenses") + " - " + view,
 		values: raw.actual_expenses,
 		chartType: "bar",
+		plLayer: "bar",
+		plSeriesKind: "expense",
+		plIsPlan: false,
 	});
 	if (cint(filters.show_plan)) {
-		datasets.push({ name: br.__("Profit - plan"), values: raw.profit_plan, chartType: "line" });
+		datasets.push({
+			name: br.__("Profit - plan"),
+			values: raw.profit_plan,
+			chartType: "line",
+			plLayer: "profit",
+			plSeriesKind: "period_profit",
+			plIsPlan: true,
+		});
 	}
 	datasets.push({
 		name: br.__("Profit") + " - " + view,
 		values: raw.profit_actual,
 		chartType: "line",
+		plLayer: "profit",
+		plSeriesKind: "period_profit",
+		plIsPlan: false,
 	});
 	if (cint(filters.show_plan)) {
 		datasets.push({
 			name: br.__("Cumulative profit - plan"),
 			values: raw.cumulative_profit_plan,
 			chartType: "line",
+			plLayer: "cumulative",
+			plSeriesKind: "cumulative_profit",
+			plIsPlan: true,
 		});
 	}
 	datasets.push({
 		name: br.__("Cumulative profit") + " - " + view,
 		values: raw.cumulative_profit_actual,
 		chartType: "line",
+		plLayer: "cumulative",
+		plSeriesKind: "cumulative_profit",
+		plIsPlan: false,
 	});
 
 	return {
@@ -209,29 +310,104 @@ br.build_budget_chart_frm = function (report) {
 		budget_view_options = __("Actual only");
 	}
 
+	var company = filters.company;
+	if (Array.isArray(company)) {
+		company = company[0];
+	}
+
 	return {
-		doc: { company: filters.company },
+		doc: { company: company },
 		bg_hide_plan: !cint(filters.show_plan),
+		budget_accumulated_values: cint(filters.accumulated_values),
 		pl_chart_expanded: false,
 		hide_pl_chart_expanded_toggle: true,
 		budget_view_options: budget_view_options,
 	};
 };
 
-br.ensure_budget_chart_container = function (report) {
-	if (!report || !report.$report) {
+br.ensure_budget_report_insights_header = function (report) {
+	if (!report || !report.page) {
 		return null;
 	}
 
-	var $container = report.$report.find(".budget-report-chart-container").first();
+	var $page = report.page.wrapper.closest("#page-query-report");
+	if (!$page.length) {
+		$page = $("#page-query-report");
+	}
+	if (!$page.length) {
+		return null;
+	}
+
+	if (report.$budget_report_insights && report.$budget_report_insights.length) {
+		return report.$budget_report_insights;
+	}
+
+	var $header = $page.find(".budget-report-insights").first();
+	if (!$header.length) {
+		$header = $('<div class="budget-report-insights"></div>');
+		var $form = $page.find(".page-form.budget-report-filters-form").first();
+		if (!$form.length) {
+			$form = $page.find(".page-form").first();
+		}
+		if ($form.length) {
+			$header.insertBefore($form);
+		} else {
+			var $main = $page.find(".layout-main-section").first();
+			if ($main.length) {
+				$main.prepend($header);
+			} else {
+				report.page.wrapper.prepend($header);
+			}
+		}
+	}
+
+	report.$budget_report_insights = $header;
+	return $header;
+};
+
+br.sync_budget_insights_layout = function (report) {
+	var $insights = br.ensure_budget_report_insights_header(report);
+	if (!$insights || !$insights.length) {
+		return;
+	}
+
+	var $chart = $insights.find(".budget-report-chart-container").first();
+	var $summary = $insights.find(".budget-pl-summary").first();
+	if (!$chart.length || !$summary.length) {
+		return;
+	}
+
+	if ($summary.index() < $chart.index()) {
+		$chart.insertBefore($summary);
+	}
+};
+
+br.ensure_budget_chart_container = function (report) {
+	var $header = br.ensure_budget_report_insights_header(report);
+	if (!$header || !$header.length) {
+		return null;
+	}
+
+	var $container = $header.find(".budget-report-chart-container").first();
 	if (!$container.length) {
 		$container = $('<div class="budget-report-chart-container"></div>');
-		report.$report.prepend($container);
+		var $summary = $header.find(".budget-pl-summary").first();
+		if ($summary.length) {
+			$container.insertBefore($summary);
+		} else {
+			$header.prepend($container);
+		}
 	}
+
+	br.sync_budget_insights_layout(report);
 
 	var $chart = $container.find(".budget-report-chart").first();
 	if (!$chart.length) {
 		$chart = $('<div class="budget-report-chart"></div>').appendTo($container);
+	}
+
+	if (report && report.$report) {
+		report.$report.find(".budget-report-chart-container").remove();
 	}
 
 	return $chart.get(0);

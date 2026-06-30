@@ -5,7 +5,44 @@ from frappe.utils import flt, cint
 from collections import defaultdict
 
 from .allocation import calculate_allocation_for_month
+from .allocation_cache import prefetch_allocation_histories
+from .filter_utils import (
+	SQL_EXCLUDE_PROJECT_RISK_BUDGET,
+	get_company_names,
+	risk_budget_sql_params,
+)
 from .hierarchy import build_hierarchy_for_project
+
+def get_task_hierarchies(projects):
+    """Загружает иерархии Task для нескольких проектов одним запросом."""
+    if not projects:
+        return {}
+
+    tasks = frappe.get_all(
+        "Task",
+        filters={"project": ["in", list(projects)]},
+        fields=["name", "subject", "parent_task", "project", "lft", "rgt"],
+        order_by="lft",
+    )
+
+    by_project = defaultdict(dict)
+    for task in tasks:
+        by_project[task.project][task.name] = {
+            "name": task.name,
+            "subject": task.subject,
+            "parent_task": task.parent_task,
+            "children": [],
+        }
+
+    for task in tasks:
+        parent = task.parent_task
+        if parent and parent in by_project[task.project]:
+            by_project[task.project][parent]["children"].append(
+                by_project[task.project][task.name]
+            )
+
+    return dict(by_project)
+
 
 def get_task_hierarchy(project):
     """Получает иерархию задач для конкретного проекта"""
@@ -155,127 +192,112 @@ def aggregate_tasks_for_account_and_period(account_rows, task_hierarchy, period_
         frappe.log(f"Error in aggregate_tasks_for_account_and_period for period {period_key}, type {data_type}: {str(e)}")
         return 0
 
+def _build_raw_budget_query(filters, *, project=None, projects=None):
+    final_conditions = []
+    filter_values = {
+        "from_year": filters.get("from_year"),
+        "to_year": filters.get("to_year"),
+        **risk_budget_sql_params(),
+    }
+
+    from_month = cint(filters.get("from_month"))
+    to_month = cint(filters.get("to_month"))
+
+    if from_month:
+        final_conditions.append("pba.pba_month >= %(from_month)s")
+        filter_values["from_month"] = from_month
+
+    if to_month:
+        final_conditions.append("pba.pba_month <= %(to_month)s")
+        filter_values["to_month"] = to_month
+
+    if projects is not None:
+        final_conditions.append("pb.pb_project IN %(projects)s")
+        filter_values["projects"] = tuple(projects)
+    elif project:
+        final_conditions.append("pb.pb_project = %(project)s")
+        filter_values["project"] = project
+
+    if filters.get("project_portfolio"):
+        final_conditions.append("p.custom_project_portfolio = %(project_portfolio)s")
+        filter_values["project_portfolio"] = filters.get("project_portfolio")
+
+    where_clause = " AND ".join(final_conditions) if final_conditions else "1=1"
+
+    sql_query = """
+        SELECT
+            pb.pb_account,
+            pb.pb_project as project,
+            pbd.docname as task,
+            pba.pba_year,
+            pba.pba_month,
+            CASE
+                WHEN pbd.docname IS NULL OR pbd.docname = '' THEN 'without_task'
+                ELSE 'with_task'
+            END as data_type,
+            SUM(COALESCE(pba.pba_plan, 0)) as plan,
+            SUM(COALESCE(pba.pba_expected, 0)) as forecast
+        FROM `tabProject Budget Amount` pba
+        INNER JOIN `tabProject Budget` pb ON pba.parent = pb.name
+        LEFT JOIN `tabProject Budget Dimension` pbd ON pbd.parent = pb.name
+            AND pbd.doc = 'Task'
+        LEFT JOIN `tabProject` p ON pb.pb_project = p.name
+        WHERE pba.pba_year BETWEEN %(from_year)s AND %(to_year)s
+            AND {where_clause}
+            {risk_exclude}
+        GROUP BY pb.pb_account, pb.pb_project, pbd.docname, pba.pba_year, pba.pba_month
+        ORDER BY pb.pb_project, pb.pb_account, pba.pba_year, pba.pba_month
+    """.format(where_clause=where_clause, risk_exclude=SQL_EXCLUDE_PROJECT_RISK_BUDGET)
+
+    return sql_query, filter_values
+
+
+def get_raw_budget_data_for_projects(projects, filters):
+    """Batch-загрузка бюджетных данных для списка проектов."""
+    if not projects:
+        return []
+
+    try:
+        sql_query, filter_values = _build_raw_budget_query(filters, projects=projects)
+        return frappe.db.sql(sql_query, filter_values, as_dict=1)
+    except Exception as e:
+        frappe.log_error(
+            title="Error in get_raw_budget_data_for_projects",
+            message=traceback.format_exc(),
+        )
+        frappe.log(f"Error in get_raw_budget_data_for_projects: {str(e)}")
+        return []
+
+
 def get_raw_budget_data_for_project(project, filters):
     """
     Получает сырые бюджетные данные для конкретного проекта с РАЗДЕЛЕНИЕМ по Task
     """
     try:
-        frappe.log(f"=== GET RAW BUDGET DATA FOR PROJECT {project} START ===")
-        
-        final_conditions = []
-        filter_values = {
-            "from_year": filters.get("from_year"),
-            "to_year": filters.get("to_year"),
-            "project": project
-        }
-        
-        # Добавляем фильтрацию по месяцам - ПРЕОБРАЗУЕМ В ЧИСЛА!
-        from_month = cint(filters.get("from_month"))
-        to_month = cint(filters.get("to_month"))
-        
-        if from_month:
-            final_conditions.append("pba.pba_month >= %(from_month)s")
-            filter_values["from_month"] = from_month
-        
-        if to_month:
-            final_conditions.append("pba.pba_month <= %(to_month)s")
-            filter_values["to_month"] = to_month
-        
-        # Фильтр по проекту (обязательный для этой функции)
-        final_conditions.append("pb.pb_project = %(project)s")
-        
-        # Фильтр по портфолио (если указан)
-        if filters.get("project_portfolio"):
-            final_conditions.append("p.custom_project_portfolio = %(project_portfolio)s")
-            filter_values["project_portfolio"] = filters.get("project_portfolio")
-        
-        where_clause = " AND ".join(final_conditions) if final_conditions else "1=1"
-        
-        sql_query = """
-            SELECT 
-                pb.pb_account,
-                pb.pb_project as project,
-                pbd.docname as task,
-                pba.pba_year,
-                pba.pba_month,
-                CASE 
-                    WHEN pbd.docname IS NULL OR pbd.docname = '' THEN 'without_task'
-                    ELSE 'with_task'
-                END as data_type,
-                SUM(COALESCE(pba.pba_plan, 0)) as plan,
-                SUM(COALESCE(pba.pba_expected, 0)) as forecast
-            FROM `tabProject Budget Amount` pba
-            INNER JOIN `tabProject Budget` pb ON pba.parent = pb.name
-            LEFT JOIN `tabProject Budget Dimension` pbd ON pbd.parent = pb.name 
-                AND pbd.doc = 'Task'
-            LEFT JOIN `tabProject` p ON pb.pb_project = p.name
-            WHERE pba.pba_year BETWEEN %(from_year)s AND %(to_year)s
-                AND {where_clause}
-            GROUP BY pb.pb_account, pb.pb_project, pbd.docname, pba.pba_year, pba.pba_month
-            ORDER BY pb.pb_account, pba.pba_year, pba.pba_month
-        """.format(where_clause=where_clause)
-        
-        raw_budget_data = frappe.db.sql(sql_query, filter_values, as_dict=1)
-        
-        frappe.log(f"Raw budget data for project {project}: {len(raw_budget_data)} rows")
-        
-        # Логируем детали для отладки
-        if raw_budget_data:
-            frappe.log(f"Sample data for project {project}:")
-            for i, row in enumerate(raw_budget_data[:5]):
-                frappe.log(f"  Row {i+1}: Account='{row.get('pb_account', 'Unknown')}', "
-                          f"Month={int(row.get('pba_year', 0))}-{int(row.get('pba_month', 0)):02d}, "
-                          f"plan={row.get('plan', 0)}, forecast={row.get('forecast', 0)}")
-        else:
-            frappe.log(f"No budget data found for project {project} in period {from_month}-{to_month}")
-            
-            # Проверим более детально
-            check_query = """
-                SELECT 
-                    pba.pba_year,
-                    pba.pba_month,
-                    COUNT(*) as cnt 
-                FROM `tabProject Budget Amount` pba
-                INNER JOIN `tabProject Budget` pb ON pba.parent = pb.name
-                WHERE pb.pb_project = %s
-                    AND pba.pba_year = %s
-                GROUP BY pba.pba_year, pba.pba_month
-                ORDER BY pba.pba_year, pba.pba_month
-            """
-            check_result = frappe.db.sql(check_query, (project, filters.get("from_year")), as_dict=1)
-            frappe.log(f"Budget records by month for project {project}:")
-            for record in check_result:
-                frappe.log(f"  {record.get('pba_year')}-{record.get('pba_month')}: {record.get('cnt')} records")
-        
-        frappe.log(f"=== GET RAW BUDGET DATA FOR PROJECT {project} END ===")
-        
-        return raw_budget_data
-        
+        sql_query, filter_values = _build_raw_budget_query(filters, project=project)
+        return frappe.db.sql(sql_query, filter_values, as_dict=1)
+
     except Exception as e:
         frappe.log(f"Error in get_raw_budget_data_for_project for project {project}: {str(e)}")
         frappe.log_error(f"Error in get_raw_budget_data_for_project: {traceback.format_exc()}")
         return []
 
-def process_project_data(project, filters):
+def process_project_data(project, filters, raw_budget_data=None, task_hierarchy=None):
     """
     Обрабатывает данные для одного проекта
     Возвращает данные по статьям для этого проекта с флагом has_own_data
     """
-    frappe.log(f"=== PROCESS PROJECT DATA APPLY CC ALLOCATION VALUE: {filters.get('apply_cc_allocation', 'NOT FOUND')} ===")
-    
     from_month = cint(filters.get("from_month", 1))
     to_month = cint(filters.get("to_month", 12))
-    frappe.log(f"Processing project {project} for period {from_month}-{to_month}")
-    
-    # 1. Получаем сырые данные для проекта
-    raw_budget_data = get_raw_budget_data_for_project(project, filters)
-    
+
+    if raw_budget_data is None:
+        raw_budget_data = get_raw_budget_data_for_project(project, filters)
+
     if not raw_budget_data:
-        frappe.log(f"No budget data for project {project}")
         return []
-    
-    # 2. Получаем иерархию Task для этого проекта
-    task_hierarchy = get_task_hierarchy(project)
+
+    if task_hierarchy is None:
+        task_hierarchy = get_task_hierarchy(project)
     
     # 3. Группируем данные по счетам и периодам
     account_period_data = defaultdict(lambda: {
@@ -517,70 +539,57 @@ def get_budget_data(filters, accounts):
         frappe.log("=== GET BUDGET DATA START ===")
         frappe.log(f"Input filters: {filters}")
         
-        # Определяем список проектов для обработки
-        projects_to_process = []
-        project_filter = filters.get("project")
+        # Writable projects only (see permissions.apply_report_project_permissions).
+        projects_to_process = filters.get("_report_writable_projects")
+        if projects_to_process is None:
+            from .permissions import get_writable_report_projects
 
-        if project_filter:
-            projects_to_process = (
-                list(project_filter)
-                if isinstance(project_filter, (list, tuple))
-                else [project_filter]
-            )
-        else:
-            project_filters = {}
-            portfolio = filters.get("project_portfolio")
-            if portfolio:
-                if isinstance(portfolio, (list, tuple)):
-                    project_filters["custom_project_portfolio"] = ["in", list(portfolio)]
-                else:
-                    project_filters["custom_project_portfolio"] = portfolio
+            projects_to_process = get_writable_report_projects(filters)
+            filters["_report_writable_projects"] = projects_to_process
 
-            projects_to_process = frappe.get_all(
-                "Project", filters=project_filters, pluck="name"
-            )
-
-            frappe.log(f"Found {len(projects_to_process)} projects to process")
-        
         if not projects_to_process:
-            frappe.log("No projects to process")
             return []
-        
-        # Получаем иерархию счетов для построения структуры
+
+        needs_allocation = filters.get("cost_center") or filters.get("business_area")
+        if needs_allocation:
+            prefetch_allocation_histories(projects_to_process)
+
         parent_children_map = defaultdict(list)
         for acc in accounts:
             parent_children_map[acc.parent_account or None].append(acc)
-        
-        # Словарь для хранения иерархических данных по каждому проекту
+
         projects_hierarchy = {}
-        
-        # Обрабатываем каждый проект отдельно
+        raw_by_project = defaultdict(list)
+        for row in get_raw_budget_data_for_projects(projects_to_process, filters):
+            raw_by_project[row.get("project")].append(row)
+
+        task_hierarchies = get_task_hierarchies(projects_to_process)
+
         for project in projects_to_process:
             try:
-                frappe.log(f"=== Processing project {project} ===")
-                
-                # Получаем сырые данные для проекта
-                project_raw_data = process_project_data(project, filters)
-                frappe.log(f"Project {project} raw data: {len(project_raw_data)} rows")
-                
-                if not project_raw_data:
-                    frappe.log(f"No data for project {project}, skipping")
-                    continue
-                
-                # Строим иерархию для этого проекта
-                project_hierarchy = build_hierarchy_for_project(
-                    project_raw_data, 
-                    accounts, 
-                    parent_children_map
+                project_raw_data = process_project_data(
+                    project,
+                    filters,
+                    raw_budget_data=raw_by_project.get(project, []),
+                    task_hierarchy=task_hierarchies.get(project, {}),
                 )
-                
-                # Сохраняем иерархические данные проекта
+
+                if not project_raw_data:
+                    continue
+
+                project_hierarchy = build_hierarchy_for_project(
+                    project_raw_data,
+                    accounts,
+                    parent_children_map,
+                )
                 projects_hierarchy[project] = project_hierarchy
-                frappe.log(f"Project {project} hierarchy built successfully")
-                
+
             except Exception as e:
+                frappe.log_error(
+                    title=f"Error processing project {project}",
+                    message=traceback.format_exc(),
+                )
                 frappe.log(f"Error processing project {project}: {str(e)}")
-                frappe.log_error(f"Error processing project {project}: {traceback.format_exc()}")
                 continue
         
         if not projects_hierarchy:
@@ -605,10 +614,12 @@ def get_budget_data(filters, accounts):
 
 def get_accounts(filters):
     """Получает иерархию счетов как в финансовых отчетах - ТОЛЬКО АКТИВНЫЕ СЧЕТА (disabled = 0)"""
-    company = filters.get("company") or frappe.defaults.get_user_default("Company")
-    
-    frappe.log(f"=== GET ACCOUNTS START (company: {company}) ===")
-    
+    companies = get_company_names(filters)
+    if not companies:
+        return []
+
+    frappe.log(f"=== GET ACCOUNTS START (companies: {companies}) ===")
+
     accounts = frappe.db.sql("""
         SELECT
             name,
@@ -619,11 +630,11 @@ def get_accounts(filters):
             lft,
             rgt
         FROM `tabAccount`
-        WHERE company = %s
+        WHERE company IN %(companies)s
             AND disabled = 0
             AND root_type IN ('Income', 'Expense')
         ORDER BY lft
-    """, company, as_dict=1)
+    """, {"companies": tuple(companies)}, as_dict=1)
     
     frappe.log(f"Found {len(accounts)} ACTIVE accounts (disabled = 0)")
     frappe.log("=== GET ACCOUNTS END ===")

@@ -8,6 +8,9 @@ from frappe.utils import flt
 from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.actual_loader import (
 	get_actual_data_simple,
 )
+from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.actual_utils import (
+	signed_pl_amount,
+)
 
 
 class TestProjectBudgetPlanVsForecastActuals(FrappeTestCase):
@@ -81,6 +84,40 @@ class TestProjectBudgetPlanVsForecastActuals(FrappeTestCase):
 		actual = self._get_actual_for_account(self.income_account, 2026, 4)
 		self.assertEqual(actual, 700)
 
+	def test_signed_pl_amount_matches_gl_convention(self):
+		self.assertEqual(signed_pl_amount("Income", 300, 1000), 700)
+		self.assertEqual(signed_pl_amount("Income", 1000, 0), -1000)
+		self.assertEqual(signed_pl_amount("Expense", 1000, 300), 700)
+		self.assertEqual(signed_pl_amount("Expense", 0, 500), -500)
+
+	def test_finance_book_filter_excludes_non_default_book(self):
+		default_fb, other_fb = self._ensure_finance_books()
+		original_default_fb = frappe.db.get_value("Company", self.company, "default_finance_book")
+		frappe.db.set_value("Company", self.company, "default_finance_book", default_fb)
+
+		try:
+			self._post_journal(
+				[
+					{"account": self.expense_account, "debit": 1000, "credit": 0},
+					{"account": self.balancing_account, "debit": 0, "credit": 1000},
+				],
+				"2026-05-10",
+				finance_book=default_fb,
+			)
+			self._post_journal(
+				[
+					{"account": self.expense_account, "debit": 500, "credit": 0},
+					{"account": self.balancing_account, "debit": 0, "credit": 500},
+				],
+				"2026-05-15",
+				finance_book=other_fb,
+			)
+
+			actual = self._get_actual_for_account(self.expense_account, 2026, 5)
+			self.assertEqual(actual, 1000)
+		finally:
+			frappe.db.set_value("Company", self.company, "default_finance_book", original_default_fb)
+
 	def _get_actual_for_account(self, account, year, month):
 		rows = get_actual_data_simple(
 			{
@@ -97,7 +134,7 @@ class TestProjectBudgetPlanVsForecastActuals(FrappeTestCase):
 				return flt(row.get("actual"))
 		return 0
 
-	def _post_journal(self, accounts, posting_date):
+	def _post_journal(self, accounts, posting_date, finance_book=None):
 		import erpnext
 
 		cost_center = erpnext.get_default_cost_center(self.company)
@@ -105,6 +142,8 @@ class TestProjectBudgetPlanVsForecastActuals(FrappeTestCase):
 		je = frappe.new_doc("Journal Entry")
 		je.company = self.company
 		je.posting_date = posting_date
+		if finance_book:
+			je.finance_book = finance_book
 		for line in accounts:
 			je.append(
 				"accounts",
@@ -187,3 +226,14 @@ class TestProjectBudgetPlanVsForecastActuals(FrappeTestCase):
 	def _cleanup_project_data(project_name):
 		if frappe.db.exists("Project", project_name):
 			frappe.delete_doc("Project", project_name, ignore_permissions=True, force=1)
+
+	@classmethod
+	def _ensure_finance_books(cls):
+		default_name = "TEST-PL-ACTUALS-FB-DEFAULT"
+		other_name = "TEST-PL-ACTUALS-FB-OTHER"
+		for name in (default_name, other_name):
+			if not frappe.db.exists("Finance Book", name):
+				frappe.get_doc({"doctype": "Finance Book", "finance_book_name": name}).insert(
+					ignore_permissions=True
+				)
+		return default_name, other_name

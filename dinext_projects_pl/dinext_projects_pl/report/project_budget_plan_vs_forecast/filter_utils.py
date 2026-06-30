@@ -76,6 +76,8 @@ def normalize_filters(filters):
 	if filters.get("to_month"):
 		filters["to_month"] = cint(filters["to_month"])
 
+	_expand_company_filter(filters)
+
 	for field in ("project", "project_portfolio", "cost_center", "business_area", "company"):
 		if field not in filters:
 			continue
@@ -93,7 +95,49 @@ def normalize_filters(filters):
 
 	_expand_hierarchy_filters(filters)
 
+	from .permissions import apply_report_project_permissions
+
+	apply_report_project_permissions(filters)
+
 	return filters
+
+
+def get_company_names(filters):
+	"""Return selected company and all nested-set descendants as a list."""
+	company = filters.get("company") or frappe.defaults.get_user_default("Company")
+	if isinstance(company, (list, tuple)):
+		return [name for name in company if name]
+	if company:
+		return [company]
+	return []
+
+
+def apply_company_sql(conditions, filter_values, filters, sql_column):
+	"""Append equality or IN condition for company filter values."""
+	companies = get_company_names(filters)
+	if not companies:
+		return
+
+	if len(companies) == 1:
+		conditions.append(f"{sql_column} = %(company)s")
+		filter_values["company"] = companies[0]
+	else:
+		conditions.append(f"{sql_column} IN %(company)s")
+		filter_values["company"] = tuple(companies)
+
+
+def _expand_company_filter(filters):
+	"""Include descendant companies for group/parent company selection."""
+	company = filters.get("company")
+	if not company:
+		return
+
+	names = company if isinstance(company, list) else [company]
+	expanded = get_descendants("Company", names, "parent_company")
+	if not expanded:
+		return
+
+	filters["company"] = expanded[0] if len(expanded) == 1 else expanded
 
 
 def _expand_hierarchy_filters(filters):
@@ -114,6 +158,22 @@ def _expand_hierarchy_filters(filters):
 			continue
 
 		filters[field] = expanded[0] if len(expanded) == 1 else expanded
+
+
+def append_company_sql(query, params, filters, sql_expr):
+	"""Append AND clause for company filter values."""
+	companies = get_company_names(filters)
+	if not companies:
+		return query
+
+	if len(companies) == 1:
+		query += f" AND {sql_expr} = %(company)s"
+		params["company"] = companies[0]
+	else:
+		query += f" AND {sql_expr} IN %(company)s"
+		params["company"] = tuple(companies)
+
+	return query
 
 
 def apply_dimension_sql(conditions, filter_values, filters, field, sql_column):
@@ -202,3 +262,19 @@ def get_descendants(doctype, names, parent_field):
 		{"names": names},
 		pluck=True,
 	)
+
+
+# Match project P&L: risk reserves live in separate Project Budget rows with this dimension
+# and are excluded from financial root totals (see project_pl_calc.getFinancialRootRows).
+RISK_DIMENSION = "Project Risk"
+
+SQL_EXCLUDE_PROJECT_RISK_BUDGET = """
+	AND NOT EXISTS (
+		SELECT 1 FROM `tabProject Budget Dimension` pbd_risk
+		WHERE pbd_risk.parent = pb.name AND pbd_risk.doc = %(risk_dimension)s
+	)
+"""
+
+
+def risk_budget_sql_params():
+	return {"risk_dimension": RISK_DIMENSION}
