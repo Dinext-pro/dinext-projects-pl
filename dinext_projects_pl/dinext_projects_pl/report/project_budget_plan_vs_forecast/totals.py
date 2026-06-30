@@ -5,6 +5,7 @@ from frappe.utils import flt, cint, today, getdate
 from collections import defaultdict
 
 from .periods import apply_accumulated_values, get_sorted_period_fieldnames, _period_sort_key
+from .debug_utils import _report_debug
 
 
 def apply_accumulated_presentation(data, columns, filters):
@@ -36,8 +37,8 @@ def apply_forecast_actual_logic(data, filters):
     current_year = current_date.year
     current_month = current_date.month
     
-    frappe.log(f"Applying forecast/actual logic. Current date: {current_date}")
-    frappe.log(f"Current year/month: {current_year}/{current_month}")
+    _report_debug(f"Applying forecast/actual logic. Current date: {current_date}", filters)
+    _report_debug(f"Current year/month: {current_year}/{current_month}", filters)
     
     # Проходим по всем строкам данных
     for row in data:
@@ -54,7 +55,7 @@ def apply_forecast_actual_logic(data, filters):
                             old_value = row[key]
                             row[key] = 0
                             if old_value != 0:
-                                frappe.log(f"Zeroed forecast for past month: {key} (was {old_value})")
+                                _report_debug(f"Zeroed forecast for past month: {key} (was {old_value})", filters)
                     except (ValueError, IndexError):
                         continue
             elif key.startswith('actual_'):
@@ -68,7 +69,7 @@ def apply_forecast_actual_logic(data, filters):
                             old_value = row[key]
                             row[key] = 0
                             if old_value != 0:
-                                frappe.log(f"Zeroed actual for future month: {key} (was {old_value})")
+                                _report_debug(f"Zeroed actual for future month: {key} (was {old_value})", filters)
                     except (ValueError, IndexError):
                         continue
     
@@ -141,6 +142,22 @@ def get_root_financial_nodes(data):
     return root_income_nodes, root_expense_nodes
 
 
+def get_root_financial_nodes_from_accounts(accounts):
+    """Корневые узлы дохода/расхода по списку счетов (indent 0, как в get_data)."""
+    root_accounts = [acc for acc in (accounts or []) if not acc.get("parent_account")]
+    root_accounts.sort(key=lambda acc: (acc.get("root_type") != "Income", acc.get("lft") or 0))
+
+    root_income_nodes = []
+    root_expense_nodes = []
+    for acc in root_accounts:
+        if acc.get("root_type") == "Income":
+            root_income_nodes.append(acc["name"])
+        elif acc.get("root_type") == "Expense":
+            root_expense_nodes.append(acc["name"])
+
+    return root_income_nodes, root_expense_nodes
+
+
 def add_profit_row(data, columns, filters):
     """Добавляет строку с прибылью и рентабельностью с расчетом по месяцам"""
     if not data:
@@ -155,8 +172,8 @@ def add_profit_row(data, columns, filters):
     
     root_income_nodes, root_expense_nodes = get_root_financial_nodes(data)
     
-    frappe.log(f"Root income nodes: {root_income_nodes}")
-    frappe.log(f"Root expense nodes: {root_expense_nodes}")
+    _report_debug(f"Root income nodes: {root_income_nodes}", filters)
+    _report_debug(f"Root expense nodes: {root_expense_nodes}", filters)
     
     monthly_columns = get_sorted_period_fieldnames(columns, "plan_")
     monthly_columns.extend(get_sorted_period_fieldnames(columns, "forecast_"))
@@ -293,6 +310,6 @@ def add_profit_row(data, columns, filters):
     data.append(profit_row)
     data.append(profitability_row)
     
-    frappe.log(f"Profit row added. Monthly profit values calculated for {len(monthly_columns)} columns")
+    _report_debug(f"Profit row added. Monthly profit values calculated for {len(monthly_columns)} columns", filters)
     
     return data

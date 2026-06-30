@@ -112,20 +112,6 @@ def get_company_names(filters):
 	return []
 
 
-def apply_company_sql(conditions, filter_values, filters, sql_column):
-	"""Append equality or IN condition for company filter values."""
-	companies = get_company_names(filters)
-	if not companies:
-		return
-
-	if len(companies) == 1:
-		conditions.append(f"{sql_column} = %(company)s")
-		filter_values["company"] = companies[0]
-	else:
-		conditions.append(f"{sql_column} IN %(company)s")
-		filter_values["company"] = tuple(companies)
-
-
 def _expand_company_filter(filters):
 	"""Include descendant companies for group/parent company selection."""
 	company = filters.get("company")
@@ -160,60 +146,6 @@ def _expand_hierarchy_filters(filters):
 		filters[field] = expanded[0] if len(expanded) == 1 else expanded
 
 
-def append_company_sql(query, params, filters, sql_expr):
-	"""Append AND clause for company filter values."""
-	companies = get_company_names(filters)
-	if not companies:
-		return query
-
-	if len(companies) == 1:
-		query += f" AND {sql_expr} = %(company)s"
-		params["company"] = companies[0]
-	else:
-		query += f" AND {sql_expr} IN %(company)s"
-		params["company"] = tuple(companies)
-
-	return query
-
-
-def apply_dimension_sql(conditions, filter_values, filters, field, sql_column):
-	"""Append equality or IN condition for scalar / multi-select filter values."""
-	value = filters.get(field)
-	if not value:
-		return
-
-	if isinstance(value, (list, tuple)):
-		if len(value) == 1:
-			conditions.append(f"{sql_column} = %({field})s")
-			filter_values[field] = value[0]
-		else:
-			conditions.append(f"{sql_column} IN %({field})s")
-			filter_values[field] = tuple(value)
-	else:
-		conditions.append(f"{sql_column} = %({field})s")
-		filter_values[field] = value
-
-
-def append_dimension_sql(query, params, filters, field, sql_expr):
-	"""Append AND clause to a dynamic SQL string for scalar / multi-select values."""
-	value = filters.get(field)
-	if not value:
-		return query
-
-	if isinstance(value, (list, tuple)):
-		if len(value) == 1:
-			query += f" AND {sql_expr} = %({field})s"
-			params[field] = value[0]
-		else:
-			query += f" AND {sql_expr} IN %({field})s"
-			params[field] = tuple(value)
-	else:
-		query += f" AND {sql_expr} = %({field})s"
-		params[field] = value
-
-	return query
-
-
 def get_descendants(doctype, names, parent_field):
 	"""Expand nested hierarchy nodes to include all descendants."""
 	if not names:
@@ -226,55 +158,33 @@ def get_descendants(doctype, names, parent_field):
 	if not names:
 		return []
 
-	table = frappe.utils.get_table_name(doctype, wrap_in_backticks=True)
 	meta = frappe.get_meta(doctype)
+	expanded = set(names)
 
 	if meta.is_nested_set():
-		return frappe.db.sql(
-			f"""
-			SELECT DISTINCT child.name
-			FROM {table} child
-			INNER JOIN {table} parent ON
-				child.lft >= parent.lft AND child.rgt <= parent.rgt
-			WHERE parent.name IN %(names)s
-			ORDER BY child.lft
-			""",
-			{"names": names},
-			pluck=True,
+		from frappe.utils.nestedset import get_descendants_of
+
+		for name in names:
+			for descendant in get_descendants_of(
+				doctype, name, ignore_permissions=True
+			):
+				expanded.add(descendant)
+		return sorted(expanded)
+
+	frontier = list(names)
+	while frontier:
+		children = frappe.db.get_all(
+			doctype,
+			filters={parent_field: ["in", frontier]},
+			pluck="name",
 		)
+		frontier = [child for child in children if child not in expanded]
+		expanded.update(frontier)
 
-	parent_column = f"`{parent_field}`"
-	return frappe.db.sql(
-		f"""
-		WITH RECURSIVE descendants AS (
-			SELECT name
-			FROM {table}
-			WHERE name IN %(names)s
-			UNION ALL
-			SELECT child.name
-			FROM {table} child
-			INNER JOIN descendants parent ON child.{parent_column} = parent.name
-		)
-		SELECT DISTINCT name
-		FROM descendants
-		ORDER BY name
-		""",
-		{"names": names},
-		pluck=True,
-	)
+	return sorted(expanded)
 
 
-# Match project P&L: risk reserves live in separate Project Budget rows with this dimension
-# and are excluded from financial root totals (see project_pl_calc.getFinancialRootRows).
+# Match project P&L (project_pl_calc.getFinancialRootRows / addRiskDimensionRows):
+# Project Risk reserves are loaded and tracked separately; they must not roll up the CoA
+# hierarchy or appear as a separate line in the consolidated report.
 RISK_DIMENSION = "Project Risk"
-
-SQL_EXCLUDE_PROJECT_RISK_BUDGET = """
-	AND NOT EXISTS (
-		SELECT 1 FROM `tabProject Budget Dimension` pbd_risk
-		WHERE pbd_risk.parent = pb.name AND pbd_risk.doc = %(risk_dimension)s
-	)
-"""
-
-
-def risk_budget_sql_params():
-	return {"risk_dimension": RISK_DIMENSION}

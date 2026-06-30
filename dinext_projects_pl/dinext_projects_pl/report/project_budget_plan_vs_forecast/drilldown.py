@@ -5,12 +5,14 @@ from collections import defaultdict
 from frappe import _
 from frappe.utils import cint, flt
 
-from .budget_loader import get_accounts, process_project_data
+from .budget_loader import preload_project_budget_context, process_project_data
+from .query_builder import (
+	build_drill_budget_projects_query,
+	fetch_account_subtree_names,
+)
 from .filter_utils import (
-	SQL_EXCLUDE_PROJECT_RISK_BUDGET,
 	normalize_filters,
 	normalize_list_filter,
-	risk_budget_sql_params,
 )
 from .permissions import filter_writable_report_projects, restrict_to_writable_projects
 from .hierarchy import build_hierarchy_for_project
@@ -142,68 +144,14 @@ def get_budget_details(
 			clipped_periods.append((period_year, period_month))
 		month_periods = clipped_periods or month_periods
 
-		accounts = get_accounts(filters)
-		parent_children_map = defaultdict(list)
-		for acc in accounts:
-			parent_children_map[acc.parent_account or None].append(acc)
-
-		child_accounts = frappe.db.sql(
-			"""
-			SELECT name
-			FROM `tabAccount`
-			WHERE lft >= (SELECT lft FROM `tabAccount` WHERE name = %s)
-				AND rgt <= (SELECT rgt FROM `tabAccount` WHERE name = %s)
-				AND company = %s
-			""",
-			(account, account, filters["company"]),
-			as_dict=1,
-		)
-		account_names = [row.name for row in child_accounts]
+		account_names = fetch_account_subtree_names(account, filters["company"])
 		if not account_names:
 			return []
 
 		month_values = sorted(set(month_periods))
-		formatted_conditions = []
-		for period_year, period_month in month_values:
-			formatted_conditions.append(
-				f"(pba.pba_year = {period_year} AND pba.pba_month = {period_month})"
-			)
-		projects_query = f"""
-			SELECT DISTINCT pb.pb_project as project
-			FROM `tabProject Budget Amount` pba
-			INNER JOIN `tabProject Budget` pb ON pba.parent = pb.name
-			LEFT JOIN `tabProject` p ON pb.pb_project = p.name
-			WHERE pb.pb_account IN %(accounts)s
-				AND ({" OR ".join(formatted_conditions)})
-				{SQL_EXCLUDE_PROJECT_RISK_BUDGET}
-		"""
-		params = {"accounts": tuple(account_names), **risk_budget_sql_params()}
-
-		if project:
-			if isinstance(project, (list, tuple)):
-				if len(project) == 1:
-					projects_query += " AND pb.pb_project = %(project)s"
-					params["project"] = project[0]
-				else:
-					projects_query += " AND pb.pb_project IN %(project)s"
-					params["project"] = tuple(project)
-			else:
-				projects_query += " AND pb.pb_project = %(project)s"
-				params["project"] = project
-
-		if project_portfolio:
-			if isinstance(project_portfolio, (list, tuple)):
-				if len(project_portfolio) == 1:
-					projects_query += " AND p.custom_project_portfolio = %(project_portfolio)s"
-					params["project_portfolio"] = project_portfolio[0]
-				else:
-					projects_query += " AND p.custom_project_portfolio IN %(project_portfolio)s"
-					params["project_portfolio"] = tuple(project_portfolio)
-			else:
-				projects_query += " AND p.custom_project_portfolio = %(project_portfolio)s"
-				params["project_portfolio"] = project_portfolio
-
-		project_results = frappe.db.sql(projects_query, params, as_dict=1)
+		project_results = build_drill_budget_projects_query(
+			filters, account_names, month_values
+		).run(as_dict=1)
 		projects_to_process = restrict_to_writable_projects(
 			[row["project"] for row in project_results if row.get("project")],
 			filters,
@@ -211,11 +159,22 @@ def get_budget_details(
 		if not projects_to_process:
 			return []
 
+		context = preload_project_budget_context(filters, projects_to_process)
+		accounts = context["accounts"]
+		parent_children_map = context["parent_children_map"]
+		raw_by_project = context["raw_by_project"]
+		task_hierarchies = context["task_hierarchies"]
+
 		aggregated = {}
 		amount_type = _("Plan") if data_type == "plan" else _("Forecast")
 
 		for proj in projects_to_process:
-			project_raw_data = process_project_data(proj, filters)
+			project_raw_data = process_project_data(
+				proj,
+				filters,
+				raw_budget_data=raw_by_project.get(proj, []),
+				task_hierarchy=task_hierarchies.get(proj, {}),
+			)
 			if not project_raw_data:
 				continue
 
@@ -296,41 +255,9 @@ def _get_drill_projects_for_accounts(filters, account_names, month_periods):
 		return []
 
 	month_values = sorted(set(month_periods))
-	formatted_conditions = []
-	for period_year, period_month in month_values:
-		formatted_conditions.append(
-			f"(pba.pba_year = {period_year} AND pba.pba_month = {period_month})"
-		)
-
-	projects_query = f"""
-		SELECT DISTINCT pb.pb_project as project
-		FROM `tabProject Budget Amount` pba
-		INNER JOIN `tabProject Budget` pb ON pba.parent = pb.name
-		LEFT JOIN `tabProject` p ON pb.pb_project = p.name
-		WHERE pb.pb_account IN %(accounts)s
-			AND ({" OR ".join(formatted_conditions)})
-			{SQL_EXCLUDE_PROJECT_RISK_BUDGET}
-	"""
-	params = {"accounts": tuple(account_names), **risk_budget_sql_params()}
-	project = normalize_list_filter(filters.get("project"))
-	project_portfolio = normalize_list_filter(filters.get("project_portfolio"))
-
-	if project:
-		if len(project) == 1:
-			projects_query += " AND pb.pb_project = %(project)s"
-			params["project"] = project[0]
-		else:
-			projects_query += " AND pb.pb_project IN %(project)s"
-			params["project"] = tuple(project)
-	elif project_portfolio:
-		if len(project_portfolio) == 1:
-			projects_query += " AND p.custom_project_portfolio = %(project_portfolio)s"
-			params["project_portfolio"] = project_portfolio[0]
-		else:
-			projects_query += " AND p.custom_project_portfolio IN %(project_portfolio)s"
-			params["project_portfolio"] = tuple(project_portfolio)
-
-	project_results = frappe.db.sql(projects_query, params, as_dict=1)
+	project_results = build_drill_budget_projects_query(
+		filters, account_names, month_values
+	).run(as_dict=1)
 	return restrict_to_writable_projects(
 		[row["project"] for row in project_results if row.get("project")],
 		filters,
@@ -414,18 +341,17 @@ def get_profit_details(
 			clipped_periods.append((period_year, period_month))
 		month_periods = clipped_periods or month_periods
 
-		from .project_budget_plan_vs_forecast import get_data
-		from .totals import get_root_financial_nodes
+		from .totals import get_root_financial_nodes_from_accounts
 
-		report_data = get_data(filters)
-		root_income_nodes, root_expense_nodes = get_root_financial_nodes(report_data)
+		context = preload_project_budget_context(filters, [])
+		accounts = context["accounts"]
+		parent_children_map = context["parent_children_map"]
+
+		root_income_nodes, root_expense_nodes = get_root_financial_nodes_from_accounts(
+			accounts
+		)
 		if not root_income_nodes and not root_expense_nodes:
 			return []
-
-		accounts = get_accounts(filters)
-		parent_children_map = defaultdict(list)
-		for acc in accounts:
-			parent_children_map[acc.parent_account or None].append(acc)
 
 		drill_accounts = _expand_account_subtree(
 			parent_children_map, root_income_nodes + root_expense_nodes
@@ -436,11 +362,20 @@ def get_profit_details(
 		if not projects_to_process:
 			return []
 
+		context = preload_project_budget_context(filters, projects_to_process)
+		raw_by_project = context["raw_by_project"]
+		task_hierarchies = context["task_hierarchies"]
+
 		amount_type = _("Plan") if data_type == "plan" else _("Forecast")
 		results = []
 
 		for proj in projects_to_process:
-			project_raw_data = process_project_data(proj, filters)
+			project_raw_data = process_project_data(
+				proj,
+				filters,
+				raw_budget_data=raw_by_project.get(proj, []),
+				task_hierarchy=task_hierarchies.get(proj, {}),
+			)
 			if not project_raw_data:
 				continue
 

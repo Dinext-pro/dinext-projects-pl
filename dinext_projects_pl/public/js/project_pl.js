@@ -1,9 +1,170 @@
 // Клиентский скрипт для Doctype "Project"
+frappe.provide("dinext_projects_pl");
+
+const PROJECT_PL_TAB_FIELDNAME = "custom_pl";
+const PROJECT_PL_TABLE_SELECTOR = ".budget-container .budget-table";
+const PROJECT_PL_OPEN_TAB_STORAGE_KEY = "dinext_projects_pl_open_tab";
+
+dinext_projects_pl.navigate_to_project_pl = function (project) {
+	if (!project) {
+		return;
+	}
+
+	try {
+		sessionStorage.setItem(PROJECT_PL_OPEN_TAB_STORAGE_KEY, project);
+	} catch (e) {
+		// ignore storage errors (private mode, etc.)
+	}
+
+	frappe.route_options = frappe.route_options || {};
+	frappe.route_options.open_pl_tab = 1;
+
+	const route = frappe.get_route();
+	if (
+		route &&
+		route[0] === "Form" &&
+		route[1] === "Project" &&
+		route[2] === project &&
+		cur_frm &&
+		cur_frm.docname === project
+	) {
+		schedule_open_project_pl_tab(cur_frm);
+		return;
+	}
+
+	frappe.set_route("Form", "Project", project);
+};
+
+function should_open_project_pl_tab(frm) {
+	if (!frm || frm.doctype !== "Project" || !frm.docname) {
+		return false;
+	}
+	if (frappe.route_options && cint(frappe.route_options.open_pl_tab)) {
+		return true;
+	}
+	try {
+		return sessionStorage.getItem(PROJECT_PL_OPEN_TAB_STORAGE_KEY) === frm.docname;
+	} catch (e) {
+		return false;
+	}
+}
+
+function clear_project_pl_open_tab_request(project) {
+	if (frappe.route_options && cint(frappe.route_options.open_pl_tab)) {
+		delete frappe.route_options.open_pl_tab;
+	}
+	try {
+		if (sessionStorage.getItem(PROJECT_PL_OPEN_TAB_STORAGE_KEY) === project) {
+			sessionStorage.removeItem(PROJECT_PL_OPEN_TAB_STORAGE_KEY);
+		}
+	} catch (e) {
+		// ignore
+	}
+}
+
+function schedule_open_project_pl_tab(frm) {
+	if (!should_open_project_pl_tab(frm)) {
+		return;
+	}
+	clear_project_pl_open_tab_request(frm.docname);
+
+	const apply = function () {
+		open_project_pl_tab_and_scroll(frm);
+	};
+
+	apply();
+	frappe.after_ajax(apply);
+	setTimeout(apply, 150);
+	setTimeout(apply, 500);
+	setTimeout(apply, 1200);
+
+	if (frm.$wrapper) {
+		frm.$wrapper.off("render_complete.project_pl_open").one("render_complete.project_pl_open", apply);
+	}
+}
+
+function activate_project_pl_tab(frm) {
+	const $wrapper = frm.$wrapper || $(frm.wrapper);
+	const tab_selector = '[data-fieldname="' + PROJECT_PL_TAB_FIELDNAME + '"]';
+	let tab = null;
+
+	if (frm.layout && frm.layout.tabs) {
+		tab = frm.layout.tabs.find(function (item) {
+			return item.df && item.df.fieldname === PROJECT_PL_TAB_FIELDNAME;
+		});
+	}
+
+	if (tab) {
+		frm.set_active_tab(tab);
+		tab.set_active();
+		return;
+	}
+
+	if ($wrapper.find(tab_selector).length) {
+		$wrapper.find(tab_selector).tab("show");
+	} else if (frm.layout && typeof frm.layout.select_tab === "function") {
+		frm.layout.select_tab(PROJECT_PL_TAB_FIELDNAME);
+	}
+}
+
+function open_project_pl_tab_and_scroll(frm) {
+	activate_project_pl_tab(frm);
+	scroll_to_project_pl_table(frm);
+}
+
+function scroll_to_project_pl_table(frm) {
+	const max_attempts = 40;
+	let attempts = 0;
+	const $wrapper = frm.$wrapper || $(frm.wrapper);
+	const $tabPane = $wrapper.find("#project-custom_pl");
+
+	function find_target() {
+		let $target = $wrapper.find(PROJECT_PL_TABLE_SELECTOR).first();
+		if ($target.length) {
+			return $target;
+		}
+
+		const field = frm.get_field && frm.get_field("custom_planning");
+		if (field && field.$wrapper && field.$wrapper.length) {
+			$target = field.$wrapper.find(".budget-table").first();
+			if ($target.length) {
+				return $target;
+			}
+			return field.$wrapper;
+		}
+
+		if ($tabPane.length) {
+			return $tabPane;
+		}
+
+		return $();
+	}
+
+	function try_scroll() {
+		attempts += 1;
+		const $target = find_target();
+		const tab_is_active = !$tabPane.length || $tabPane.hasClass("active");
+		if ($target.length && tab_is_active && ($target.is(":visible") || $target.closest(".tab-pane.active").length)) {
+			frappe.utils.scroll_to($target, true, 15);
+			return;
+		}
+		if (attempts < max_attempts) {
+			setTimeout(try_scroll, 150);
+		}
+	}
+
+	setTimeout(try_scroll, 50);
+}
+
 frappe.ui.form.on("Project", {
     refresh: function(frm) {
         console.log("refresh");
         // При первом открытии добавляем кастомную вкладку "Трудозатраты", если ещё не создана
         render_budget_table(frm);
+        schedule_open_project_pl_tab(frm);
+    },
+    onload_post_render: function(frm) {
+        schedule_open_project_pl_tab(frm);
     }
 });
 

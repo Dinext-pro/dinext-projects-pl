@@ -408,6 +408,11 @@ br.apply_report_styles = function () {
 			max-width: 100%;
 		}
 
+		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form .budget-report-filter-wide .selectable-item .small {
+			color: var(--text-muted);
+			margin-top: 2px;
+		}
+
 		#page-query-report.budget-plan-vs-forecast-page .page-form.budget-report-filters-form > .budget-report-filter-company {
 			width: 180px !important;
 			min-width: 180px !important;
@@ -450,31 +455,37 @@ br.apply_report_styles = function () {
 		}
 
 		.budget-plan-vs-forecast-page .budget-report-insights {
-			padding: 16px 32px 0 32px;
+			padding: 4px 12px 0 12px;
 			box-sizing: border-box;
 		}
 
 		.budget-plan-vs-forecast-page .budget-report-insights .budget-report-chart-container {
-			margin: 0 0 8px 0;
+			margin: 0 0 4px 0;
 			padding: 0;
 		}
 
 		.budget-plan-vs-forecast-page .budget-report-insights .report-summary.budget-pl-summary {
-			margin: 0 0 12px 0;
+			margin: 0 0 4px 0;
 		}
 
 		.budget-plan-vs-forecast-page .budget-report-chart-container {
-			margin: 0 0 12px 0;
-			padding: 8px 0 0;
+			margin: 0 0 4px 0;
+			padding: 0;
 		}
 
 		.budget-plan-vs-forecast-page .report-summary.budget-pl-summary {
 			display: flex;
-			margin: 0 0 12px 0;
-			padding: 20px 15px;
+			margin: 0 0 4px 0;
+			padding: 10px 8px;
 			background-color: var(--card-bg, var(--bg-color));
 			border-radius: var(--border-radius-md, 8px);
-			border-bottom: 1px solid var(--border-color, #dee2e6);
+			border-bottom: none;
+		}
+
+		#page-query-report.budget-plan-vs-forecast-page .actions-btn-group,
+		#page-query-report.budget-plan-vs-forecast-page .custom-actions,
+		#page-query-report.budget-plan-vs-forecast-page .custom-actions .inner-group-button {
+			display: none !important;
 		}
 
 		@media (min-width: 576px) {
@@ -522,8 +533,8 @@ br.apply_report_styles = function () {
 
 		.budget-plan-vs-forecast-page .budget-report-chart {
 			width: 100%;
-			height: 320px;
-			min-height: 240px;
+			height: 360px;
+			min-height: 280px;
 		}
 	`;
 

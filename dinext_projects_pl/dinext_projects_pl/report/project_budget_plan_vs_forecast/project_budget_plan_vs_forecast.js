@@ -73,6 +73,9 @@ function init_budget_report(report) {
 	br.setup_period_month_pickers(report);
 	br.setup_period_granularity_handler(report);
 	br.setup_custom_export(report);
+	if (typeof br.disable_budget_report_toolbar_actions === "function") {
+		br.disable_budget_report_toolbar_actions(report);
+	}
 	if (typeof br.install_budget_presentation_hooks === "function") {
 		br.install_budget_presentation_hooks(report);
 	}

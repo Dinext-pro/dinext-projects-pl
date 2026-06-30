@@ -325,6 +325,34 @@ br.build_budget_chart_frm = function (report) {
 	};
 };
 
+br.disable_budget_report_toolbar_actions = function (report) {
+	if (!report || report._budget_toolbar_actions_disabled) {
+		return;
+	}
+	report._budget_toolbar_actions_disabled = true;
+
+	report.add_chart_buttons_to_toolbar = function () {};
+	report.add_card_button_to_toolbar = function () {};
+};
+
+br.hide_budget_report_actions_menu = function (report) {
+	if (!report || !report.page) {
+		return;
+	}
+
+	if (typeof report.page.hide_actions_menu === "function") {
+		report.page.hide_actions_menu();
+	}
+
+	if (report.page.custom_actions && report.page.custom_actions.length) {
+		report.page.custom_actions.addClass("hide");
+	}
+
+	if (typeof report.page.get_inner_group_button === "function") {
+		report.page.get_inner_group_button(__("Actions")).remove();
+	}
+};
+
 br.ensure_budget_report_insights_header = function (report) {
 	if (!report || !report.page) {
 		return null;
@@ -377,9 +405,7 @@ br.sync_budget_insights_layout = function (report) {
 		return;
 	}
 
-	if ($summary.index() < $chart.index()) {
-		$chart.insertBefore($summary);
-	}
+	$summary.insertBefore($chart);
 };
 
 br.ensure_budget_chart_container = function (report) {
@@ -393,9 +419,9 @@ br.ensure_budget_chart_container = function (report) {
 		$container = $('<div class="budget-report-chart-container"></div>');
 		var $summary = $header.find(".budget-pl-summary").first();
 		if ($summary.length) {
-			$container.insertBefore($summary);
+			$container.insertAfter($summary);
 		} else {
-			$header.prepend($container);
+			$header.append($container);
 		}
 	}
 

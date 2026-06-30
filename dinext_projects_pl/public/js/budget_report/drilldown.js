@@ -143,6 +143,10 @@ br.after_datatable_render = function () {
 		}
 		br.render_budget_chart(report);
 		br.render_budget_summary(report);
+		br.disable_budget_report_toolbar_actions(report);
+		setTimeout(function () {
+			br.hide_budget_report_actions_menu(report);
+		}, 0);
 		if (br.render_sticky_summary_footer) {
 			br.render_sticky_summary_footer(report);
 		}
@@ -311,6 +315,13 @@ br.bind_budget_detail_project_links = function (dialog) {
 		event.preventDefault();
 		var project = $(this).attr("data-project");
 		if (!project) {
+			return;
+		}
+		if (dialog && typeof dialog.hide === "function") {
+			dialog.hide();
+		}
+		if (typeof dinext_projects_pl !== "undefined" && typeof dinext_projects_pl.navigate_to_project_pl === "function") {
+			dinext_projects_pl.navigate_to_project_pl(project);
 			return;
 		}
 		frappe.set_route("Form", "Project", project);
@@ -1722,6 +1733,15 @@ br.ensure_budget_pl_summary = function (report) {
 	}
 	if ($existing.length) {
 		report.$budget_pl_summary = $existing;
+		var $insights = br.ensure_budget_report_insights_header(report);
+		if ($insights && $insights.length && !$existing.closest(".budget-report-insights").length) {
+			var $chart = $insights.find(".budget-report-chart-container").first();
+			if ($chart.length) {
+				$existing.insertBefore($chart);
+			} else {
+				$existing.prependTo($insights);
+			}
+		}
 		if (typeof br.sync_budget_insights_layout === "function") {
 			br.sync_budget_insights_layout(report);
 		}
@@ -1739,9 +1759,9 @@ br.ensure_budget_pl_summary = function (report) {
 	if ($insights && $insights.length) {
 		var $chart = $insights.find(".budget-report-chart-container").first();
 		if ($chart.length) {
-			$summary.insertAfter($chart);
+			$summary.insertBefore($chart);
 		} else {
-			$summary.appendTo($insights);
+			$summary.prependTo($insights);
 		}
 		if (typeof br.sync_budget_insights_layout === "function") {
 			br.sync_budget_insights_layout(report);

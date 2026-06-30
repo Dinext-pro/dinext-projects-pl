@@ -77,19 +77,7 @@ dinext_projects_pl.budget_plan_vs_forecast.filters = [
 		label: br.__("Project"),
 		fieldtype: "MultiSelectList",
 		get_data: function (txt) {
-			var company = frappe.query_report.get_filter_value("company");
-			return frappe
-				.call({
-					method:
-						"dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.project_budget_plan_vs_forecast.get_report_project_options",
-					args: {
-						txt: txt || "",
-						company: company,
-					},
-				})
-				.then(function (response) {
-					return response.message || [];
-				});
+			return budget_report_link_options("Project", txt);
 		},
 		options: "Project",
 	},
@@ -536,6 +524,8 @@ dinext_projects_pl.budget_plan_vs_forecast.setup_filter_layout = function (repor
 		: report.page.wrapper.find(".page-form");
 
 	$form.addClass("budget-report-filters-form");
+	br.disable_budget_report_toolbar_actions(report);
+	br.hide_budget_report_actions_menu(report);
 	br.ensure_budget_report_insights_header(report);
 
 	$form.children(".form-group, .frappe-control").each(function () {
