@@ -5,7 +5,11 @@ from collections import defaultdict
 from frappe.utils import flt, cint, add_days
 
 from .actual_utils import signed_pl_amount
-from .allocation import calculate_allocation_for_month
+from .allocation import (
+	calculate_allocation_for_month,
+	get_business_area_history,
+	get_cost_center_history,
+)
 from .debug_utils import _report_debug
 from .query_builder import (
 	build_gl_actual_query,
@@ -30,9 +34,37 @@ def _get_period_dates(filters):
 	return start_date, end_date
 
 
-def _uses_allocation_path(filters):
+def _project_has_dimension_history(project):
+	if not project:
+		return False
+	return bool(get_cost_center_history(project) or get_business_area_history(project))
+
+
+def _filtered_projects_have_dimension_history(filters):
+	project = filters.get("project")
+	if project:
+		projects = project if isinstance(project, (list, tuple)) else [project]
+		return any(_project_has_dimension_history(p) for p in projects)
+
+	if filters.get("project_portfolio") or filters.get("company"):
+		projects = filters.get("_report_writable_projects")
+		if projects is None:
+			from .permissions import get_writable_report_projects
+
+			projects = get_writable_report_projects(filters)
+		return any(_project_has_dimension_history(p) for p in (projects or []))
+
+	return False
+
+
+def _uses_project_dimension_path(filters):
+	"""Load GL by project and match CC/BA via project history (not gle.cost_center)."""
 	has_dimension_filter = filters.get("cost_center") or filters.get("business_area")
-	return bool(has_dimension_filter and cint(filters.get("apply_cc_allocation", 1)))
+	if not has_dimension_filter:
+		return False
+	if cint(filters.get("apply_cc_allocation", 1)):
+		return True
+	return _filtered_projects_have_dimension_history(filters)
 
 
 def _aggregate_allocated_rows(project_rows, filters):
@@ -109,7 +141,7 @@ def get_actual_data_simple(filters):
 
 		start_date, end_date = _get_period_dates(filters)
 
-		if _uses_allocation_path(filters):
+		if _uses_project_dimension_path(filters):
 			return _get_allocated_actual_data(filters, start_date, end_date)
 
 		actual_data = build_gl_actual_query(
