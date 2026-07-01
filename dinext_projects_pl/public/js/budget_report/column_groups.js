@@ -146,6 +146,39 @@ cg.get_column_group_label = function (col, groupKey) {
 	return cg.format_period_label(groupKey);
 };
 
+cg.is_current_period_group = function (groupKey) {
+	if (!groupKey || groupKey === cg.TOTAL_GROUP_KEY) {
+		return false;
+	}
+	if (!frappe.datetime || !frappe.datetime.get_today || !frappe.datetime.str_to_obj) {
+		return false;
+	}
+
+	var today = frappe.datetime.str_to_obj(frappe.datetime.get_today());
+	var year = today.getFullYear();
+	var month = today.getMonth() + 1;
+	var parts = String(groupKey).split("_");
+
+	if (parts.length === 1 && /^\d{4}$/.test(parts[0])) {
+		return parseInt(parts[0], 10) === year;
+	}
+
+	if (parts.length === 2 && /^Q[1-4]$/i.test(parts[1])) {
+		if (parseInt(parts[0], 10) !== year) {
+			return false;
+		}
+		var quarter = parseInt(parts[1].slice(1), 10);
+		var currentQuarter = Math.floor((month - 1) / 3) + 1;
+		return quarter === currentQuarter;
+	}
+
+	if (parts.length === 2 && /^\d{2}$/.test(parts[1])) {
+		return parseInt(parts[0], 10) === year && parseInt(parts[1], 10) === month;
+	}
+
+	return false;
+};
+
 cg.get_column_dom_offset = function () {
 	var report = frappe.query_report;
 	if (!report || !report.datatable || !report.datatable.datamanager) {
@@ -328,18 +361,25 @@ cg.apply_grouped_headers = function () {
 		});
 
 		$groupRow.append(
-			$('<div class="dt-cell budget-report-header-cell budget-period-group-cell"></div>')
-				.attr("data-colspan", groupCols.length)
-				.css({
-					width: groupWidth,
-					minWidth: groupWidth,
-					flex: "0 0 " + groupWidth + "px",
-				})
-				.append(
-					$('<div class="dt-cell__content budget-period-group-label"></div>').text(
-						cg.get_column_group_label(col, groupKey)
-					)
-				)
+			(function () {
+				var groupCellClasses =
+					"dt-cell budget-report-header-cell budget-period-group-cell";
+				if (cg.is_current_period_group(groupKey)) {
+					groupCellClasses += " budget-period-group-cell--current-period";
+				}
+				return $('<div class="' + groupCellClasses + '"></div>')
+					.attr("data-colspan", groupCols.length)
+					.css({
+						width: groupWidth,
+						minWidth: groupWidth,
+						flex: "0 0 " + groupWidth + "px",
+					})
+					.append(
+						$('<div class="dt-cell__content budget-period-group-label"></div>').text(
+							cg.get_column_group_label(col, groupKey)
+						)
+					);
+			})()
 		);
 	}
 

@@ -718,6 +718,22 @@ test("get_pl_echarts_option keeps current date markLine off bar series when plan
     assert.equal(cumulativeMarkerSeries.markLine.data[0].xAxis, 1);
 });
 
+test("get_pl_echarts_option hides current date markLine label when requested", () => {
+    const context = loadEchartsModule();
+    context.__plChartToday = "2026-02-15";
+    const frm = createChartFrm({
+        bg_hide_plan: false,
+        hide_current_date_mark_line_label: true,
+    });
+    const option = context.get_pl_echarts_option(frm, context.get_pl_chart_data(frm));
+    const cumulativeMarkerSeries = option.series.find(
+        (series) => series.areaStyle && series.markLine
+    );
+
+    assert.ok(cumulativeMarkerSeries);
+    assert.equal(cumulativeMarkerSeries.markLine.data[0].label.show, false);
+});
+
 test("get_pl_profit_label_layout places label above for non-negative and below for negative", () => {
     const context = loadEchartsModule();
     const lineY = 100;

@@ -35,7 +35,7 @@ br.get_budget_period_groups = function (columns) {
 	var seen = {};
 
 	(columns || []).forEach(function (col) {
-		if (!col || !col.period_group || seen[col.period_group]) {
+		if (!col || !col.period_group || col.period_group === "total" || seen[col.period_group]) {
 			return;
 		}
 		seen[col.period_group] = true;
@@ -78,6 +78,30 @@ br.sum_row_fields = function (rows, fieldnames) {
 	return total;
 };
 
+br.parse_budget_chart_period_meta = function (periodKey) {
+	if (!periodKey || periodKey === "total") {
+		return {};
+	}
+
+	var parts = String(periodKey).split("_");
+	if (parts.length === 1 && /^\d{4}$/.test(parts[0])) {
+		return { year: parseInt(parts[0], 10) };
+	}
+	if (parts.length === 2 && /^Q[1-4]$/i.test(parts[1])) {
+		return {
+			year: parseInt(parts[0], 10),
+			quarter: parseInt(parts[1].slice(1), 10),
+		};
+	}
+	if (parts.length === 2 && /^\d{2}$/.test(parts[1])) {
+		return {
+			year: parseInt(parts[0], 10),
+			month: parseInt(parts[1], 10),
+		};
+	}
+	return {};
+};
+
 br.summarize_budget_chart_periods = function (data, columns) {
 	var period_groups = br.get_budget_period_groups(columns);
 	var income_roots = br.get_budget_root_rows(data).filter(function (row) {
@@ -98,7 +122,12 @@ br.summarize_budget_chart_periods = function (data, columns) {
 
 	period_groups.forEach(function (group) {
 		labels.push(group.label);
-		periods.push({ label: group.label, key: group.key });
+		periods.push(
+			Object.assign(
+				{ label: group.label, key: group.key },
+				br.parse_budget_chart_period_meta(group.key)
+			)
+		);
 
 		var income_plan = br.sum_row_fields(income_roots, group.plan);
 		var income_actual = br.sum_row_fields(income_roots, group.display);
@@ -393,6 +422,7 @@ br.build_budget_chart_frm = function (report) {
 		budget_accumulated_values: cint(filters.accumulated_values),
 		pl_chart_expanded: false,
 		hide_pl_chart_expanded_toggle: true,
+		hide_current_date_mark_line_label: true,
 		budget_view_options: budget_view_options,
 	};
 };

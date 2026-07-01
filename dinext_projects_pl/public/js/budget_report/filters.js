@@ -226,7 +226,7 @@ dinext_projects_pl.budget_plan_vs_forecast.filters = [
 		fieldname: "apply_cc_allocation",
 		label: br.__("Apply Cost Center Allocation"),
 		fieldtype: "Check",
-		default: 1,
+		default: 0,
 	},
 ];
 

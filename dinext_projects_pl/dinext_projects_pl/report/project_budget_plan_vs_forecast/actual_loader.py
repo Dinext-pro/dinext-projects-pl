@@ -62,7 +62,7 @@ def _uses_project_dimension_path(filters):
 	has_dimension_filter = filters.get("cost_center") or filters.get("business_area")
 	if not has_dimension_filter:
 		return False
-	if cint(filters.get("apply_cc_allocation", 1)):
+	if cint(filters.get("apply_cc_allocation", 0)):
 		return True
 	return _filtered_projects_have_dimension_history(filters)
 
@@ -70,7 +70,7 @@ def _uses_project_dimension_path(filters):
 def _aggregate_allocated_rows(project_rows, filters):
 	cost_center_filter = filters.get("cost_center")
 	business_area_filter = filters.get("business_area")
-	apply_allocation = cint(filters.get("apply_cc_allocation", 1))
+	apply_allocation = cint(filters.get("apply_cc_allocation", 0))
 
 	aggregated = defaultdict(float)
 	for row in project_rows:

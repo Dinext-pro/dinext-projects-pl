@@ -33,6 +33,19 @@ function loadColumnGroupsModule() {
 				frappeProvide(namespace, context);
 			},
 			query_report: {},
+			datetime: {
+				get_today() {
+					return "2026-03-15";
+				},
+				str_to_obj(value) {
+					const parts = String(value).split("-");
+					return new Date(
+						parseInt(parts[0], 10),
+						parseInt(parts[1], 10) - 1,
+						parseInt(parts[2], 10)
+					);
+				},
+			},
 		},
 		cint(value, default_value) {
 			const parsed = parseInt(value, 10);
@@ -150,6 +163,18 @@ test("get_report_columns_with_groups merges metadata from raw_data columns", () 
 	assert.equal(merged.length, 1);
 	assert.equal(merged[0].period_group, "2026_01");
 	assert.equal(merged[0].period_group_label, "Jan 2026");
+});
+
+test("is_current_period_group matches month quarter and year keys", () => {
+	const cg = loadColumnGroupsModule();
+
+	assert.equal(cg.is_current_period_group("2026_03"), true);
+	assert.equal(cg.is_current_period_group("2026_01"), false);
+	assert.equal(cg.is_current_period_group("2026_Q1"), true);
+	assert.equal(cg.is_current_period_group("2026_Q2"), false);
+	assert.equal(cg.is_current_period_group("2026"), true);
+	assert.equal(cg.is_current_period_group("2025"), false);
+	assert.equal(cg.is_current_period_group("total"), false);
 });
 
 test("get_column_group_label uses Total for total group", () => {
