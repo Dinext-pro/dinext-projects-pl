@@ -185,6 +185,6 @@ def get_descendants(doctype, names, parent_field):
 
 
 # Match project P&L (project_pl_calc.getFinancialRootRows / addRiskDimensionRows):
-# Project Risk reserves are loaded and tracked separately; they must not roll up the CoA
-# hierarchy or appear as a separate line in the consolidated report.
+# Project Risk reserves are excluded from CoA rollup and separate report lines,
+# but must reduce profit / summary totals (see calc_column_total + get_child_budget_sum).
 RISK_DIMENSION = "Project Risk"

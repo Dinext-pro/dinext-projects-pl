@@ -19,6 +19,7 @@ from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecas
 )
 from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.risk_utils import (
 	DATA_TYPE_WITH_RISK,
+	apply_risk_reserves_to_expense_by_column,
 )
 
 
@@ -89,6 +90,39 @@ class TestProjectBudgetPlanVsForecastRisk(FrappeTestCase):
 			flt(expense_row.get(forecast_col)),
 			self.BASE_FORECAST + self.RISK_FORECAST,
 		)
+
+	def test_execute_report_profit_includes_risk_reserves(self):
+		filters = {
+			**self._base_filters(),
+			"project": self.project.name,
+			"view_type": "forecast_only",
+			"show_zero_rows": 1,
+		}
+		_columns, data = execute(filters)
+		expense_row = next(row for row in data if row.get("account") == self.expense_account)
+		profit_row = next(row for row in data if row.get("is_profit_row"))
+		forecast_col = f"forecast_{self.PERIOD_KEY}"
+
+		self.assertEqual(flt(expense_row.get(forecast_col)), self.BASE_FORECAST)
+		self.assertEqual(
+			flt(profit_row.get(forecast_col)),
+			-(self.BASE_FORECAST + self.RISK_FORECAST),
+		)
+		self.assertEqual(
+			flt(profit_row.get("total_exp")),
+			-(self.BASE_FORECAST + self.RISK_FORECAST),
+		)
+
+	def test_apply_risk_reserves_to_expense_by_column_forecast_only(self):
+		expense_by_column = {"forecast_2026_06": 100_000}
+		risk_totals = {"2026_06": {"plan": 0, "forecast": 500_000}}
+		apply_risk_reserves_to_expense_by_column(
+			expense_by_column,
+			risk_totals,
+			{"view_type": "forecast_only"},
+			["forecast_2026_06"],
+		)
+		self.assertEqual(expense_by_column["forecast_2026_06"], 600_000)
 
 	def test_risk_on_leaf_does_not_roll_up_to_parent_account(self):
 		"""Risk reserves stay off the CoA rollup (unlike task aggregation)."""

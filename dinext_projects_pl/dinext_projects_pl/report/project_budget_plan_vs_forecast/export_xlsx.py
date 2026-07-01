@@ -59,6 +59,8 @@ def build_grouped_xlsx_data(columns, data):
 	for row in data or []:
 		if not isinstance(row, dict):
 			continue
+		if row.get("is_report_meta"):
+			continue
 		row_data = []
 		for col in visible_columns:
 			fieldname = col.get("fieldname")

@@ -13,6 +13,8 @@ from .debug_utils import _report_debug
 from .risk_utils import (
 	DATA_TYPE_WITH_TASK,
 	DATA_TYPE_WITHOUT_TASK,
+	aggregate_risk_totals_by_period,
+	merge_risk_totals,
 	split_financial_and_risk_amounts,
 	sum_risk_amounts,
 )
@@ -246,10 +248,12 @@ def process_project_data(project, filters, raw_budget_data=None, task_hierarchy=
     if risk_rows:
         risk_plan = sum_risk_amounts(risk_rows, value_key="plan")
         risk_forecast = sum_risk_amounts(risk_rows, value_key="forecast")
+        project_risk_totals = aggregate_risk_totals_by_period(project, risk_rows, filters)
+        merge_risk_totals(filters.setdefault("_report_risk_totals", {}), project_risk_totals)
         _report_debug(
             f"Project {project}: loaded {len(risk_rows)} risk reserve row(s), "
             f"plan={risk_plan}, forecast={risk_forecast} (excluded from CoA rollup, "
-            f"matching project P&L getFinancialRootRows)",
+            f"applied to profit totals like project P&L calc_column_total)",
             filters,
         )
 
@@ -529,6 +533,7 @@ def get_budget_data(filters, accounts):
     try:
         _report_debug("=== GET BUDGET DATA START ===", filters)
         _report_debug(f"Input filters: {filters}", filters)
+        filters["_report_risk_totals"] = {}
         
         # Writable projects only (see permissions.apply_report_project_permissions).
         projects_to_process = filters.get("_report_writable_projects")

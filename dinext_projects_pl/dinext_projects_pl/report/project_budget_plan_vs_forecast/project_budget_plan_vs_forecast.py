@@ -15,6 +15,7 @@ from .permissions import get_writable_report_projects
 from .hierarchy import add_account_hierarchy, accumulate_all_values_upwards
 from .totals import apply_forecast_actual_logic, add_row_totals, add_profit_row
 from .periods import aggregate_data_by_granularity
+from .risk_utils import build_report_risk_meta_row
 from . import drilldown as budget_drilldown
 from . import permissions as budget_permissions
 from .debug_utils import _report_debug
@@ -122,6 +123,10 @@ def execute(filters=None):
 
     data = add_row_totals(data, period_filters, columns)
     data = add_profit_row(data, columns, period_filters)
+
+    meta_row = build_report_risk_meta_row(filters.get("_report_risk_totals"))
+    if meta_row:
+        data.append(meta_row)
 
     _report_debug(f"Final data rows: {len(data)}", filters)
     _report_debug(f"Final columns: {[col['fieldname'] for col in columns]}", filters)

@@ -18,7 +18,7 @@ const PL_CHART_COLORS_SHOW_PLAN = [
 ];
 
 let _plChartThemeObserver = null;
-let _plChartThemeObserverTarget = null;
+let _plChartActiveFrm = null;
 let _plChartResizeObserver = null;
 let _plChartResizeObserverTarget = null;
 
@@ -38,13 +38,53 @@ function load_pl_echarts() {
     });
 }
 
-function is_pl_chart_dark_theme() {
-    const theme = document.documentElement.getAttribute("data-theme");
-    if (theme === "dark" || theme === "light") {
-        return theme === "dark";
+function parse_pl_chart_rgb(color) {
+    if (!color) {
+        return null;
     }
 
-    const mode = document.documentElement.getAttribute("data-theme-mode");
+    const value = String(color).trim();
+    const rgbMatch = value.match(/^rgba?\(([^)]+)\)$/i);
+    if (rgbMatch) {
+        const parts = rgbMatch[1].split(",").map((part) => parseFloat(part.trim()));
+        if (parts.length >= 3) {
+            return { r: parts[0], g: parts[1], b: parts[2] };
+        }
+    }
+
+    const hexMatch = value.match(/^#([0-9a-f]{3,8})$/i);
+    if (!hexMatch) {
+        return null;
+    }
+
+    let hex = hexMatch[1];
+    if (hex.length === 3) {
+        hex = hex
+            .split("")
+            .map((char) => char + char)
+            .join("");
+    }
+
+    return {
+        r: parseInt(hex.slice(0, 2), 16),
+        g: parseInt(hex.slice(2, 4), 16),
+        b: parseInt(hex.slice(4, 6), 16),
+    };
+}
+
+function is_pl_chart_color_dark(color) {
+    const rgb = parse_pl_chart_rgb(color);
+    if (!rgb) {
+        return false;
+    }
+
+    const luminance = 0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b;
+    return luminance < 128;
+}
+
+function is_pl_chart_dark_theme() {
+    const root = document.documentElement;
+    const mode = root.getAttribute("data-theme-mode");
     if (mode === "dark") {
         return true;
     }
@@ -52,20 +92,48 @@ function is_pl_chart_dark_theme() {
         return false;
     }
 
+    const theme = root.getAttribute("data-theme");
+    if (theme === "dark") {
+        return true;
+    }
+    if (theme === "light") {
+        return false;
+    }
+
+    const bodyStyle = getComputedStyle(document.body);
+    if (is_pl_chart_color_dark(bodyStyle.backgroundColor)) {
+        return true;
+    }
+    if (is_pl_chart_color_dark(bodyStyle.color)) {
+        return false;
+    }
+
     return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
 function get_pl_chart_theme_colors() {
+    const isDark = is_pl_chart_dark_theme();
     const rootStyle = getComputedStyle(document.documentElement);
-    const fallbackText = is_pl_chart_dark_theme() ? "#e2e2e2" : "#333333";
-    const fallbackMuted = is_pl_chart_dark_theme() ? "#a0a0a0" : "#748094";
-    const fallbackBorder = is_pl_chart_dark_theme() ? "#3a3a3a" : "#d1d8dd";
-    const fallbackBg = is_pl_chart_dark_theme() ? "#1e1e1e" : "#ffffff";
+    const bodyStyle = getComputedStyle(document.body);
+    const fallbackText = isDark ? "#e2e2e2" : "#333333";
+    const fallbackMuted = isDark ? "#a3a3a3" : "#748094";
+    const fallbackBorder = isDark ? "#3a3a3a" : "#d1d8dd";
+    const fallbackBg = isDark ? "#1e1e1e" : "#ffffff";
+    const fallbackGridLine = isDark ? "rgba(255, 255, 255, 0.08)" : "#e8e8e8";
+
+    const text = bodyStyle.color || rootStyle.getPropertyValue("--text-color").trim() || fallbackText;
+    const axisLabel = isDark
+        ? text
+        : rootStyle.getPropertyValue("--text-muted").trim() || bodyStyle.color || fallbackMuted;
 
     return {
-        text: rootStyle.getPropertyValue("--text-color").trim() || fallbackText,
-        muted: rootStyle.getPropertyValue("--text-muted").trim() || fallbackMuted,
-        border: rootStyle.getPropertyValue("--border-color").trim() || fallbackBorder,
+        text,
+        muted: isDark ? axisLabel : rootStyle.getPropertyValue("--text-muted").trim() || fallbackMuted,
+        axisLabel,
+        border: isDark ? fallbackBorder : rootStyle.getPropertyValue("--border-color").trim() || fallbackBorder,
+        gridLine: isDark
+            ? fallbackGridLine
+            : rootStyle.getPropertyValue("--border-color").trim() || fallbackGridLine,
         bg: rootStyle.getPropertyValue("--card-bg").trim() || fallbackBg,
     };
 }
@@ -878,7 +946,7 @@ function get_pl_echarts_option(frm, chartData) {
             type: "category",
             data: chartData.labels,
             axisLabel: {
-                color: themeColors.muted,
+                color: themeColors.axisLabel,
             },
             axisLine: {
                 lineStyle: { color: themeColors.border },
@@ -886,7 +954,7 @@ function get_pl_echarts_option(frm, chartData) {
             splitLine: {
                 show: true,
                 lineStyle: {
-                    color: themeColors.border,
+                    color: themeColors.gridLine,
                     width: 1,
                 },
             },
@@ -895,11 +963,14 @@ function get_pl_echarts_option(frm, chartData) {
             type: "value",
             ...get_pl_chart_y_axis_range(chartData),
             axisLabel: {
-                color: themeColors.muted,
+                color: themeColors.axisLabel,
                 formatter: format_pl_chart_axis_value,
             },
             splitLine: {
-                lineStyle: { color: themeColors.border },
+                lineStyle: {
+                    color: themeColors.gridLine,
+                    width: 1,
+                },
             },
         },
         series,
@@ -909,6 +980,10 @@ function get_pl_echarts_option(frm, chartData) {
 function dispose_pl_chart_instance(frm) {
     if (!frm?._pl_chart_instance) {
         return;
+    }
+
+    if (_plChartActiveFrm === frm) {
+        _plChartActiveFrm = null;
     }
 
     if (typeof frm._pl_chart_instance.dispose === "function") {
@@ -1020,8 +1095,42 @@ function bind_pl_tab_listener_once(frm) {
     frm._pl_tab_listener_bound = true;
 }
 
-function ensure_pl_chart_theme_observer(frm) {
-    if (typeof MutationObserver === "undefined" || !frm) {
+function refresh_budget_report_chart_theme() {
+    const br =
+        typeof dinext_projects_pl !== "undefined" &&
+        dinext_projects_pl.budget_plan_vs_forecast;
+    const report = typeof frappe !== "undefined" && frappe.query_report;
+
+    if (!br || !br._budget_chart_instance || !report || !report.data || !report.data.length) {
+        return;
+    }
+    if (typeof br.get_budget_chart_presentation !== "function") {
+        return;
+    }
+
+    const chartData = br.get_budget_chart_presentation(report);
+    const frm = br.build_budget_chart_frm(report);
+    const option = get_pl_echarts_option(frm, chartData);
+    br._budget_chart_instance.setOption(option, true);
+    if (typeof br.resize_budget_chart === "function") {
+        br.resize_budget_chart();
+    }
+}
+
+function refresh_pl_charts_theme() {
+    if (_plChartActiveFrm?._pl_chart_instance) {
+        const frm = _plChartActiveFrm;
+        const chartData = get_pl_chart_data(frm);
+        const option = get_pl_echarts_option(frm, chartData);
+        frm._pl_chart_instance.setOption(option, true);
+        frm._pl_chart_instance.resize();
+    }
+
+    refresh_budget_report_chart_theme();
+}
+
+function ensure_pl_chart_theme_observer() {
+    if (typeof MutationObserver === "undefined" || _plChartThemeObserver) {
         return;
     }
 
@@ -1030,36 +1139,24 @@ function ensure_pl_chart_theme_observer(frm) {
         return;
     }
 
-    if (_plChartThemeObserver && _plChartThemeObserverTarget === frm) {
-        return;
-    }
-
-    if (_plChartThemeObserver) {
-        _plChartThemeObserver.disconnect();
-        _plChartThemeObserver = null;
-        _plChartThemeObserverTarget = null;
-    }
-
     let theme = root.getAttribute("data-theme");
+    let themeMode = root.getAttribute("data-theme-mode");
+
     _plChartThemeObserver = new MutationObserver(function () {
         const nextTheme = root.getAttribute("data-theme");
-        if (nextTheme === theme) {
+        const nextThemeMode = root.getAttribute("data-theme-mode");
+        if (nextTheme === theme && nextThemeMode === themeMode) {
             return;
         }
         theme = nextTheme;
-
-        if (!_plChartThemeObserverTarget?._pl_chart_instance) {
-            return;
-        }
-
-        const chartData = get_pl_chart_data(_plChartThemeObserverTarget);
-        const option = get_pl_echarts_option(_plChartThemeObserverTarget, chartData);
-        _plChartThemeObserverTarget._pl_chart_instance.setOption(option, true);
-        _plChartThemeObserverTarget._pl_chart_instance.resize();
+        themeMode = nextThemeMode;
+        refresh_pl_charts_theme();
     });
 
-    _plChartThemeObserver.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
-    _plChartThemeObserverTarget = frm;
+    _plChartThemeObserver.observe(root, {
+        attributes: true,
+        attributeFilter: ["data-theme", "data-theme-mode"],
+    });
 }
 
 function render_pl_chart_impl(frm, init = true) {
@@ -1120,9 +1217,10 @@ function _render_pl_chart(frm, init = true) {
 
                 frm._pl_chart_instance = window.echarts.init(chartDom);
                 frm._pl_chart_instance.setOption(option, true);
+                _plChartActiveFrm = frm;
                 ensure_pl_chart_resize_observer(frm, chartDom);
                 schedule_pl_chart_resize(frm);
-                ensure_pl_chart_theme_observer(frm);
+                ensure_pl_chart_theme_observer();
             } catch (err) {
                 console.error("render_pl_chart error:", err);
                 const chartDom = get_pl_chart_dom(frm);
@@ -1160,5 +1258,8 @@ globalThis.get_pl_echarts_option = get_pl_echarts_option;
 globalThis.get_pl_profit_dash_geometry = get_pl_profit_dash_geometry;
 globalThis.get_pl_profit_label_layout = get_pl_profit_label_layout;
 globalThis.get_pl_chart_current_period_index = get_pl_chart_current_period_index;
+globalThis.get_pl_chart_theme_colors = get_pl_chart_theme_colors;
+globalThis.is_pl_chart_dark_theme = is_pl_chart_dark_theme;
+globalThis.ensure_pl_chart_theme_observer = ensure_pl_chart_theme_observer;
 globalThis.build_pl_profit_dash_series = build_pl_profit_dash_series;
 globalThis._render_pl_chart = _render_pl_chart;

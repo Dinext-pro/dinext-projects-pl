@@ -20,6 +20,11 @@ function loadBudgetPresentationModule() {
 	const context = {
 		frappe: {
 			provide() {},
+			datetime: {
+				get_today() {
+					return "2026-06-15";
+				},
+			},
 		},
 		cint(value, default_value) {
 			const parsed = parseInt(value, 10);
@@ -281,4 +286,43 @@ test("apply_budget_presentation toggle accumulated off restores period values", 
 	assert.equal(periodProfit[`plan_${year}_02`], 40);
 	assert.equal(periodProfit[`plan_${year}_03`], 25);
 	assert.equal(periodProfit.total_plan, 125);
+});
+
+test("addProfitRow subtracts risk reserves from profit without changing CoA rows", () => {
+	const br = loadBudgetPresentationModule();
+	const year = 2026;
+	const monthKey = `${year}_06`;
+	const columns = [
+		{
+			fieldname: `forecast_${monthKey}`,
+			period_group: monthKey,
+			period_role: "display",
+		},
+		{ fieldname: "total_exp", period_group: "total", period_role: "forecast" },
+	];
+	const rows = [
+		{
+			account: "Income Root",
+			indent: 0,
+			root_type: "Income",
+			[`forecast_${monthKey}`]: 0,
+		},
+		{
+			account: "Expense Root",
+			indent: 0,
+			root_type: "Expense",
+			[`forecast_${monthKey}`]: 100_000,
+		},
+	];
+	const riskTotals = {
+		[monthKey]: { plan: 0, forecast: 500_000 },
+	};
+
+	br.addProfitRow(rows, columns, { view_type: "forecast_only" }, riskTotals);
+	const profit = profitRow(rows);
+	const expense = rows.find((row) => row.account === "Expense Root");
+
+	assert.equal(expense[`forecast_${monthKey}`], 100_000);
+	assert.equal(profit[`forecast_${monthKey}`], -600_000);
+	assert.equal(profit.total_exp, -600_000);
 });
