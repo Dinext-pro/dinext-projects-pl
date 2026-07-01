@@ -497,6 +497,55 @@ test("get_pl_echarts_option aligns series colors with tooltip palette", () => {
     assert.equal(actualProfit.itemStyle.color, "#ff9933");
 });
 
+test("get_pl_echarts_option keeps period bar colors when cumulative series precede bars", () => {
+    const context = loadEchartsModule();
+    const frm = createChartFrm({ bg_hide_plan: false, budget_accumulated_values: true });
+    const chartData = {
+        labels: ["Jan", "Feb"],
+        datasets: [
+            {
+                name: "Cumulative income - actual/forecast",
+                values: [100, 200],
+                plLayer: "cumulative",
+                plSeriesKind: "cumulative_income",
+                plIsPlan: false,
+            },
+            {
+                name: "Cumulative expenses - actual/forecast",
+                values: [-40, -80],
+                plLayer: "cumulative",
+                plSeriesKind: "cumulative_expense",
+                plIsPlan: false,
+            },
+            {
+                name: "Income - actual/forecast",
+                values: [100, 100],
+                plLayer: "bar",
+                plSeriesKind: "income",
+                plIsPlan: false,
+            },
+            {
+                name: "Expenses - actual/forecast",
+                values: [-40, -40],
+                plLayer: "bar",
+                plSeriesKind: "expense",
+                plIsPlan: false,
+            },
+        ],
+        dataObj: { periods: [] },
+    };
+    const option = context.get_pl_echarts_option(frm, chartData);
+    const incomeBar = option.series.find(
+        (series) => series.type === "bar" && String(series.name).includes("Income")
+    );
+    const expenseBar = option.series.find(
+        (series) => series.type === "bar" && String(series.name).includes("Expenses")
+    );
+
+    assert.equal(incomeBar.color, "#007a33");
+    assert.equal(expenseBar.color, "#cc3333");
+});
+
 test("get_pl_profit_dash_geometry centers dash on plan and actual stack slots", () => {
     const context = loadEchartsModule();
     const bandWidth = 100;

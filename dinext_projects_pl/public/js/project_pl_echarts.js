@@ -450,6 +450,27 @@ function is_pl_cumulative_volume_series(dataset) {
 }
 
 function get_pl_chart_dataset_color(dataset, index, palette, frm) {
+    if (dataset.plSeriesKind === "income") {
+        if (frm.bg_hide_plan) {
+            return palette[0];
+        }
+        return palette[dataset.plIsPlan ? 0 : 1];
+    }
+
+    if (dataset.plSeriesKind === "expense") {
+        if (frm.bg_hide_plan) {
+            return palette[1];
+        }
+        return palette[dataset.plIsPlan ? 2 : 3];
+    }
+
+    if (dataset.plSeriesKind === "period_profit") {
+        if (frm.bg_hide_plan) {
+            return palette[3];
+        }
+        return palette[dataset.plIsPlan ? 4 : 5];
+    }
+
     if (dataset.plSeriesKind === "cumulative_income") {
         if (frm.bg_hide_plan) {
             return palette[0];

@@ -114,14 +114,22 @@ function runAccumulatedPipeline(br, data, columns, filters) {
 	return br.addProfitRow(rows, columns, accFilters);
 }
 
-test("applyAccumulatedValues keeps running totals per prefix independent", () => {
+test("applyAccumulatedValues keeps plan and display chains independent", () => {
 	const br = loadBudgetPresentationModule();
 	const year = 2026;
 	const columns = [
-		{ fieldname: `plan_${year}_01`, period_group: `${year}_01` },
-		{ fieldname: `plan_${year}_02`, period_group: `${year}_02` },
-		{ fieldname: `actual_${year}_01`, period_group: `${year}_01` },
-		{ fieldname: `actual_${year}_02`, period_group: `${year}_02` },
+		{ fieldname: `plan_${year}_01`, period_group: `${year}_01`, period_role: "plan" },
+		{ fieldname: `plan_${year}_02`, period_group: `${year}_02`, period_role: "plan" },
+		{
+			fieldname: `actual_${year}_01`,
+			period_group: `${year}_01`,
+			period_role: "display",
+		},
+		{
+			fieldname: `actual_${year}_02`,
+			period_group: `${year}_02`,
+			period_role: "display",
+		},
 	];
 	const data = [
 		{
@@ -135,10 +143,49 @@ test("applyAccumulatedValues keeps running totals per prefix independent", () =>
 
 	const result = br.applyAccumulatedValues(deepClone(data), columns, {
 		accumulated_values: 1,
+		view_type: "actual_only",
 	})[0];
 
 	assert.equal(result[`plan_${year}_02`], 15);
 	assert.equal(result[`actual_${year}_02`], 120);
+});
+
+test("applyAccumulatedValues unifies forecast_actual display timeline", () => {
+	const br = loadBudgetPresentationModule();
+	const year = 2026;
+	const columns = [
+		{
+			fieldname: `actual_${year}_01`,
+			period_group: `${year}_01`,
+			period_role: "display",
+		},
+		{
+			fieldname: `actual_${year}_02`,
+			period_group: `${year}_02`,
+			period_role: "display",
+		},
+		{
+			fieldname: `forecast_${year}_03`,
+			period_group: `${year}_03`,
+			period_role: "display",
+		},
+	];
+	const data = [
+		{
+			account: "Test",
+			[`actual_${year}_01`]: 100,
+			[`actual_${year}_02`]: 50,
+			[`forecast_${year}_03`]: 30,
+		},
+	];
+
+	const result = br.applyAccumulatedValues(deepClone(data), columns, {
+		accumulated_values: 1,
+		view_type: "forecast_actual",
+	})[0];
+
+	assert.equal(result[`actual_${year}_02`], 150);
+	assert.equal(result[`forecast_${year}_03`], 180);
 });
 
 test("addRowTotals accumulated uses last period not sum", () => {

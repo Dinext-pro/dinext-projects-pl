@@ -3,37 +3,8 @@ frappe.provide("dinext_projects_pl");
 
 const PROJECT_PL_TAB_FIELDNAME = "custom_pl";
 const PROJECT_PL_TABLE_SELECTOR = ".budget-container .budget-table";
-const PROJECT_PL_OPEN_TAB_STORAGE_KEY = "dinext_projects_pl_open_tab";
-
-dinext_projects_pl.navigate_to_project_pl = function (project) {
-	if (!project) {
-		return;
-	}
-
-	try {
-		sessionStorage.setItem(PROJECT_PL_OPEN_TAB_STORAGE_KEY, project);
-	} catch (e) {
-		// ignore storage errors (private mode, etc.)
-	}
-
-	frappe.route_options = frappe.route_options || {};
-	frappe.route_options.open_pl_tab = 1;
-
-	const route = frappe.get_route();
-	if (
-		route &&
-		route[0] === "Form" &&
-		route[1] === "Project" &&
-		route[2] === project &&
-		cur_frm &&
-		cur_frm.docname === project
-	) {
-		schedule_open_project_pl_tab(cur_frm);
-		return;
-	}
-
-	frappe.set_route("Form", "Project", project);
-};
+const PROJECT_PL_OPEN_TAB_STORAGE_KEY =
+	dinext_projects_pl.PROJECT_PL_OPEN_TAB_STORAGE_KEY || "dinext_projects_pl_open_tab";
 
 function should_open_project_pl_tab(frm) {
 	if (!frm || frm.doctype !== "Project" || !frm.docname) {
@@ -62,15 +33,53 @@ function clear_project_pl_open_tab_request(project) {
 	}
 }
 
+function activate_project_pl_tab(frm) {
+	if (frm.layout && typeof frm.layout.select_tab === "function") {
+		frm.layout.select_tab(PROJECT_PL_TAB_FIELDNAME);
+		return;
+	}
+
+	const $wrapper = frm.$wrapper || $(frm.wrapper);
+	const tab_selector = '[data-fieldname="' + PROJECT_PL_TAB_FIELDNAME + '"]';
+
+	if (frm.layout && frm.layout.tabs) {
+		const tab = frm.layout.tabs.find(function (item) {
+			return item.df && item.df.fieldname === PROJECT_PL_TAB_FIELDNAME;
+		});
+		if (tab) {
+			tab.set_active();
+			return;
+		}
+	}
+
+	if ($wrapper.find(tab_selector).length) {
+		$wrapper.find(tab_selector).tab("show");
+	}
+}
+
+function open_project_pl_tab_and_scroll(frm) {
+	activate_project_pl_tab(frm);
+	scroll_to_project_pl_table(frm);
+}
+
 function schedule_open_project_pl_tab(frm) {
 	if (!should_open_project_pl_tab(frm)) {
 		return;
 	}
 	clear_project_pl_open_tab_request(frm.docname);
 
+	const $wrapper = frm.$wrapper || $(frm.wrapper);
+	const tab_selector = '[data-fieldname="' + PROJECT_PL_TAB_FIELDNAME + '"]';
+
 	const apply = function () {
 		open_project_pl_tab_and_scroll(frm);
 	};
+
+	$wrapper
+		.off("shown.bs.tab.project_pl_open", tab_selector)
+		.one("shown.bs.tab.project_pl_open", tab_selector, function () {
+			scroll_to_project_pl_table(frm);
+		});
 
 	apply();
 	frappe.after_ajax(apply);
@@ -78,38 +87,29 @@ function schedule_open_project_pl_tab(frm) {
 	setTimeout(apply, 500);
 	setTimeout(apply, 1200);
 
-	if (frm.$wrapper) {
-		frm.$wrapper.off("render_complete.project_pl_open").one("render_complete.project_pl_open", apply);
+	if ($wrapper) {
+		$wrapper.off("render_complete.project_pl_open").one("render_complete.project_pl_open", apply);
 	}
 }
 
-function activate_project_pl_tab(frm) {
-	const $wrapper = frm.$wrapper || $(frm.wrapper);
-	const tab_selector = '[data-fieldname="' + PROJECT_PL_TAB_FIELDNAME + '"]';
-	let tab = null;
+dinext_projects_pl.open_project_pl_tab = schedule_open_project_pl_tab;
 
-	if (frm.layout && frm.layout.tabs) {
-		tab = frm.layout.tabs.find(function (item) {
-			return item.df && item.df.fieldname === PROJECT_PL_TAB_FIELDNAME;
-		});
-	}
-
-	if (tab) {
-		frm.set_active_tab(tab);
-		tab.set_active();
-		return;
-	}
-
-	if ($wrapper.find(tab_selector).length) {
-		$wrapper.find(tab_selector).tab("show");
-	} else if (frm.layout && typeof frm.layout.select_tab === "function") {
-		frm.layout.select_tab(PROJECT_PL_TAB_FIELDNAME);
-	}
-}
-
-function open_project_pl_tab_and_scroll(frm) {
-	activate_project_pl_tab(frm);
-	scroll_to_project_pl_table(frm);
+if (!dinext_projects_pl._project_pl_route_hook_installed) {
+	dinext_projects_pl._project_pl_route_hook_installed = true;
+	frappe.router.on("change", function () {
+		var route = frappe.get_route();
+		if (
+			route[0] !== "Form" ||
+			route[1] !== "Project" ||
+			!route[2] ||
+			!cur_frm ||
+			cur_frm.doctype !== "Project" ||
+			cur_frm.docname !== route[2]
+		) {
+			return;
+		}
+		schedule_open_project_pl_tab(cur_frm);
+	});
 }
 
 function scroll_to_project_pl_table(frm) {
@@ -142,9 +142,13 @@ function scroll_to_project_pl_table(frm) {
 
 	function try_scroll() {
 		attempts += 1;
+		if ($tabPane.length && !$tabPane.hasClass("active")) {
+			activate_project_pl_tab(frm);
+		}
+
 		const $target = find_target();
 		const tab_is_active = !$tabPane.length || $tabPane.hasClass("active");
-		if ($target.length && tab_is_active && ($target.is(":visible") || $target.closest(".tab-pane.active").length)) {
+		if ($target.length && tab_is_active) {
 			frappe.utils.scroll_to($target, true, 15);
 			return;
 		}

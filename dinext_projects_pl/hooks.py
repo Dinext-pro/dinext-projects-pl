@@ -100,6 +100,7 @@ fixtures = [
 # include js in doctype views
 doctype_js = {"Project": 
     [
+        "public/js/project_pl_navigation.js",
         "public/js/project_pl_style.js",
         "public/js/project_pl.js",
         "public/js/project_pl_calc.js",

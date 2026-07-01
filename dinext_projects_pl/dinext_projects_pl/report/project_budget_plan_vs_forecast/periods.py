@@ -180,6 +180,27 @@ def get_sorted_period_fieldnames(columns, prefix, require_period_group=False):
 	return fieldnames
 
 
+def get_ordered_display_fieldnames(columns, filters=None):
+	"""One display column per period in report order (fact then forecast timeline)."""
+	filters = filters or {}
+	view_type = filters.get("view_type", "forecast_actual")
+	fieldnames = []
+
+	for column in columns or []:
+		fieldname = column.get("fieldname")
+		if not fieldname or not column.get("period_group"):
+			continue
+		if column.get("period_role") == "display":
+			fieldnames.append(fieldname)
+			continue
+		if view_type == "forecast_only" and fieldname.startswith("forecast_"):
+			fieldnames.append(fieldname)
+		elif view_type == "actual_only" and fieldname.startswith("actual_"):
+			fieldnames.append(fieldname)
+
+	return fieldnames
+
+
 def apply_accumulated_values(data, columns, filters):
 	"""Convert period columns to running totals per row when accumulated_values is enabled."""
 	if not filters.get("accumulated_values"):
@@ -188,27 +209,23 @@ def apply_accumulated_values(data, columns, filters):
 	if not data:
 		return data
 
-	period_columns = []
-	for column in columns:
-		fieldname = column.get("fieldname")
-		if fieldname and fieldname.startswith(("plan_", "forecast_", "actual_")):
-			period_columns.append(fieldname)
+	filters = filters or {}
+	plan_columns = get_sorted_period_fieldnames(columns, "plan_")
+	display_columns = get_ordered_display_fieldnames(columns, filters)
 
-	if not period_columns:
+	if not plan_columns and not display_columns:
 		return data
 
-	columns_by_prefix = {}
-	for fieldname in period_columns:
-		prefix = fieldname.split("_", 1)[0]
-		columns_by_prefix.setdefault(prefix, []).append(fieldname)
-
-	for prefix_columns in columns_by_prefix.values():
-		prefix_columns.sort(key=_period_sort_key)
-
 	for row in data:
-		for prefix_columns in columns_by_prefix.values():
+		if plan_columns:
 			running_total = 0
-			for fieldname in prefix_columns:
+			for fieldname in plan_columns:
+				running_total += flt(row.get(fieldname, 0))
+				row[fieldname] = running_total
+
+		if display_columns:
+			running_total = 0
+			for fieldname in display_columns:
 				running_total += flt(row.get(fieldname, 0))
 				row[fieldname] = running_total
 

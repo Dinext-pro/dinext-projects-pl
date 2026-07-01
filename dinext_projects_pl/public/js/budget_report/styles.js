@@ -12,6 +12,11 @@ br.apply_report_styles = function () {
 			--budget-report-header-z-index: 6;
 			--budget-report-summary-z-index: 5;
 			--budget-report-period-border: var(--gray-400, #ced4da);
+			--budget-report-header-row-height: 24px;
+			--budget-report-header-padding-y: 2px;
+			--budget-report-header-padding-x: 4px;
+			--budget-report-header-period-font-size: 12px;
+			--budget-report-header-role-font-size: 10px;
 		}
 
 		html[data-theme="dark"] .report-wrapper,
@@ -72,15 +77,26 @@ br.apply_report_styles = function () {
 		.report-wrapper .budget-period-group-row {
 			display: flex;
 			flex-direction: row;
+			height: var(--budget-report-header-row-height);
+			min-height: var(--budget-report-header-row-height);
 			background-color: var(--budget-report-header-bg);
 			color: var(--budget-report-header-color);
 		}
 
+		.report-wrapper .budget-period-group-row .budget-period-group-cell,
+		.report-wrapper .budget-period-group-row .budget-period-group-spacer,
+		.report-wrapper .budget-period-group-row .dt-cell {
+			height: var(--budget-report-header-row-height);
+			min-height: var(--budget-report-header-row-height);
+		}
+
 		.report-wrapper .budget-period-group-cell .budget-period-group-label {
-			font-size: 12px;
+			font-size: var(--budget-report-header-period-font-size);
+			line-height: 1.2;
 			text-align: center;
 			font-weight: 600;
 			width: 100%;
+			padding: var(--budget-report-header-padding-y) var(--budget-report-header-padding-x);
 			color: var(--budget-report-header-color);
 		}
 
@@ -94,6 +110,18 @@ br.apply_report_styles = function () {
 			color: var(--budget-report-header-color) !important;
 		}
 
+		.report-wrapper .dt-header .budget-period-group-row,
+		.report-wrapper .dt-header .dt-row-header:not(.budget-period-group-row) {
+			height: var(--budget-report-header-row-height);
+			min-height: var(--budget-report-header-row-height);
+		}
+
+		.report-wrapper .dt-header .dt-row-header:not(.budget-period-group-row) .dt-cell,
+		.report-wrapper .dt-header .dt-row-header:not(.budget-period-group-row) .dt-cell--header {
+			height: var(--budget-report-header-row-height);
+			min-height: var(--budget-report-header-row-height);
+		}
+
 		.report-wrapper .dt-header .dt-row-header,
 		.report-wrapper .dt-header .dt-row-header .dt-cell,
 		.report-wrapper .dt-header .dt-row-header .dt-cell--header,
@@ -102,10 +130,13 @@ br.apply_report_styles = function () {
 			color: var(--budget-report-header-color) !important;
 		}
 
-		.report-wrapper .budget-report-header-cell .dt-cell__content,
-		.report-wrapper .dt-cell--header .dt-cell__content,
-		.report-wrapper .dt-row-header .dt-cell--header .dt-cell__content {
-			font-size: 12px;
+		.report-wrapper .dt-header .dt-row-header:not(.budget-period-group-row) .dt-cell__content,
+		.report-wrapper .dt-header .dt-row-header:not(.budget-period-group-row) .budget-report-header-cell .dt-cell__content,
+		.report-wrapper .dt-header .dt-row-header:not(.budget-period-group-row) .dt-cell--header .dt-cell__content {
+			font-size: var(--budget-report-header-role-font-size);
+			line-height: 1.2;
+			padding: 0 var(--budget-report-header-padding-x) var(--budget-report-header-padding-y);
+			padding-right: calc(var(--budget-report-header-padding-x) * 2);
 			text-align: center !important;
 			display: flex;
 			justify-content: center !important;

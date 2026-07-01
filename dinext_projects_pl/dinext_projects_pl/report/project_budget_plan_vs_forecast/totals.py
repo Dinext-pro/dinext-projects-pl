@@ -4,7 +4,12 @@ from frappe import _
 from frappe.utils import flt, cint, today, getdate
 from collections import defaultdict
 
-from .periods import apply_accumulated_values, get_sorted_period_fieldnames, _period_sort_key
+from .periods import (
+	apply_accumulated_values,
+	get_ordered_display_fieldnames,
+	get_sorted_period_fieldnames,
+	_period_sort_key,
+)
 from .debug_utils import _report_debug
 
 
@@ -181,8 +186,7 @@ def add_profit_row(data, columns, filters):
     monthly_columns = sorted(set(monthly_columns), key=_period_sort_key)
 
     plan_columns = get_sorted_period_fieldnames(columns, "plan_")
-    forecast_columns = get_sorted_period_fieldnames(columns, "forecast_")
-    actual_columns = get_sorted_period_fieldnames(columns, "actual_")
+    display_period_columns = get_ordered_display_fieldnames(columns, filters)
     
     # Словари для суммирования по месяцам
     income_by_column = defaultdict(float)
@@ -242,9 +246,6 @@ def add_profit_row(data, columns, filters):
         
         profitability_row[col] = flt(profitability, 1)
     
-    display_period_columns = forecast_columns + actual_columns
-    display_period_columns.sort(key=_period_sort_key)
-
     if accumulated:
         total_income_plan = income_by_column.get(plan_columns[-1], 0) if plan_columns else 0
         total_expense_plan = expense_by_column.get(plan_columns[-1], 0) if plan_columns else 0
