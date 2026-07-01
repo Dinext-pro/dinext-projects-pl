@@ -100,6 +100,22 @@ def get_columns(filters, data):
 	return columns
 
 
+TOTAL_PERIOD_GROUP = "total"
+
+
+def _total_subcolumn(fieldname, label, period_role, width):
+	return {
+		"label": label,
+		"fieldname": fieldname,
+		"fieldtype": "Currency",
+		"width": width,
+		"precision": 0,
+		"period_group": TOTAL_PERIOD_GROUP,
+		"period_group_label": _("Total"),
+		"period_role": period_role,
+	}
+
+
 def add_total_columns(columns, filters):
 	"""Добавляем итоговые колонки"""
 	view_type = filters.get("view_type", "forecast_actual")
@@ -108,38 +124,34 @@ def add_total_columns(columns, filters):
 	total_columns = []
 
 	if show_plan:
-		total_columns.append({
-			"label": _("Total Plan"),
-			"fieldname": "total_plan",
-			"fieldtype": "Currency",
-			"width": TOTAL_CURRENCY_WIDTH,
-			"precision": 0,
-		})
+		total_columns.append(_total_subcolumn(
+			"total_plan",
+			_("Total Plan"),
+			"plan",
+			TOTAL_CURRENCY_WIDTH,
+		))
 
 	if view_type == "forecast_actual":
-		total_columns.append({
-			"label": _("Total Forecast/Fact"),
-			"fieldname": "total_exp_fct",
-			"fieldtype": "Currency",
-			"width": TOTAL_FORECAST_WIDTH,
-			"precision": 0,
-		})
+		total_columns.append(_total_subcolumn(
+			"total_exp_fct",
+			_("Total Forecast/Fact"),
+			"display",
+			TOTAL_FORECAST_WIDTH,
+		))
 	elif view_type == "forecast_only":
-		total_columns.append({
-			"label": _("Total Forecast"),
-			"fieldname": "total_exp",
-			"fieldtype": "Currency",
-			"width": TOTAL_CURRENCY_WIDTH,
-			"precision": 0,
-		})
+		total_columns.append(_total_subcolumn(
+			"total_exp",
+			_("Total Forecast"),
+			"forecast",
+			TOTAL_CURRENCY_WIDTH,
+		))
 	elif view_type == "actual_only":
-		total_columns.append({
-			"label": _("Total Fact"),
-			"fieldname": "total_fct",
-			"fieldtype": "Currency",
-			"width": TOTAL_CURRENCY_WIDTH,
-			"precision": 0,
-		})
+		total_columns.append(_total_subcolumn(
+			"total_fct",
+			_("Total Fact"),
+			"display",
+			TOTAL_CURRENCY_WIDTH,
+		))
 
 	return columns + total_columns
 

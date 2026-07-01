@@ -53,6 +53,8 @@ br.ru_fallback_translations = {
 	"Total Forecast": "Итого прогноз",
 	"Total Forecast/Fact": "Итого прогноз/факт",
 	"Total Plan": "Итого план",
+	"Total": "Итого",
+	"Forecast/Fact": "Прогноз/факт",
 	"View Type": "Режим отображения",
 	"Year": "Год",
 };
@@ -185,11 +187,25 @@ dinext_projects_pl.budget_plan_vs_forecast.filters = [
 		default: 0,
 		on_change: function (report) {
 			report = report || frappe.query_report;
-			if (!report || !report._budget_source_snapshot) {
+			if (!report) {
+				return;
+			}
+			if (!report._budget_source_snapshot) {
+				report.refresh(true);
 				return;
 			}
 			br.apply_budget_presentation(report);
 			br.rerender_budget_presentation(report);
+			if (typeof br.render_budget_summary === "function") {
+				br.render_budget_summary(report);
+			}
+			if (typeof br.render_budget_chart === "function") {
+				br.render_budget_chart(report);
+			}
+			var cg = br.column_groups || dinext_projects_pl.budget_plan_vs_forecast.column_groups;
+			if (cg && typeof cg.ensure_grouped_headers === "function") {
+				cg.ensure_grouped_headers(report, 0);
+			}
 		},
 	},
 	{
@@ -564,7 +580,9 @@ br.apply_table_header_translations = function () {
 		return;
 	}
 
-	report.$report.find(".dt-header .dt-cell__content").each(function () {
+	report.$report
+		.find(".dt-header .dt-row-header:not(.budget-period-group-row) .dt-cell__content")
+		.each(function () {
 		var $el = $(this);
 		var text = $el.text().trim();
 		if (!text) {
@@ -667,6 +685,30 @@ br.apply_report_translations = function (report) {
 			}
 		});
 	}
+};
+
+br.normalize_checkbox_filters_from_url = function (report) {
+	if (!report || !report.get_filter) {
+		return;
+	}
+	var params = new URLSearchParams(window.location.search);
+	var checkbox_fields = [
+		"show_plan",
+		"show_zero_columns",
+		"show_zero_rows",
+		"accumulated_values",
+		"include_future_actual",
+		"apply_cc_allocation",
+	];
+	checkbox_fields.forEach(function (fieldname) {
+		if (!params.has(fieldname)) {
+			return;
+		}
+		var control = report.get_filter(fieldname);
+		if (control) {
+			control.set_value(cint(params.get(fieldname)));
+		}
+	});
 };
 
 br.get_filter_values_for_url = function (report) {

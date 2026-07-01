@@ -18,14 +18,20 @@ br.after_datatable_render = function () {
 		}
 
 		var cg = dinext_projects_pl.budget_plan_vs_forecast.column_groups;
-		if (cg && cg.apply_grouped_headers) {
-			cg.apply_grouped_headers();
-		}
-		if (br.apply_table_header_translations) {
-			br.apply_table_header_translations();
-		}
-		if (br.fix_table_horizontal_layout) {
-			br.fix_table_horizontal_layout();
+		if (cg && typeof cg.ensure_grouped_headers === "function") {
+			cg.ensure_grouped_headers(report, 0);
+		} else if (cg && typeof cg.schedule_budget_grouped_headers === "function") {
+			cg.schedule_budget_grouped_headers(report);
+		} else {
+			if (cg && cg.apply_grouped_headers) {
+				cg.apply_grouped_headers();
+			}
+			if (br.apply_table_header_translations) {
+				br.apply_table_header_translations();
+			}
+			if (br.fix_table_horizontal_layout) {
+				br.fix_table_horizontal_layout();
+			}
 		}
 		br.render_budget_chart(report);
 		br.render_budget_summary(report);
@@ -42,9 +48,11 @@ br.after_datatable_render = function () {
 
 		if (cg && cg.apply_period_boundary_classes && report.columns) {
 			cg.apply_period_boundary_classes(
-				report.columns.filter(function (col) {
-					return !col.hidden;
-				}),
+				cg.get_report_columns_with_groups
+					? cg.get_report_columns_with_groups(report)
+					: report.columns.filter(function (col) {
+							return !col.hidden;
+					  }),
 				report
 			);
 		}

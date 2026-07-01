@@ -121,6 +121,7 @@ function makeReport({ accumulated_values = 0, data, columns } = {}) {
 	};
 
 	if (accumulated_values) {
+		report._budget_source_snapshot = deepClone(data || defaultData);
 		const br = loadBudgetChartModules();
 		report.data = preTransformAccumulatedData(br, report);
 	}
@@ -253,28 +254,48 @@ test("build_budget_chart_data accumulates actual display columns independently",
 	assert.equal(chartData.cumulative_profit_actual[1], 135);
 });
 
-test("get_budget_chart_presentation uses cumulative lines only when accumulated_values is enabled", () => {
+test("get_budget_chart_presentation adds period bars alongside cumulative lines when accumulated", () => {
 	const br = loadBudgetChartModules();
 	const report = makeReport({ accumulated_values: 1 });
 	report.get_filter_values = function () {
 		return {
 			accumulated_values: 1,
-			show_plan: 0,
-			view_type: "actual_only",
+			show_plan: 1,
+			view_type: "plan_only",
 		};
 	};
 
 	const presentation = br.get_budget_chart_presentation(report);
 	const names = presentation.datasets.map((dataset) => dataset.name);
 	const layers = presentation.datasets.map((dataset) => dataset.plLayer);
+	const incomeBar = presentation.datasets.find(
+		(dataset) => dataset.plLayer === "bar" && dataset.plSeriesKind === "income" && dataset.plIsPlan
+	);
+	const cumulativeIncome = presentation.datasets.find(
+		(dataset) => dataset.plSeriesKind === "cumulative_income" && dataset.plIsPlan
+	);
 
 	assert.ok(names.some((name) => name.includes("Cumulative income")));
 	assert.ok(names.some((name) => name.includes("Cumulative expenses")));
 	assert.ok(names.some((name) => name.includes("Cumulative profit")));
-	assert.equal(
-		names.some((name) => name.includes("Profit") && !name.includes("Cumulative")),
-		false
-	);
-	assert.equal(names.some((name) => name.includes("Income -")), false);
-	assert.ok(layers.every((layer) => layer === "cumulative"));
+	assert.ok(names.some((name) => name.includes("Income - plan")));
+	assert.ok(names.some((name) => name.includes("Expenses - plan")));
+	assert.ok(layers.includes("bar"));
+	assert.ok(layers.includes("cumulative"));
+	assert.equal(incomeBar.values[0], 100);
+	assert.equal(incomeBar.values[1], 50);
+	assert.equal(cumulativeIncome.values[0], 100);
+	assert.equal(cumulativeIncome.values[1], 150);
+});
+
+test("build_budget_chart_data exposes period values from source snapshot when accumulated", () => {
+	const br = loadBudgetChartModules();
+	const report = makeReport({ accumulated_values: 1 });
+
+	const chartData = br.build_budget_chart_data(report);
+
+	assert.equal(chartData.period_plan_income[0], 100);
+	assert.equal(chartData.period_plan_income[1], 50);
+	assert.equal(chartData.plan_income[0], 100);
+	assert.equal(chartData.plan_income[1], 150);
 });

@@ -69,59 +69,59 @@ br.getSortedPeriodFieldnames = function (columns, prefix, requirePeriodGroup) {
 	return fieldnames;
 };
 
+br.getOrderedDisplayFieldnames = function (columns, filters) {
+	filters = filters || {};
+	var viewType = filters.view_type || "forecast_actual";
+	var fieldnames = [];
+
+	(columns || []).forEach(function (column) {
+		var fieldname = column && column.fieldname;
+		if (!fieldname || !column.period_group) {
+			return;
+		}
+		if (column.period_role === "display") {
+			fieldnames.push(fieldname);
+			return;
+		}
+		if (viewType === "forecast_only" && fieldname.indexOf("forecast_") === 0) {
+			fieldnames.push(fieldname);
+		} else if (viewType === "actual_only" && fieldname.indexOf("actual_") === 0) {
+			fieldnames.push(fieldname);
+		}
+	});
+
+	return fieldnames;
+};
+
 br.applyAccumulatedValues = function (data, columns, filters) {
 	if (!cint(filters && filters.accumulated_values) || !data || !data.length) {
 		return data;
 	}
 
-	var periodColumns = [];
-	(columns || []).forEach(function (column) {
-		var fieldname = column && column.fieldname;
-		if (
-			fieldname &&
-			(fieldname.indexOf("plan_") === 0 ||
-				fieldname.indexOf("forecast_") === 0 ||
-				fieldname.indexOf("actual_") === 0)
-		) {
-			periodColumns.push(fieldname);
-		}
-	});
+	filters = filters || {};
+	var planColumns = br.getSortedPeriodFieldnames(columns, "plan_");
+	var displayColumns = br.getOrderedDisplayFieldnames(columns, filters);
 
-	if (!periodColumns.length) {
+	if (!planColumns.length && !displayColumns.length) {
 		return data;
 	}
 
-	var columnsByPrefix = {};
-	periodColumns.forEach(function (fieldname) {
-		var prefix = fieldname.split("_", 1)[0];
-		if (!columnsByPrefix[prefix]) {
-			columnsByPrefix[prefix] = [];
-		}
-		columnsByPrefix[prefix].push(fieldname);
-	});
-
-	Object.keys(columnsByPrefix).forEach(function (prefix) {
-		columnsByPrefix[prefix].sort(function (a, b) {
-			var keyA = br._periodSortKey(a);
-			var keyB = br._periodSortKey(b);
-			for (var i = 0; i < keyA.length; i++) {
-				if (keyA[i] !== keyB[i]) {
-					return keyA[i] - keyB[i];
-				}
-			}
-			return 0;
-		});
-	});
-
 	data.forEach(function (row) {
-		Object.keys(columnsByPrefix).forEach(function (prefix) {
-			var prefixColumns = columnsByPrefix[prefix];
-			var runningTotal = 0;
-			prefixColumns.forEach(function (fieldname) {
-				runningTotal += flt(row[fieldname]);
-				row[fieldname] = runningTotal;
+		if (planColumns.length) {
+			var planRunning = 0;
+			planColumns.forEach(function (fieldname) {
+				planRunning += flt(row[fieldname]);
+				row[fieldname] = planRunning;
 			});
-		});
+		}
+
+		if (displayColumns.length) {
+			var displayRunning = 0;
+			displayColumns.forEach(function (fieldname) {
+				displayRunning += flt(row[fieldname]);
+				row[fieldname] = displayRunning;
+			});
+		}
 	});
 
 	return data;
@@ -276,8 +276,7 @@ br.addProfitRow = function (data, columns, filters) {
 	});
 
 	var planColumns = br.getSortedPeriodFieldnames(columns, "plan_");
-	var forecastColumns = br.getSortedPeriodFieldnames(columns, "forecast_");
-	var actualColumns = br.getSortedPeriodFieldnames(columns, "actual_");
+	var displayPeriodColumns = br.getOrderedDisplayFieldnames(columns, filters);
 
 	var incomeByColumn = {};
 	var expenseByColumn = {};
@@ -340,18 +339,6 @@ br.addProfitRow = function (data, columns, filters) {
 			profitability = (profit / income) * 100;
 		}
 		profitabilityRow[col] = flt(profitability, 1);
-	});
-
-	var displayPeriodColumns = forecastColumns.concat(actualColumns);
-	displayPeriodColumns.sort(function (a, b) {
-		var keyA = br._periodSortKey(a);
-		var keyB = br._periodSortKey(b);
-		for (var i = 0; i < keyA.length; i++) {
-			if (keyA[i] !== keyB[i]) {
-				return keyA[i] - keyB[i];
-			}
-		}
-		return 0;
 	});
 
 	var totalIncomePlan;
@@ -471,10 +458,13 @@ br.apply_budget_presentation = function (report) {
 		br.addRowTotals(data, filters, columns);
 		br.addProfitRow(data, columns, filters);
 		report.data = data;
-		return;
+	} else {
+		report.data = deepCloneData(snapshot);
 	}
 
-	report.data = deepCloneData(snapshot);
+	if (typeof br.render_budget_summary === "function") {
+		br.render_budget_summary(report);
+	}
 };
 
 br.rerender_budget_presentation = function (report) {
@@ -485,7 +475,12 @@ br.rerender_budget_presentation = function (report) {
 
 	report.render_datatable();
 
-	if (typeof br.after_datatable_render === "function") {
+	var cg = br.column_groups;
+	if (cg && typeof cg.ensure_grouped_headers === "function") {
+		cg.ensure_grouped_headers(report, 0);
+	} else if (cg && typeof cg.schedule_budget_grouped_headers === "function") {
+		cg.schedule_budget_grouped_headers(report);
+	} else if (typeof br.after_datatable_render === "function") {
 		br.after_datatable_render();
 	}
 };

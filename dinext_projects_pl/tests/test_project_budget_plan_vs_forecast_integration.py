@@ -16,6 +16,7 @@ from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecas
 )
 from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.totals import (
 	apply_accumulated_presentation,
+	get_root_financial_nodes,
 )
 from dinext_projects_pl.tests.fixtures.bvf_report_seed import (
 	PROJECT_A,
@@ -45,6 +46,9 @@ class TestProjectBudgetPlanVsForecastIntegration(FrappeTestCase):
 		cls.expense_account = cls.seed["expense_account"]
 		cls.income_account = cls.seed["income_account"]
 		cls.child_cc_a = cls.seed["cost_centers"]["a"]
+		cls.project_b = cls.seed["projects"]["b"]
+		cls.main_cc = cls.seed["cost_centers"]["main"]
+		cls.other_cc = cls.seed["cost_centers"]["other"]
 
 	@classmethod
 	def tearDownClass(cls):
@@ -194,6 +198,142 @@ class TestProjectBudgetPlanVsForecastIntegration(FrappeTestCase):
 		self.assertEqual(flt(expense_row.get("plan_2026_05")), 300)  # 100 + 200
 		self.assertEqual(flt(expense_row.get("plan_2026_06")), 600)  # 100 + 200 + 300
 		self.assertEqual(flt(expense_row.get("total_plan")), 600)
+
+	def _row(self, filters, account):
+		for row in get_data(filters):
+			if row.get("account") == account:
+				return row
+		return {}
+
+	def test_cc04_group_cc_filter_expands_to_full_allocation(self):
+		"""TC-CC-04: parent Main CC filter (execute normalizes descendants) → full Apr actual 800."""
+		filters = self._base_filters(
+			cost_center=self.main_cc,
+			view_type="actual_only",
+			apply_cc_allocation=1,
+			from_month=4,
+			to_month=4,
+		)
+		actual = self._execute_cell(filters, self.expense_account, "actual", self.PERIOD_APR)
+		self.assertEqual(actual, self.NET_EXPENSE_APR)
+
+	def test_cc05_may_other_cc_posting_with_child_filter(self):
+		"""TC-CC-05: May G4 on Other CC — oracle via allocation formula on project GL total."""
+		filters = self._base_filters(
+			cost_center=self.child_cc_a,
+			view_type="actual_only",
+			apply_cc_allocation=1,
+			from_month=5,
+			to_month=5,
+		)
+		may_net = 400  # G4 only in May for PRJ-A
+		actual = self._cell(filters, self.expense_account, "actual", "2026_05")
+		expected = calculate_allocation_for_month(
+			project=self.project,
+			year=2026,
+			month=5,
+			total_amount=may_net,
+			cost_center_filter=self.child_cc_a,
+			apply_allocation=1,
+		)
+		self.assertEqual(actual, expected)
+
+	def test_cc07_company_filter_aggregates_both_projects(self):
+		"""TC-CC-07: no project filter — company aggregates PRJ-A May + PRJ-B May actuals."""
+		filters = self._base_filters(
+			view_type="actual_only",
+			from_month=5,
+			to_month=5,
+		)
+		filters.pop("project", None)
+		actual = self._execute_cell(filters, self.expense_account, "actual", "2026_05")
+		self.assertEqual(actual, 700)  # 400 (PRJ-A G4) + 300 (PRJ-B)
+
+	def test_cc09_allocation_on_without_cc_keeps_budget_rows(self):
+		"""TC-CC-09: allocation ON, no CC filter — plan/forecast rows present."""
+		filters = self._base_filters(
+			view_type="plan_only",
+			show_plan=1,
+			from_month=4,
+			to_month=6,
+		)
+		filters.pop("cost_center", None)
+		_columns, data = execute(filters)
+		expense_row = next((row for row in data if row.get("account") == self.expense_account), None)
+		self.assertIsNotNone(expense_row)
+		self.assertEqual(flt(expense_row.get("total_plan")), 600)
+
+	def test_gl03_cc_filter_report_matches_gl_subtree_when_gl_split(self):
+		"""TC-GL-03: with ERPNext CCA split, report actual equals direct GL on Child-A."""
+		filters = self._base_filters(
+			cost_center=self.child_cc_a,
+			view_type="actual_only",
+			apply_cc_allocation=1,
+			from_month=4,
+			to_month=4,
+		)
+		actual = self._cell(filters, self.expense_account, "actual", self.PERIOD_APR)
+		gl_amount = flt(
+			frappe.db.sql(
+				"""
+				SELECT ROUND(SUM(gle.debit - gle.credit), 0)
+				FROM `tabGL Entry` gle
+				WHERE gle.company = %s AND gle.project = %s AND gle.account = %s
+					AND gle.cost_center = %s
+					AND gle.posting_date BETWEEN %s AND %s AND gle.is_cancelled = 0
+				""",
+				(
+					self.company,
+					self.project,
+					self.expense_account,
+					self.child_cc_a,
+					self.APR_START,
+					self.APR_END,
+				),
+			)[0][0]
+		)
+		self.assertEqual(actual, self.ALLOCATED_CHILD_A)
+		self.assertEqual(actual, gl_amount)
+
+	def test_acc04_accumulated_export_totals_match_last_period(self):
+		"""TC-ACC-04: accumulated export — total_plan equals last period running value."""
+		filters = self._base_filters(
+			view_type="plan_only",
+			show_plan=1,
+			from_month=4,
+			to_month=6,
+		)
+		filters.pop("cost_center", None)
+		_columns, period_data = execute(filters)
+		acc_data = apply_accumulated_presentation(
+			period_data, _columns, {**filters, "accumulated_values": 1}
+		)
+		expense_row = next(row for row in acc_data if row.get("account") == self.expense_account)
+		self.assertEqual(flt(expense_row.get("plan_2026_06")), 600)
+		self.assertEqual(flt(expense_row.get("total_plan")), 600)
+
+	def test_acc05_accumulated_profit_row_matches_root_delta(self):
+		"""TC-ACC-05: accumulated profit row = income - expense for Apr."""
+		filters = self._base_filters(
+			view_type="actual_only",
+			from_month=4,
+			to_month=4,
+		)
+		filters.pop("cost_center", None)
+		_columns, period_data = execute(filters)
+		acc_data = apply_accumulated_presentation(
+			period_data, _columns, {**filters, "accumulated_values": 1}
+		)
+		income_roots, expense_roots = get_root_financial_nodes(acc_data)
+		by_account = {row["account"]: row for row in acc_data if row.get("account")}
+
+		def _sum_roots(roots, field):
+			return sum(flt(by_account.get(name, {}).get(field, 0)) for name in roots)
+
+		income = _sum_roots(income_roots, "actual_2026_04")
+		expense = _sum_roots(expense_roots, "actual_2026_04")
+		profit_row = next(row for row in acc_data if row.get("is_profit_row"))
+		self.assertEqual(flt(profit_row.get("actual_2026_04")), income - expense)
 
 	def test_acc08_execute_period_totals_without_accumulation(self):
 		"""TC-ACC-01: period-mode execute totals sum months when accumulated=0."""

@@ -78,9 +78,7 @@ br.sum_row_fields = function (rows, fieldnames) {
 	return total;
 };
 
-br.build_budget_chart_data = function (report) {
-	var data = report.data || [];
-	var columns = report.columns || [];
+br.summarize_budget_chart_periods = function (data, columns) {
 	var period_groups = br.get_budget_period_groups(columns);
 	var income_roots = br.get_budget_root_rows(data).filter(function (row) {
 		return row.root_type === "Income";
@@ -115,26 +113,6 @@ br.build_budget_chart_data = function (report) {
 		profit_actual.push(parseFloat((income_actual - expense_actual).toFixed(2)));
 	});
 
-	var cumulative_profit_plan = [];
-	var cumulative_profit_actual = [];
-	var accumulated_values = cint(
-		report.get_filter_value && report.get_filter_value("accumulated_values")
-	);
-
-	if (accumulated_values) {
-		cumulative_profit_plan = profit_plan.slice();
-		cumulative_profit_actual = profit_actual.slice();
-	} else {
-		var cum_plan = 0;
-		var cum_actual = 0;
-		for (var i = 0; i < profit_plan.length; i++) {
-			cum_plan += profit_plan[i];
-			cum_actual += profit_actual[i];
-			cumulative_profit_plan.push(parseFloat(cum_plan.toFixed(2)));
-			cumulative_profit_actual.push(parseFloat(cum_actual.toFixed(2)));
-		}
-	}
-
 	return {
 		labels: labels,
 		plan_income: plan_income,
@@ -143,87 +121,61 @@ br.build_budget_chart_data = function (report) {
 		actual_expenses: actual_expenses,
 		profit_plan: profit_plan,
 		profit_actual: profit_actual,
-		cumulative_profit_plan: cumulative_profit_plan,
-		cumulative_profit_actual: cumulative_profit_actual,
 		periods: periods,
 	};
 };
 
-br.get_budget_chart_presentation = function (report) {
-	var filters = report.get_filter_values();
-	var raw = br.build_budget_chart_data(report);
-	var view = br.get_budget_chart_view_label(filters);
-	var accumulated = cint(filters.accumulated_values);
-	var datasets = [];
+br.derive_period_values_from_cumulative = function (values) {
+	var period = [];
+	var previous = 0;
 
-	if (accumulated) {
-		if (cint(filters.show_plan)) {
-			datasets.push({
-				name: br.__("Cumulative income - plan"),
-				values: raw.plan_income,
-				chartType: "line",
-				plLayer: "cumulative",
-				plSeriesKind: "cumulative_income",
-				plIsPlan: true,
-			});
-		}
-		datasets.push({
-			name: br.__("Cumulative income") + " - " + view,
-			values: raw.actual_income,
-			chartType: "line",
-			plLayer: "cumulative",
-			plSeriesKind: "cumulative_income",
-			plIsPlan: false,
-		});
-		if (cint(filters.show_plan)) {
-			datasets.push({
-				name: br.__("Cumulative expenses - plan"),
-				values: raw.plan_expenses,
-				chartType: "line",
-				plLayer: "cumulative",
-				plSeriesKind: "cumulative_expense",
-				plIsPlan: true,
-			});
-		}
-		datasets.push({
-			name: br.__("Cumulative expenses") + " - " + view,
-			values: raw.actual_expenses,
-			chartType: "line",
-			plLayer: "cumulative",
-			plSeriesKind: "cumulative_expense",
-			plIsPlan: false,
-		});
-		if (cint(filters.show_plan)) {
-			datasets.push({
-				name: br.__("Cumulative profit - plan"),
-				values: raw.cumulative_profit_plan,
-				chartType: "line",
-				plLayer: "cumulative",
-				plSeriesKind: "cumulative_profit",
-				plIsPlan: true,
-			});
-		}
-		datasets.push({
-			name: br.__("Cumulative profit") + " - " + view,
-			values: raw.cumulative_profit_actual,
-			chartType: "line",
-			plLayer: "cumulative",
-			plSeriesKind: "cumulative_profit",
-			plIsPlan: false,
-		});
+	(values || []).forEach(function (value) {
+		var current = flt(value);
+		period.push(parseFloat((current - previous).toFixed(2)));
+		previous = current;
+	});
 
+	return period;
+};
+
+br.resolve_budget_chart_period_values = function (raw, accumulated) {
+	if (!accumulated) {
 		return {
-			labels: raw.labels,
-			datasets: datasets,
-			yMarkers: null,
-			dataObj: raw,
+			plan_income: raw.plan_income,
+			actual_income: raw.actual_income,
+			plan_expenses: raw.plan_expenses,
+			actual_expenses: raw.actual_expenses,
+			profit_plan: raw.profit_plan,
+			profit_actual: raw.profit_actual,
 		};
 	}
 
+	if (raw.period_plan_income) {
+		return {
+			plan_income: raw.period_plan_income,
+			actual_income: raw.period_actual_income,
+			plan_expenses: raw.period_plan_expenses,
+			actual_expenses: raw.period_actual_expenses,
+			profit_plan: raw.period_profit_plan,
+			profit_actual: raw.period_profit_actual,
+		};
+	}
+
+	return {
+		plan_income: br.derive_period_values_from_cumulative(raw.plan_income),
+		actual_income: br.derive_period_values_from_cumulative(raw.actual_income),
+		plan_expenses: br.derive_period_values_from_cumulative(raw.plan_expenses),
+		actual_expenses: br.derive_period_values_from_cumulative(raw.actual_expenses),
+		profit_plan: br.derive_period_values_from_cumulative(raw.profit_plan),
+		profit_actual: br.derive_period_values_from_cumulative(raw.profit_actual),
+	};
+};
+
+br.append_budget_period_bar_datasets = function (datasets, periodValues, filters, view) {
 	if (cint(filters.show_plan)) {
 		datasets.push({
 			name: br.__("Income - plan"),
-			values: raw.plan_income,
+			values: periodValues.plan_income,
 			chartType: "bar",
 			plLayer: "bar",
 			plSeriesKind: "income",
@@ -232,7 +184,7 @@ br.get_budget_chart_presentation = function (report) {
 	}
 	datasets.push({
 		name: br.__("Income") + " - " + view,
-		values: raw.actual_income,
+		values: periodValues.actual_income,
 		chartType: "bar",
 		plLayer: "bar",
 		plSeriesKind: "income",
@@ -241,7 +193,7 @@ br.get_budget_chart_presentation = function (report) {
 	if (cint(filters.show_plan)) {
 		datasets.push({
 			name: br.__("Expenses - plan"),
-			values: raw.plan_expenses,
+			values: periodValues.plan_expenses,
 			chartType: "bar",
 			plLayer: "bar",
 			plSeriesKind: "expense",
@@ -250,30 +202,15 @@ br.get_budget_chart_presentation = function (report) {
 	}
 	datasets.push({
 		name: br.__("Expenses") + " - " + view,
-		values: raw.actual_expenses,
+		values: periodValues.actual_expenses,
 		chartType: "bar",
 		plLayer: "bar",
 		plSeriesKind: "expense",
 		plIsPlan: false,
 	});
-	if (cint(filters.show_plan)) {
-		datasets.push({
-			name: br.__("Profit - plan"),
-			values: raw.profit_plan,
-			chartType: "line",
-			plLayer: "profit",
-			plSeriesKind: "period_profit",
-			plIsPlan: true,
-		});
-	}
-	datasets.push({
-		name: br.__("Profit") + " - " + view,
-		values: raw.profit_actual,
-		chartType: "line",
-		plLayer: "profit",
-		plSeriesKind: "period_profit",
-		plIsPlan: false,
-	});
+};
+
+br.append_budget_cumulative_profit_datasets = function (datasets, raw, filters, view) {
 	if (cint(filters.show_plan)) {
 		datasets.push({
 			name: br.__("Cumulative profit - plan"),
@@ -292,6 +229,141 @@ br.get_budget_chart_presentation = function (report) {
 		plSeriesKind: "cumulative_profit",
 		plIsPlan: false,
 	});
+};
+
+br.append_budget_cumulative_line_datasets = function (datasets, raw, filters, view) {
+	if (cint(filters.show_plan)) {
+		datasets.push({
+			name: br.__("Cumulative income - plan"),
+			values: raw.plan_income,
+			chartType: "line",
+			plLayer: "cumulative",
+			plSeriesKind: "cumulative_income",
+			plIsPlan: true,
+		});
+	}
+	datasets.push({
+		name: br.__("Cumulative income") + " - " + view,
+		values: raw.actual_income,
+		chartType: "line",
+		plLayer: "cumulative",
+		plSeriesKind: "cumulative_income",
+		plIsPlan: false,
+	});
+	if (cint(filters.show_plan)) {
+		datasets.push({
+			name: br.__("Cumulative expenses - plan"),
+			values: raw.plan_expenses,
+			chartType: "line",
+			plLayer: "cumulative",
+			plSeriesKind: "cumulative_expense",
+			plIsPlan: true,
+		});
+	}
+	datasets.push({
+		name: br.__("Cumulative expenses") + " - " + view,
+		values: raw.actual_expenses,
+		chartType: "line",
+		plLayer: "cumulative",
+		plSeriesKind: "cumulative_expense",
+		plIsPlan: false,
+	});
+	br.append_budget_cumulative_profit_datasets(datasets, raw, filters, view);
+};
+
+br.append_budget_period_profit_datasets = function (datasets, periodValues, filters, view) {
+	if (cint(filters.show_plan)) {
+		datasets.push({
+			name: br.__("Profit - plan"),
+			values: periodValues.profit_plan,
+			chartType: "line",
+			plLayer: "profit",
+			plSeriesKind: "period_profit",
+			plIsPlan: true,
+		});
+	}
+	datasets.push({
+		name: br.__("Profit") + " - " + view,
+		values: periodValues.profit_actual,
+		chartType: "line",
+		plLayer: "profit",
+		plSeriesKind: "period_profit",
+		plIsPlan: false,
+	});
+};
+
+br.build_budget_chart_data = function (report) {
+	var data = report.data || [];
+	var columns = report.columns || [];
+	var summary = br.summarize_budget_chart_periods(data, columns);
+	var accumulated_values = cint(
+		report.get_filter_value && report.get_filter_value("accumulated_values")
+	);
+
+	var cumulative_profit_plan = [];
+	var cumulative_profit_actual = [];
+
+	if (accumulated_values) {
+		cumulative_profit_plan = summary.profit_plan.slice();
+		cumulative_profit_actual = summary.profit_actual.slice();
+	} else {
+		var cum_plan = 0;
+		var cum_actual = 0;
+		for (var i = 0; i < summary.profit_plan.length; i++) {
+			cum_plan += summary.profit_plan[i];
+			cum_actual += summary.profit_actual[i];
+			cumulative_profit_plan.push(parseFloat(cum_plan.toFixed(2)));
+			cumulative_profit_actual.push(parseFloat(cum_actual.toFixed(2)));
+		}
+	}
+
+	var result = {
+		labels: summary.labels,
+		plan_income: summary.plan_income,
+		actual_income: summary.actual_income,
+		plan_expenses: summary.plan_expenses,
+		actual_expenses: summary.actual_expenses,
+		profit_plan: summary.profit_plan,
+		profit_actual: summary.profit_actual,
+		cumulative_profit_plan: cumulative_profit_plan,
+		cumulative_profit_actual: cumulative_profit_actual,
+		periods: summary.periods,
+	};
+
+	if (accumulated_values) {
+		var periodSource = report._budget_source_snapshot;
+		if (periodSource && periodSource.length) {
+			var periodSummary = br.summarize_budget_chart_periods(periodSource, columns);
+			result.period_plan_income = periodSummary.plan_income;
+			result.period_actual_income = periodSummary.actual_income;
+			result.period_plan_expenses = periodSummary.plan_expenses;
+			result.period_actual_expenses = periodSummary.actual_expenses;
+			result.period_profit_plan = periodSummary.profit_plan;
+			result.period_profit_actual = periodSummary.profit_actual;
+		}
+	}
+
+	return result;
+};
+
+br.get_budget_chart_presentation = function (report) {
+	var filters = report.get_filter_values();
+	var raw = br.build_budget_chart_data(report);
+	var view = br.get_budget_chart_view_label(filters);
+	var accumulated = cint(filters.accumulated_values);
+	var periodValues = br.resolve_budget_chart_period_values(raw, accumulated);
+	var datasets = [];
+
+	if (accumulated) {
+		br.append_budget_cumulative_line_datasets(datasets, raw, filters, view);
+	}
+
+	br.append_budget_period_bar_datasets(datasets, periodValues, filters, view);
+
+	if (!accumulated) {
+		br.append_budget_period_profit_datasets(datasets, periodValues, filters, view);
+		br.append_budget_cumulative_profit_datasets(datasets, raw, filters, view);
+	}
 
 	return {
 		labels: raw.labels,

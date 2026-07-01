@@ -4,6 +4,7 @@ const REPORT_NAME = "Project Budget Plan vs Forecast";
 
 const _budget_report_files = [
 	"/assets/dinext_common/js/sticky-datatable.js",
+	"/assets/dinext_projects_pl/js/project_pl_navigation.js",
 	"/assets/dinext_projects_pl/js/budget_report/filters.js",
 	"/assets/dinext_projects_pl/js/budget_report/presentation.js",
 	"/assets/dinext_projects_pl/js/budget_report/datatable_options.js",
@@ -74,6 +75,7 @@ function init_budget_report(report) {
 	br.install_sticky_datatable(report);
 	br.setup_filter_layout(report);
 	br.setup_url_filter_persistence(report);
+	br.normalize_checkbox_filters_from_url(report);
 	br.setup_budget_summary_hooks(report);
 	br.setup_period_month_pickers(report);
 	br.setup_period_granularity_handler(report);

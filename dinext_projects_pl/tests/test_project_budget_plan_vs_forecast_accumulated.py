@@ -14,6 +14,7 @@ from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecas
 from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.periods import (
 	aggregate_data_by_granularity,
 	apply_accumulated_values,
+	get_ordered_display_fieldnames,
 )
 from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.project_budget_plan_vs_forecast import (
 	execute,
@@ -192,13 +193,21 @@ class TestProjectBudgetPlanVsForecastAccumulated(FrappeTestCase):
 		self.assertEqual(result[f"plan_{year}_02"], 150)
 		self.assertEqual(result[f"plan_{year}_03"], 180)
 
-	def test_apply_accumulated_values_keeps_prefixes_independent(self):
+	def test_apply_accumulated_values_keeps_plan_and_display_independent(self):
 		year = 2026
 		columns = [
-			{"fieldname": f"plan_{year}_01", "period_group": f"{year}_01"},
-			{"fieldname": f"plan_{year}_02", "period_group": f"{year}_02"},
-			{"fieldname": f"actual_{year}_01", "period_group": f"{year}_01"},
-			{"fieldname": f"actual_{year}_02", "period_group": f"{year}_02"},
+			{"fieldname": f"plan_{year}_01", "period_group": f"{year}_01", "period_role": "plan"},
+			{"fieldname": f"plan_{year}_02", "period_group": f"{year}_02", "period_role": "plan"},
+			{
+				"fieldname": f"actual_{year}_01",
+				"period_group": f"{year}_01",
+				"period_role": "display",
+			},
+			{
+				"fieldname": f"actual_{year}_02",
+				"period_group": f"{year}_02",
+				"period_role": "display",
+			},
 		]
 		data = [
 			{
@@ -210,10 +219,119 @@ class TestProjectBudgetPlanVsForecastAccumulated(FrappeTestCase):
 			}
 		]
 
-		result = apply_accumulated_values(data, columns, {"accumulated_values": 1})[0]
+		result = apply_accumulated_values(
+			data, columns, {"accumulated_values": 1, "view_type": "actual_only"}
+		)[0]
 
 		self.assertEqual(result[f"plan_{year}_02"], 15)
 		self.assertEqual(result[f"actual_{year}_02"], 120)
+
+	def test_apply_accumulated_values_unifies_forecast_actual_display_timeline(self):
+		"""Fact months then forecast months accumulate on one timeline."""
+		year = 2026
+		columns = [
+			{
+				"fieldname": f"actual_{year}_01",
+				"period_group": f"{year}_01",
+				"period_role": "display",
+			},
+			{
+				"fieldname": f"actual_{year}_02",
+				"period_group": f"{year}_02",
+				"period_role": "display",
+			},
+			{
+				"fieldname": f"forecast_{year}_03",
+				"period_group": f"{year}_03",
+				"period_role": "display",
+			},
+		]
+		data = [
+			{
+				"account": "Test",
+				f"actual_{year}_01": 100,
+				f"actual_{year}_02": 50,
+				f"forecast_{year}_03": 30,
+			}
+		]
+		filters = {"accumulated_values": 1, "view_type": "forecast_actual"}
+
+		result = apply_accumulated_values(data, columns, filters)[0]
+
+		self.assertEqual(result[f"actual_{year}_01"], 100)
+		self.assertEqual(result[f"actual_{year}_02"], 150)
+		self.assertEqual(result[f"forecast_{year}_03"], 180)
+
+	def test_accumulated_dashboard_totals_match_period_sum(self):
+		"""End-of-range accumulated totals equal sum of period display values."""
+		year = 2026
+		columns = [
+			{
+				"fieldname": f"actual_{year}_01",
+				"period_group": f"{year}_01",
+				"period_role": "display",
+			},
+			{
+				"fieldname": f"actual_{year}_02",
+				"period_group": f"{year}_02",
+				"period_role": "display",
+			},
+			{
+				"fieldname": f"forecast_{year}_03",
+				"period_group": f"{year}_03",
+				"period_role": "display",
+			},
+		]
+		rows = [
+			{
+				"account": "Income Root",
+				"indent": 0,
+				"root_type": "Income",
+				f"actual_{year}_01": 100,
+				f"actual_{year}_02": 50,
+				f"forecast_{year}_03": 30,
+			},
+			{
+				"account": "Expense Root",
+				"indent": 0,
+				"root_type": "Expense",
+				f"actual_{year}_01": 40,
+				f"actual_{year}_02": 10,
+				f"forecast_{year}_03": 5,
+			},
+		]
+
+		period_filters = {"accumulated_values": 0, "view_type": "forecast_actual", "show_plan": 0}
+		period_data = add_profit_row(
+			add_row_totals(copy.deepcopy(rows), period_filters, columns),
+			columns,
+			period_filters,
+		)
+		display_fields = get_ordered_display_fieldnames(columns, period_filters)
+
+		def _root_sum(data, root_type, fields):
+			total = 0
+			for row in data:
+				if row.get("root_type") != root_type or row.get("is_profit_row") or row.get(
+					"is_profitability_row"
+				):
+					continue
+				for field in fields:
+					total += flt(row.get(field, 0))
+			return total
+
+		period_income = _root_sum(period_data, "Income", display_fields)
+		period_expense = _root_sum(period_data, "Expense", display_fields)
+
+		acc_filters = {**period_filters, "accumulated_values": 1}
+		acc_data = apply_accumulated_presentation(copy.deepcopy(rows), columns, acc_filters)
+		last_field = display_fields[-1]
+		acc_income = _root_sum(acc_data, "Income", [last_field])
+		acc_expense = _root_sum(acc_data, "Expense", [last_field])
+
+		self.assertEqual(acc_income, period_income)
+		self.assertEqual(acc_expense, period_expense)
+		self.assertEqual(acc_income - acc_expense, period_income - period_expense)
 
 	def test_add_row_totals_accumulated_uses_last_period_not_sum(self):
 		year = 2026
@@ -589,7 +707,7 @@ class TestProjectBudgetPlanVsForecastAccumulated(FrappeTestCase):
 		self.assertEqual(profit["total_plan"], 125)
 
 	def test_mixed_actual_and_forecast_accumulated_total_uses_last_display_column(self):
-		"""actual_* and forecast_* accumulate separately; total follows last chronologic column."""
+		"""Fact and forecast display columns share one accumulated timeline."""
 		year = 2026
 		filters = {
 			"from_year": year,
@@ -635,9 +753,9 @@ class TestProjectBudgetPlanVsForecastAccumulated(FrappeTestCase):
 		profit = _profit_row(result)
 
 		self.assertEqual(income["actual_2026_01"], 100)
-		self.assertEqual(income["forecast_2026_07"], 40)
-		self.assertEqual(income["total_exp_fct"], 40)
+		self.assertEqual(income["forecast_2026_07"], 140)
+		self.assertEqual(income["total_exp_fct"], 140)
 		self.assertEqual(profit["actual_2026_01"], 80)
-		self.assertEqual(profit["forecast_2026_07"], 30)
-		self.assertEqual(profit["total_exp_fct"], 30)
+		self.assertEqual(profit["forecast_2026_07"], 110)
+		self.assertEqual(profit["total_exp_fct"], 110)
 
