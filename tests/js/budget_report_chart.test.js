@@ -299,3 +299,31 @@ test("build_budget_chart_data exposes period values from source snapshot when ac
 	assert.equal(chartData.plan_income[0], 100);
 	assert.equal(chartData.plan_income[1], 150);
 });
+
+test("parse_budget_chart_period_meta extracts year month and quarter", () => {
+	const br = loadBudgetChartModules();
+
+	assert.equal(br.parse_budget_chart_period_meta("2026_03").year, 2026);
+	assert.equal(br.parse_budget_chart_period_meta("2026_03").month, 3);
+	assert.equal(br.parse_budget_chart_period_meta("2026_Q2").year, 2026);
+	assert.equal(br.parse_budget_chart_period_meta("2026_Q2").quarter, 2);
+	assert.equal(br.parse_budget_chart_period_meta("2026").year, 2026);
+	assert.equal(Object.keys(br.parse_budget_chart_period_meta("total")).length, 0);
+});
+
+test("build_budget_chart_frm hides current date markLine label", () => {
+	const br = loadBudgetChartModules();
+	const report = makeReport();
+	report.get_filter_values = function () {
+		return {
+			company: "Dinext",
+			show_plan: 1,
+			view_type: "forecast_actual",
+			accumulated_values: 0,
+		};
+	};
+
+	const frm = br.build_budget_chart_frm(report);
+
+	assert.equal(frm.hide_current_date_mark_line_label, true);
+});

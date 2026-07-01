@@ -3,8 +3,10 @@ frappe.provide("dinext_projects_pl");
 
 const PROJECT_PL_TAB_FIELDNAME = "custom_pl";
 const PROJECT_PL_TABLE_SELECTOR = ".budget-container .budget-table";
-const PROJECT_PL_OPEN_TAB_STORAGE_KEY =
-	dinext_projects_pl.PROJECT_PL_OPEN_TAB_STORAGE_KEY || "dinext_projects_pl_open_tab";
+
+function get_project_pl_open_tab_storage_key() {
+	return dinext_projects_pl.PROJECT_PL_OPEN_TAB_STORAGE_KEY || "dinext_projects_pl_open_tab";
+}
 
 function should_open_project_pl_tab(frm) {
 	if (!frm || frm.doctype !== "Project" || !frm.docname) {
@@ -14,7 +16,7 @@ function should_open_project_pl_tab(frm) {
 		return true;
 	}
 	try {
-		return sessionStorage.getItem(PROJECT_PL_OPEN_TAB_STORAGE_KEY) === frm.docname;
+		return sessionStorage.getItem(get_project_pl_open_tab_storage_key()) === frm.docname;
 	} catch (e) {
 		return false;
 	}
@@ -25,8 +27,8 @@ function clear_project_pl_open_tab_request(project) {
 		delete frappe.route_options.open_pl_tab;
 	}
 	try {
-		if (sessionStorage.getItem(PROJECT_PL_OPEN_TAB_STORAGE_KEY) === project) {
-			sessionStorage.removeItem(PROJECT_PL_OPEN_TAB_STORAGE_KEY);
+		if (sessionStorage.getItem(get_project_pl_open_tab_storage_key()) === project) {
+			sessionStorage.removeItem(get_project_pl_open_tab_storage_key());
 		}
 	} catch (e) {
 		// ignore

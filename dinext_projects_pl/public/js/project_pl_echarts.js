@@ -696,8 +696,23 @@ function get_pl_chart_current_period_index(periods) {
     const today = frappe.datetime.str_to_obj(frappe.datetime.get_today());
     const year = today.getFullYear();
     const month = today.getMonth() + 1;
+    const quarter = Math.floor((month - 1) / 3) + 1;
 
-    return periods.findIndex((period) => period.year === year && period.month === month);
+    return periods.findIndex((period) => {
+        if (period.year == null) {
+            return false;
+        }
+        if (period.year !== year) {
+            return false;
+        }
+        if (period.month != null) {
+            return Number(period.month) === month;
+        }
+        if (period.quarter != null) {
+            return Number(period.quarter) === quarter;
+        }
+        return true;
+    });
 }
 
 function build_pl_chart_plan_profit_mark_line_entry(marker, chartData, themeColors) {
@@ -731,8 +746,11 @@ function build_pl_chart_plan_profit_mark_line_entry(marker, chartData, themeColo
 function build_pl_chart_current_date_mark_line_entry(
     categoryIndex,
     themeColors,
-    categoryLabel
+    categoryLabel,
+    options = {}
 ) {
+    const showLabel = options.showLabel !== false;
+
     return {
         xAxis: categoryIndex,
         lineStyle: {
@@ -741,7 +759,7 @@ function build_pl_chart_current_date_mark_line_entry(
             type: "solid",
         },
         label: {
-            show: true,
+            show: showLabel,
             formatter: categoryLabel,
             color: themeColors.text,
             fontSize: 11,
@@ -826,7 +844,8 @@ function get_pl_echarts_option(frm, chartData) {
             build_pl_chart_current_date_mark_line_entry(
                 currentPeriodIndex,
                 themeColors,
-                chartData.labels[currentPeriodIndex]
+                chartData.labels[currentPeriodIndex],
+                { showLabel: !frm.hide_current_date_mark_line_label }
             )
         );
     }
