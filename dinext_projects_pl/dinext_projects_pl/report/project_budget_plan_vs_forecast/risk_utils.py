@@ -1,7 +1,9 @@
 # Copyright (c) 2026, Dinext and contributors
 """Project Risk reserve handling aligned with project P&L (project_pl_calc.js)."""
 
-from frappe.utils import cint, flt
+from collections import defaultdict
+
+from frappe.utils import cint, flt, getdate, today
 
 DATA_TYPE_WITH_RISK = "with_risk"
 DATA_TYPE_WITH_TASK = "with_task"
@@ -41,3 +43,116 @@ def sum_risk_amounts(risk_rows, period_key=None, *, value_key="forecast"):
 				continue
 		total += flt(row.get(amount_field, 0))
 	return total
+
+
+def merge_risk_totals(target, source):
+	"""Merge {period_key: {plan, forecast}} buckets in-place."""
+	for period_key, values in (source or {}).items():
+		bucket = target.setdefault(period_key, {"plan": 0.0, "forecast": 0.0})
+		bucket["plan"] += flt(values.get("plan"))
+		bucket["forecast"] += flt(values.get("forecast"))
+
+
+def aggregate_risk_totals_by_period(project, risk_rows, filters):
+	"""Build per-period risk reserve totals with optional CC/BA allocation."""
+	from .allocation import calculate_allocation_for_month
+
+	if not risk_rows:
+		return {}
+
+	period_amounts = defaultdict(lambda: {"plan": 0.0, "forecast": 0.0})
+	for row in risk_rows:
+		year = int(row.get("pba_year", 0))
+		month = int(row.get("pba_month", 0))
+		if year == 0 or month == 0:
+			continue
+		period_key = f"{year}_{month:02d}"
+		period_amounts[period_key]["plan"] += flt(row.get("plan", 0))
+		period_amounts[period_key]["forecast"] += flt(row.get("forecast", 0))
+
+	cost_center_filter = filters.get("cost_center")
+	business_area_filter = filters.get("business_area")
+	apply_allocation = filters.get("apply_cc_allocation", 0)
+	totals = {}
+
+	for period_key, amounts in period_amounts.items():
+		year, month = map(int, period_key.split("_"))
+		plan = amounts["plan"]
+		forecast = amounts["forecast"]
+
+		if cost_center_filter or business_area_filter:
+			plan = (
+				calculate_allocation_for_month(
+					project=project,
+					year=year,
+					month=month,
+					total_amount=plan,
+					cost_center_filter=cost_center_filter,
+					business_area_filter=business_area_filter,
+					apply_allocation=apply_allocation,
+				)
+				if plan
+				else 0
+			)
+			forecast = (
+				calculate_allocation_for_month(
+					project=project,
+					year=year,
+					month=month,
+					total_amount=forecast,
+					cost_center_filter=cost_center_filter,
+					business_area_filter=business_area_filter,
+					apply_allocation=apply_allocation,
+				)
+				if forecast
+				else 0
+			)
+
+		if plan or forecast:
+			totals[period_key] = {"plan": plan, "forecast": forecast}
+
+	return totals
+
+
+def is_past_report_period(year, month, as_of_date=None):
+	current = getdate(as_of_date or today())
+	return year < current.year or (year == current.year and month < current.month)
+
+
+def apply_risk_reserves_to_expense_by_column(expense_by_column, risk_totals, filters, monthly_columns):
+	"""
+	Add risk reserves to expense side for profit (not CoA rows).
+
+	Matches project P&L: reserves reduce profit via forecast/plan tracks only.
+	"""
+	if not risk_totals:
+		return
+
+	view_type = (filters or {}).get("view_type", "forecast_actual")
+
+	for col in monthly_columns or []:
+		if col.startswith("plan_"):
+			period_key = col[len("plan_") :]
+			amount = flt(risk_totals.get(period_key, {}).get("plan"))
+			if amount:
+				expense_by_column[col] = expense_by_column.get(col, 0) + amount
+		elif col.startswith("forecast_"):
+			period_key = col[len("forecast_") :]
+			year, month = map(int, period_key.split("_"))
+			if view_type == "forecast_only" or (
+				view_type == "forecast_actual" and not is_past_report_period(year, month)
+			):
+				amount = flt(risk_totals.get(period_key, {}).get("forecast"))
+				if amount:
+					expense_by_column[col] = expense_by_column.get(col, 0) + amount
+
+
+def build_report_risk_meta_row(risk_totals):
+	if not risk_totals:
+		return None
+	return {
+		"account": "",
+		"indent": -1,
+		"is_report_meta": True,
+		"risk_totals": risk_totals,
+	}

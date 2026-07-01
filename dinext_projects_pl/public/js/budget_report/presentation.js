@@ -8,9 +8,151 @@ function deepCloneData(data) {
 
 function stripProfitRows(data) {
 	return (data || []).filter(function (row) {
-		return row && !row.is_profit_row && !row.is_profitability_row;
+		return row && !row.is_profit_row && !row.is_profitability_row && !row.is_report_meta;
 	});
 }
+
+br.extractReportPayload = function (data) {
+	var riskTotals = null;
+	var rows = [];
+
+	(data || []).forEach(function (row) {
+		if (row && row.is_report_meta) {
+			riskTotals = row.risk_totals || riskTotals;
+			return;
+		}
+		rows.push(row);
+	});
+
+	return {
+		rows: rows,
+		riskTotals: riskTotals,
+	};
+};
+
+br.parseReportPeriodMeta = function (periodKey) {
+	if (!periodKey || periodKey === "total") {
+		return {};
+	}
+
+	var parts = String(periodKey).split("_");
+	if (parts.length === 2 && /^\d{2}$/.test(parts[1])) {
+		return {
+			year: parseInt(parts[0], 10),
+			month: parseInt(parts[1], 10),
+		};
+	}
+	return {};
+};
+
+br.isPastReportPeriod = function (year, month) {
+	var today = frappe.datetime.get_today();
+	var parts = String(today).split("-");
+	var currentYear = parseInt(parts[0], 10);
+	var currentMonth = parseInt(parts[1], 10);
+	return year < currentYear || (year === currentYear && month < currentMonth);
+};
+
+br.shouldApplyRiskForecast = function (filters, year, month) {
+	if (!year || !month) {
+		return false;
+	}
+	var viewType = (filters && filters.view_type) || "forecast_actual";
+	if (viewType === "forecast_only") {
+		return true;
+	}
+	if (viewType === "forecast_actual") {
+		return !br.isPastReportPeriod(year, month);
+	}
+	return false;
+};
+
+br.getRiskAmountForSummaryGroup = function (riskTotals, group, filters) {
+	if (!riskTotals || !group || !group.key || !riskTotals[group.key]) {
+		return { plan: 0, display: 0 };
+	}
+
+	var bucket = riskTotals[group.key];
+	var meta = br.parseReportPeriodMeta(group.key);
+	var display = 0;
+
+	if (br.shouldApplyRiskForecast(filters, meta.year, meta.month)) {
+		display = flt(bucket.forecast);
+	}
+
+	return {
+		plan: flt(bucket.plan),
+		display: display,
+	};
+};
+
+br.applyRiskReservesToExpenseByColumn = function (
+	expenseByColumn,
+	monthlyColumns,
+	riskTotals,
+	filters
+) {
+	if (!riskTotals) {
+		return;
+	}
+
+	var accumulated = cint(filters && filters.accumulated_values);
+	var runningPlan = 0;
+	var runningForecast = 0;
+
+	monthlyColumns.forEach(function (col) {
+		if (col.indexOf("plan_") === 0) {
+			var planPeriodKey = col.slice("plan_".length);
+			var planAmount = flt(riskTotals[planPeriodKey] && riskTotals[planPeriodKey].plan);
+			if (!planAmount) {
+				return;
+			}
+			if (accumulated) {
+				runningPlan += planAmount;
+				expenseByColumn[col] = flt(expenseByColumn[col]) + runningPlan;
+			} else {
+				expenseByColumn[col] = flt(expenseByColumn[col]) + planAmount;
+			}
+			return;
+		}
+
+		if (col.indexOf("forecast_") !== 0) {
+			return;
+		}
+
+		var forecastPeriodKey = col.slice("forecast_".length);
+		var meta = br.parseReportPeriodMeta(forecastPeriodKey);
+		if (!br.shouldApplyRiskForecast(filters, meta.year, meta.month)) {
+			return;
+		}
+
+		var forecastAmount = flt(
+			riskTotals[forecastPeriodKey] && riskTotals[forecastPeriodKey].forecast
+		);
+		if (!forecastAmount) {
+			return;
+		}
+
+		if (accumulated) {
+			runningForecast += forecastAmount;
+			expenseByColumn[col] = flt(expenseByColumn[col]) + runningForecast;
+		} else {
+			expenseByColumn[col] = flt(expenseByColumn[col]) + forecastAmount;
+		}
+	});
+};
+
+br.sumRiskDisplayExpense = function (riskTotals, periodGroups, filters) {
+	if (!riskTotals || !periodGroups || !periodGroups.length) {
+		return 0;
+	}
+
+	var total = 0;
+	periodGroups.forEach(function (group) {
+		total += br.getRiskAmountForSummaryGroup(riskTotals, group, filters).display;
+	});
+	return total;
+};
 
 br._periodSortKey = function (fieldname) {
 	var parts = (fieldname || "").split("_");
@@ -231,12 +373,13 @@ br.addRowTotals = function (data, filters, columns) {
 	return data;
 };
 
-br.addProfitRow = function (data, columns, filters) {
+br.addProfitRow = function (data, columns, filters, riskTotals) {
 	if (!data || !data.length) {
 		return data;
 	}
 
 	filters = filters || {};
+	riskTotals = riskTotals || (filters && filters._report_risk_totals);
 	var viewType = filters.view_type || "forecast_actual";
 	var showPlan = cint(filters.show_plan);
 	var accumulated = cint(filters.accumulated_values);
@@ -306,6 +449,13 @@ br.addProfitRow = function (data, columns, filters) {
 			expenseByColumn[col] += flt(row[col]);
 		});
 	});
+
+	br.applyRiskReservesToExpenseByColumn(
+		expenseByColumn,
+		monthlyColumns,
+		riskTotals,
+		filters
+	);
 
 	var profitRow = {
 		account: br.__("Gross Profit"),
@@ -438,7 +588,9 @@ br.store_budget_source_snapshot = function (report) {
 	if (!report) {
 		return;
 	}
-	report._budget_source_snapshot = deepCloneData(report.data);
+	var extracted = br.extractReportPayload(report.data);
+	report._budget_risk_totals = extracted.riskTotals;
+	report._budget_source_snapshot = deepCloneData(extracted.rows);
 };
 
 br.apply_budget_presentation = function (report) {
@@ -456,7 +608,7 @@ br.apply_budget_presentation = function (report) {
 		var data = stripProfitRows(deepCloneData(snapshot));
 		br.applyAccumulatedValues(data, columns, filters);
 		br.addRowTotals(data, filters, columns);
-		br.addProfitRow(data, columns, filters);
+		br.addProfitRow(data, columns, filters, report._budget_risk_totals);
 		report.data = data;
 	} else {
 		report.data = deepCloneData(snapshot);

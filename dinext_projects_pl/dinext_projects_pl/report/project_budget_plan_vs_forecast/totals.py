@@ -10,6 +10,7 @@ from .periods import (
 	get_sorted_period_fieldnames,
 	_period_sort_key,
 )
+from .risk_utils import apply_risk_reserves_to_expense_by_column
 from .debug_utils import _report_debug
 
 
@@ -18,7 +19,9 @@ def apply_accumulated_presentation(data, columns, filters):
 	data = [
 		row
 		for row in (data or [])
-		if not row.get("is_profit_row") and not row.get("is_profitability_row")
+		if not row.get("is_profit_row")
+		and not row.get("is_profitability_row")
+		and not row.get("is_report_meta")
 	]
 
 	acc_filters = dict(filters or {})
@@ -209,6 +212,13 @@ def add_profit_row(data, columns, filters):
         
         for col in monthly_columns:
             expense_by_column[col] += flt(row.get(col, 0))
+
+    apply_risk_reserves_to_expense_by_column(
+        expense_by_column,
+        (filters or {}).get("_report_risk_totals"),
+        filters,
+        monthly_columns,
+    )
     
     # Строка с валовой прибылью
     profit_row = {

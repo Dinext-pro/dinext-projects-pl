@@ -79,6 +79,9 @@ br.prepare_sticky_summary_rows = function (report) {
 	var filtered = [];
 
 	report.data.forEach(function (row) {
+		if (row && row.is_report_meta) {
+			return;
+		}
 		if (row && cint(row.indent, 0) === 0 && row.root_type === "Income" && row.account) {
 			root_income_accounts.push(row.account);
 		}

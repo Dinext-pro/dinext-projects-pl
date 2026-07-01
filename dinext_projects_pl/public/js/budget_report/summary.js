@@ -110,6 +110,9 @@ br.build_budget_summary_totals = function (report) {
 		report.get_filter_value && report.get_filter_value("accumulated_values")
 	);
 
+	var filters = report.get_filter_values ? report.get_filter_values() : {};
+	var riskTotals = report._budget_risk_totals;
+
 	if (accumulated_values && period_groups.length) {
 		var last_group = period_groups[period_groups.length - 1];
 		income_display = br.sum_row_fields(income_roots, last_group.display);
@@ -121,9 +124,12 @@ br.build_budget_summary_totals = function (report) {
 		});
 	}
 
+	expense_display += br.sumRiskDisplayExpense(riskTotals, period_groups, filters);
+	expense_display = Math.abs(expense_display);
+
 	return {
 		income: income_display,
-		expense: Math.abs(expense_display),
+		expense: expense_display,
 		profit: income_display - expense_display,
 	};
 };

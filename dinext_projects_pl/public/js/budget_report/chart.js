@@ -102,7 +102,7 @@ br.parse_budget_chart_period_meta = function (periodKey) {
 	return {};
 };
 
-br.summarize_budget_chart_periods = function (data, columns) {
+br.summarize_budget_chart_periods = function (data, columns, riskTotals, filters) {
 	var period_groups = br.get_budget_period_groups(columns);
 	var income_roots = br.get_budget_root_rows(data).filter(function (row) {
 		return row.root_type === "Income";
@@ -110,6 +110,7 @@ br.summarize_budget_chart_periods = function (data, columns) {
 	var expense_roots = br.get_budget_root_rows(data).filter(function (row) {
 		return row.root_type === "Expense";
 	});
+	filters = filters || {};
 
 	var labels = [];
 	var plan_income = [];
@@ -133,6 +134,12 @@ br.summarize_budget_chart_periods = function (data, columns) {
 		var income_actual = br.sum_row_fields(income_roots, group.display);
 		var expense_plan = br.sum_row_fields(expense_roots, group.plan);
 		var expense_actual = br.sum_row_fields(expense_roots, group.display);
+		var riskParts = br.getRiskAmountForSummaryGroup
+			? br.getRiskAmountForSummaryGroup(riskTotals, group, filters)
+			: { plan: 0, display: 0 };
+
+		expense_plan += riskParts.plan;
+		expense_actual += riskParts.display;
 
 		plan_income.push(parseFloat(income_plan.toFixed(2)));
 		actual_income.push(parseFloat(income_actual.toFixed(2)));
@@ -324,7 +331,13 @@ br.append_budget_period_profit_datasets = function (datasets, periodValues, filt
 br.build_budget_chart_data = function (report) {
 	var data = report.data || [];
 	var columns = report.columns || [];
-	var summary = br.summarize_budget_chart_periods(data, columns);
+	var filters = report.get_filter_values ? report.get_filter_values() : {};
+	var summary = br.summarize_budget_chart_periods(
+		data,
+		columns,
+		report._budget_risk_totals,
+		filters
+	);
 	var accumulated_values = cint(
 		report.get_filter_value && report.get_filter_value("accumulated_values")
 	);
@@ -362,7 +375,12 @@ br.build_budget_chart_data = function (report) {
 	if (accumulated_values) {
 		var periodSource = report._budget_source_snapshot;
 		if (periodSource && periodSource.length) {
-			var periodSummary = br.summarize_budget_chart_periods(periodSource, columns);
+			var periodSummary = br.summarize_budget_chart_periods(
+				periodSource,
+				columns,
+				report._budget_risk_totals,
+				filters
+			);
 			result.period_plan_income = periodSummary.plan_income;
 			result.period_actual_income = periodSummary.actual_income;
 			result.period_plan_expenses = periodSummary.plan_expenses;
@@ -590,6 +608,9 @@ br.render_budget_chart = function (report) {
 		}
 
 		br._budget_chart_instance.setOption(option, true);
+		if (typeof globalThis.ensure_pl_chart_theme_observer === "function") {
+			globalThis.ensure_pl_chart_theme_observer();
+		}
 		br.resize_budget_chart();
 	});
 };
