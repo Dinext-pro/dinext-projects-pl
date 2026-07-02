@@ -1104,6 +1104,9 @@ function refresh_budget_report_chart_theme() {
     if (!br || !br._budget_chart_instance || !report || !report.data || !report.data.length) {
         return;
     }
+    if (typeof br.is_budget_report_view === "function" && !br.is_budget_report_view(report)) {
+        return;
+    }
     if (typeof br.get_budget_chart_presentation !== "function") {
         return;
     }
