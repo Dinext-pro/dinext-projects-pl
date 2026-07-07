@@ -1630,14 +1630,17 @@ $(document).on('dblclick', '.budget-row-link', function(e) {
     frappe.set_route('List', 'Budget');
 });
 
-// TODO: вернуть после включения approval flow (dinext_projects_pl_enable_plan_approval = 1)
-// $(document).on('dblclick', '.bg-group-plan:not(.zero)', function(e) {
-//     e.preventDefault();
-//     e.stopPropagation();
-//
-//     const $group = $(e.currentTarget).closest('.budget-group');
-//     open_approved_budget_for_group($group);
-// });
+$(document).on('dblclick', '.bg-group-plan:not(.zero)', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!cur_frm?.docname || cur_frm.doctype !== "Project") {
+        return;
+    }
+
+    const $group = $(e.currentTarget).closest('.budget-group');
+    open_approved_budget_for_group($group);
+});
 
 // При двойном клике по значению "факт"
 // https://erp.dinord.ru/app/issue/ISS-2025-01237
@@ -1679,6 +1682,11 @@ function open_approved_budget_for_group($group) {
     const year = $group.data('year');
     const month = $group.data('month');
     const account = $group.data('account');
+
+    if (!cur_frm?.docname || !account || !year || !month) {
+        return;
+    }
+
     const dimRaw = $group.attr('data-dimensions');
 
     let dimensions = [];
