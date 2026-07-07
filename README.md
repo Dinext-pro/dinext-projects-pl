@@ -103,6 +103,10 @@ frappe.call({
 - При `Approve` бюджет submit'ится и синхронизируется в `Project Budget`.
 - При согласовании replacement-версии ранее approved budget для того же канонического ключа отменяется, а новая версия становится источником истины.
 - При отмене ранее approved budget read model либо восстанавливается из другого approved replacement, либо очищается по затронутым месяцам.
+- `Budget` можно вести как по leaf, так и по group P&L accounts. Создание бюджета блокируется только для счетов, где `Account.custom_not_plan_exp = 1`.
+- Для parent и descendant accounts допустимы отдельные бюджеты в одном scope, но parent amount должен быть не меньше суммы ближайших дочерних budgeted accounts.
+- Проверка лимита для MR/PO/GL выбирает ближайший подходящий `Budget` по иерархии account: exact account, затем ближайший parent group account и далее вверх.
+- Для variance-аналитики по group accounts используйте app-owned отчет `Dinext Budget Variance Report`; стандартный ERPNext source не изменяется.
 
 ### UI-помощники
 

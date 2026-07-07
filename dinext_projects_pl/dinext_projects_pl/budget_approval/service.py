@@ -14,7 +14,7 @@ from erpnext.accounts.doctype.budget.budget import DuplicateBudgetError
 from erpnext.accounts.utils import get_fiscal_year
 from frappe import _
 from frappe.model.workflow import apply_workflow
-from frappe.utils import getdate
+from frappe.utils import flt, getdate
 
 from dinext_projects_pl.dinext_projects_pl.budget_approval.bootstrap import (
     ACTION_CANCEL,
@@ -27,6 +27,10 @@ from dinext_projects_pl.dinext_projects_pl.budget_approval.bootstrap import (
     STATE_CANCELLED_APPROVED,
     STATE_CANCELLED_DRAFT,
     STATE_PENDING_APPROVAL,
+)
+from dinext_projects_pl.dinext_projects_pl.budget_approval.group_account_budget import (
+    get_account_details,
+    validate_budget_account_allowed,
 )
 
 PROJECT_BUDGET_DOCTYPE = "Project Budget"
@@ -55,6 +59,7 @@ def save_budget_plan_for_approval(project: str, data) -> dict:
 def _prepare_grouped_entries(project_doc, rows: list[dict]) -> dict:
     grouped = _group_plan_rows(project_doc.company, rows)
     for entry in grouped.values():
+        validate_budget_account_allowed(entry["account"], project_doc.company)
         entry["project"] = project_doc.name
         entry["company"] = project_doc.company
     return grouped
@@ -513,6 +518,7 @@ def _write_plan_amounts_to_project_budget(
         amount_row.pba_plan = float(_to_decimal_amount(plan_value))
 
     project_budget.save(ignore_permissions=True)
+    _validate_project_budget_hierarchy(project, dimensions)
 
 
 def _get_budget_source_monthly_amounts(doc) -> dict[tuple[int, int], float]:
@@ -653,3 +659,75 @@ def _get_or_create_project_budget(project: str, account: str, dimensions: list[d
     for dimension in _normalize_dimensions(dimensions):
         project_budget.append("project_budget_dimension", dimension)
     return project_budget
+
+
+def _validate_project_budget_hierarchy(project: str, dimensions: list[dict]) -> None:
+    target_key = _dimensions_key(_normalize_dimensions(dimensions))
+    budget_rows = []
+    for row in frappe.get_all(
+        PROJECT_BUDGET_DOCTYPE,
+        filters={"pb_project": project},
+        fields=["name", "pb_account"],
+    ):
+        doc = frappe.get_doc(PROJECT_BUDGET_DOCTYPE, row.name)
+        current_key = _dimensions_key(
+            _normalize_dimensions(
+                [{"doc": dim.doc, "docname": dim.docname} for dim in (doc.project_budget_dimension or [])]
+            )
+        )
+        if current_key != target_key:
+            continue
+        account_details = get_account_details(doc.pb_account)
+        for amount_row in doc.project_budget_amount or []:
+            if not amount_row.pba_year or not amount_row.pba_month:
+                continue
+            budget_rows.append(
+                {
+                    "account": doc.pb_account,
+                    "details": account_details,
+                    "year": amount_row.pba_year,
+                    "month": amount_row.pba_month,
+                    "amount": flt(amount_row.pba_plan),
+                }
+            )
+
+    for parent in budget_rows:
+        if not parent["details"].is_group:
+            continue
+        child_sum = 0.0
+        for child in budget_rows:
+            if child["year"] != parent["year"] or child["month"] != parent["month"]:
+                continue
+            if child["account"] == parent["account"]:
+                continue
+            if not _is_project_budget_descendant(child["details"], parent["details"]):
+                continue
+            if _has_project_budget_between(parent["details"], child["details"], budget_rows):
+                continue
+            child_sum += flt(child["amount"])
+        if child_sum > flt(parent["amount"]):
+            frappe.throw(
+                _(
+                    "Project Budget for parent Account {0} ({1}) cannot be less than the sum of child budgets ({2})"
+                ).format(parent["account"], flt(parent["amount"]), flt(child_sum))
+            )
+
+
+def _is_project_budget_descendant(child_details, parent_details) -> bool:
+    return (
+        child_details.company == parent_details.company
+        and child_details.lft > parent_details.lft
+        and child_details.rgt < parent_details.rgt
+    )
+
+
+def _has_project_budget_between(parent_details, child_details, rows: list[dict]) -> bool:
+    for row in rows:
+        details = row["details"]
+        if details.name in {parent_details.name, child_details.name}:
+            continue
+        if _is_project_budget_descendant(details, parent_details) and (
+            child_details.lft >= details.lft and child_details.rgt <= details.rgt
+        ):
+            return True
+    return False

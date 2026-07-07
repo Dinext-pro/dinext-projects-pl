@@ -7,6 +7,10 @@ from erpnext.accounts.doctype.budget.budget import Budget as ERPNextBudget
 from erpnext.accounts.doctype.budget.budget import DuplicateBudgetError
 from frappe import _
 
+from dinext_projects_pl.dinext_projects_pl.budget_approval.group_account_budget import (
+    validate_budget_account_allowed,
+    validate_budget_account_hierarchy,
+)
 from dinext_projects_pl.dinext_projects_pl.budget_approval.bootstrap import (
     BUDGET_WORKFLOW_STATE_FIELD,
     STATE_APPROVED,
@@ -15,6 +19,19 @@ from dinext_projects_pl.dinext_projects_pl.budget_approval.bootstrap import (
 
 
 class Budget(ERPNextBudget):
+    def validate_accounts(self):
+        account_list = []
+        for row in self.get("accounts"):
+            if not row.account:
+                continue
+
+            validate_budget_account_allowed(row.account, self.company)
+            if row.account in account_list:
+                frappe.throw(_("Account {0} has been entered multiple times").format(row.account))
+            account_list.append(row.account)
+
+        validate_budget_account_hierarchy(self)
+
     def validate_duplicate(self):
         budget_against_field = frappe.scrub(self.budget_against)
         budget_against = self.get(budget_against_field)

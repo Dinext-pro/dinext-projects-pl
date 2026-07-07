@@ -98,8 +98,9 @@ fixtures = [
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-doctype_js = {"Project": 
-    [
+doctype_js = {
+    "Budget": "public/js/budget.js",
+    "Project": [
         "public/js/project_pl_navigation.js",
         "public/js/project_pl_style.js",
         "public/js/project_pl.js",
@@ -107,7 +108,7 @@ doctype_js = {"Project":
         "public/js/project_pl_echarts.js",
         "public/js/project_pl_financial_metrics.js",
         "public/js/project_pl_dashboard.js",
-    ]
+    ],
 }
 # doctype_js = {"doctype" : "public/js/doctype.js"}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
@@ -206,7 +207,16 @@ doc_events = {
     "Budget": {
         "on_submit": "dinext_projects_pl.dinext_projects_pl.budget_approval.service.on_budget_submit",
         "on_cancel": "dinext_projects_pl.dinext_projects_pl.budget_approval.service.on_budget_cancel",
-    }
+    },
+    "Material Request": {
+        "on_submit": "dinext_projects_pl.dinext_projects_pl.budget_approval.group_account_budget.validate_group_budget_for_document",
+    },
+    "Purchase Order": {
+        "on_submit": "dinext_projects_pl.dinext_projects_pl.budget_approval.group_account_budget.validate_group_budget_for_document",
+    },
+    "GL Entry": {
+        "after_insert": "dinext_projects_pl.dinext_projects_pl.budget_approval.group_account_budget.validate_group_budget_for_gl_entry",
+    },
 }
 
 # Scheduled Tasks

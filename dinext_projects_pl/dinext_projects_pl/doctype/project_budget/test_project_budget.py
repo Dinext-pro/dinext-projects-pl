@@ -20,6 +20,9 @@ from dinext_projects_pl.dinext_projects_pl.budget_approval.service import (
     find_approved_budget_for_period,
     save_budget_plan_for_approval,
 )
+from dinext_projects_pl.dinext_projects_pl.budget_approval.group_account_budget import (
+    clear_group_budget_caches,
+)
 
 
 class TestProjectBudget(FrappeTestCase):
@@ -316,6 +319,69 @@ class TestProjectBudget(FrappeTestCase):
         )
         self.assertEqual(actual_forecast_amounts, forecast_amounts)
 
+    def test_save_plan_creates_budget_for_group_account(self):
+        group_account, child_account = self._get_group_and_child_expense_accounts(self.company)
+        period = self._current_period()
+
+        response = save_budget_plan_for_approval(
+            self.project.name,
+            [
+                {
+                    "account": group_account,
+                    "dimensions": [],
+                    "amounts": [{"year": period.year, "month": period.month, "plan_value": 500}],
+                }
+            ],
+        )
+
+        budget = frappe.get_doc("Budget", response["budgets"][0]["budget"])
+        self.assertEqual(budget.accounts[0].account, group_account)
+        self.assertEqual(budget.accounts[0].budget_amount, 500)
+
+        budget = apply_workflow(budget, ACTION_APPROVE)
+        project_budget = self._get_project_budget([], account=group_account)
+        self.assertEqual(project_budget.project_budget_amount[0].pba_plan, 500)
+
+        self.assertIsNotNone(child_account)
+
+    def test_budget_rejects_account_with_planning_disabled_flag(self):
+        _group_account, child_account = self._get_group_and_child_expense_accounts(self.company)
+        period = self._current_period()
+        old_value = frappe.db.get_value("Account", child_account, "custom_not_plan_exp")
+        frappe.db.set_value("Account", child_account, "custom_not_plan_exp", 1)
+        clear_group_budget_caches()
+
+        try:
+            with self.assertRaises(frappe.ValidationError):
+                save_budget_plan_for_approval(
+                    self.project.name,
+                    [
+                        {
+                            "account": child_account,
+                            "dimensions": [],
+                            "amounts": [{"year": period.year, "month": period.month, "plan_value": 100}],
+                        }
+                    ],
+                )
+        finally:
+            frappe.db.set_value("Account", child_account, "custom_not_plan_exp", old_value)
+            clear_group_budget_caches()
+
+    def test_budget_allows_parent_and_child_when_parent_covers_child_sum(self):
+        group_account, child_account = self._get_group_and_child_expense_accounts(self.company)
+        parent_budget = self._make_manual_budget(group_account, 500)
+        child_budget = self._make_manual_budget(child_account, 300)
+
+        self.assertTrue(frappe.db.exists("Budget", parent_budget.name))
+        self.assertTrue(frappe.db.exists("Budget", child_budget.name))
+
+    def test_budget_rejects_child_when_parent_less_than_child_sum(self):
+        group_account, child_account = self._get_group_and_child_expense_accounts(self.company)
+        self._make_manual_budget(group_account, 100)
+
+        with self.assertRaises(frappe.ValidationError):
+            self._make_manual_budget(child_account, 150)
+
     @classmethod
     def _make_project(cls):
         project = frappe.get_doc(
@@ -385,10 +451,11 @@ class TestProjectBudget(FrappeTestCase):
         if frappe.db.exists("Project", project_name):
             frappe.delete_doc("Project", project_name, ignore_permissions=True, force=1)
 
-    def _get_project_budget(self, dimensions):
+    def _get_project_budget(self, dimensions, account=None):
+        account = account or self.expense_account
         project_budgets = frappe.get_all(
             "Project Budget",
-            filters={"pb_project": self.project.name, "pb_account": self.expense_account},
+            filters={"pb_project": self.project.name, "pb_account": account},
             fields=["name"],
         )
         target = sorted(f"{d.get('doc')}:{d.get('docname')}" for d in dimensions)
@@ -418,6 +485,51 @@ class TestProjectBudget(FrappeTestCase):
             )
         project_budget.save(ignore_permissions=True)
         return project_budget
+
+    def _make_manual_budget(self, account, amount):
+        budget = frappe.get_doc(
+            {
+                "doctype": "Budget",
+                "company": self.company,
+                "fiscal_year": self._current_period().year,
+                "budget_against": "Project",
+                "project": self.project.name,
+                "accounts": [{"account": account, "budget_amount": amount}],
+            }
+        )
+        budget.insert(ignore_permissions=True)
+        return budget
+
+    @staticmethod
+    def _get_group_and_child_expense_accounts(company):
+        groups = frappe.get_all(
+            "Account",
+            filters={
+                "company": company,
+                "is_group": 1,
+                "report_type": "Profit and Loss",
+                "root_type": "Expense",
+                "disabled": 0,
+            },
+            fields=["name"],
+            order_by="lft",
+        )
+        for group in groups:
+            child = frappe.db.get_value(
+                "Account",
+                {
+                    "company": company,
+                    "parent_account": group.name,
+                    "is_group": 0,
+                    "report_type": "Profit and Loss",
+                    "root_type": "Expense",
+                    "disabled": 0,
+                },
+                "name",
+            )
+            if child:
+                return group.name, child
+        raise AssertionError("No expense group/leaf account pair found for test company")
 
     def _current_period(self):
         today = getdate()
