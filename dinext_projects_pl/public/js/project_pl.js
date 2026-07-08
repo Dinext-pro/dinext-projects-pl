@@ -1173,7 +1173,8 @@ function budget_cell_line_total( frm, periods, bucket, data ) {
         ? (((actual - plan) / plan) * 100).toFixed(1)
         : 0;
     
-    line += budget_cell( data.value, data.task?.value, { year: "", month: "", is_past: is_past }, plan, actual, true );
+    const dimensions = bucket.dimensions && bucket.dimensions.length ? bucket.dimensions : null;
+    line += budget_cell( data.value, data.task?.value, { year: "", month: "", is_past: is_past }, plan, actual, true, "", "", "", dimensions );
             
     return line;
 }
@@ -1679,31 +1680,24 @@ $(document).on('dblclick', '.bg-group-actual:not(.zero):has(.readonly-fact)', fu
 });
 
 function open_approved_budget_for_group($group) {
-    const year = $group.data('year');
-    const month = $group.data('month');
-    const account = $group.data('account');
-
-    if (!cur_frm?.docname || !account || !year || !month) {
+    const scope = parse_budget_group_scope($group);
+    if (!scope.project) {
         return;
     }
 
-    const dimRaw = $group.attr('data-dimensions');
-
-    let dimensions = [];
-    try {
-        dimensions = dimRaw ? JSON.parse(decodeURIComponent(dimRaw)) : [];
-    } catch (error) {
-        dimensions = [];
+    if (!scope.account || !scope.year || !scope.month) {
+        open_approved_budget_list_for_scope(scope);
+        return;
     }
 
     frappe.call({
         method: "dinext_projects_pl.dinext_projects_pl.budget_approval.service.find_approved_budget_for_period",
         args: {
-            project: cur_frm.docname,
-            account: account,
-            year: year,
-            month: month,
-            dimensions: dimensions,
+            project: scope.project,
+            account: scope.account,
+            year: scope.year,
+            month: scope.month,
+            dimensions: scope.dimensions,
         },
         freeze: true,
         freeze_message: __("Поиск согласованного бюджета..."),
@@ -1719,3 +1713,153 @@ function open_approved_budget_for_group($group) {
         }
     });
 }
+
+function parse_budget_group_scope($group) {
+    const dimRaw = $group.attr('data-dimensions');
+    let dimensions = [];
+    try {
+        dimensions = dimRaw ? JSON.parse(decodeURIComponent(dimRaw)) : [];
+    } catch (error) {
+        dimensions = [];
+    }
+
+    return {
+        project: cur_frm?.docname,
+        account: $group.data('account') || "",
+        task: $group.data('task') || "",
+        year: $group.data('year') || "",
+        month: $group.data('month') || "",
+        dimensions: dimensions,
+    };
+}
+
+function open_approved_budget_list_for_scope(scope) {
+    get_approved_budget_candidates(scope).then(function(budgets) {
+        const names = budgets
+            .filter(function(budget) {
+                return budget_matches_scope(budget, scope);
+            })
+            .map(function(budget) {
+                return budget.name;
+            });
+
+        open_budget_names(names, scope);
+    });
+}
+
+function get_approved_budget_candidates(scope) {
+    const fields = [
+        "name",
+        "project",
+        "docstatus",
+        "workflow_state",
+        "dinext_budget_account",
+        "budget_against",
+        "task",
+        "dinext_budget_monthly_amounts",
+    ];
+
+    (scope.dimensions || []).forEach(function(dimension) {
+        const fieldname = frappe.model.scrub(dimension.doc);
+        if (!fields.includes(fieldname)) {
+            fields.push(fieldname);
+        }
+    });
+
+    const filters = {
+        project: scope.project,
+        docstatus: 1,
+        workflow_state: "Approved",
+    };
+    if (scope.account) {
+        filters.dinext_budget_account = scope.account;
+        filters.budget_against = scope.task ? "Task" : "Project";
+    }
+    if (scope.task) {
+        filters.task = scope.task;
+    }
+
+    return frappe.db.get_list("Budget", {
+        filters: filters,
+        fields: fields,
+        limit: 0,
+    });
+}
+
+function budget_matches_scope(budget, scope) {
+    if (budget.project !== scope.project || budget.docstatus !== 1 || budget.workflow_state !== "Approved") {
+        return false;
+    }
+    if (scope.account && budget.dinext_budget_account !== scope.account) {
+        return false;
+    }
+    if (scope.account) {
+        const expectedBudgetAgainst = scope.task ? "Task" : "Project";
+        if (budget.budget_against !== expectedBudgetAgainst) {
+            return false;
+        }
+    }
+    if (scope.task && budget.task !== scope.task) {
+        return false;
+    }
+    if (!budget_matches_dimensions(budget, scope.dimensions || [])) {
+        return false;
+    }
+    if (scope.year && scope.month && !budget_has_monthly_amount(budget, scope.year, scope.month)) {
+        return false;
+    }
+    return true;
+}
+
+function budget_matches_dimensions(budget, dimensions) {
+    return (dimensions || []).every(function(dimension) {
+        return budget[frappe.model.scrub(dimension.doc)] === dimension.docname;
+    });
+}
+
+function budget_has_monthly_amount(budget, year, month) {
+    let amounts = {};
+    try {
+        amounts = budget.dinext_budget_monthly_amounts ? JSON.parse(budget.dinext_budget_monthly_amounts) : {};
+    } catch (error) {
+        amounts = {};
+    }
+    const periodKey = `${parseInt(year, 10)}-${String(parseInt(month, 10)).padStart(2, "0")}`;
+    return (parseFloat(amounts[periodKey]) || 0) > 0;
+}
+
+function open_budget_names(names, scope) {
+    if (!names.length) {
+        frappe.msgprint(__("Для выбранной ячейки не найден согласованный Budget."));
+        return;
+    }
+    if (names.length === 1) {
+        frappe.set_route("Form", "Budget", names[0]);
+        return;
+    }
+
+    frappe.route_options = build_budget_list_route_options(names, scope);
+    frappe.set_route("List", "Budget");
+}
+
+function build_budget_list_route_options(names, scope) {
+    const routeOptions = {
+        name: ["in", names],
+        project: scope.project,
+        docstatus: 1,
+        workflow_state: "Approved",
+    };
+    if (scope.account) {
+        routeOptions.dinext_budget_account = scope.account;
+        routeOptions.budget_against = scope.task ? "Task" : "Project";
+    }
+    if (scope.task) {
+        routeOptions.task = scope.task;
+    }
+    return routeOptions;
+}
+
+dinext_projects_pl.project_pl_budget_dblclick = {
+    budget_matches_scope: budget_matches_scope,
+    build_budget_list_route_options: build_budget_list_route_options,
+};

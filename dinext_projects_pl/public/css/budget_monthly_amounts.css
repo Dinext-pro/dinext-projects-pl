@@ -1,0 +1,36 @@
+.dinext-budget-monthly-amounts {
+    margin-top: 6px;
+    color: var(--text-color);
+}
+
+.dinext-budget-monthly-amounts__title {
+    margin-bottom: 6px;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    font-weight: 500;
+}
+
+.dinext-budget-monthly-amounts__table {
+    margin-bottom: 0;
+    background: var(--control-bg);
+    font-size: var(--text-sm);
+}
+
+.dinext-budget-monthly-amounts__table th,
+.dinext-budget-monthly-amounts__table td {
+    padding: 6px 8px;
+    border-color: var(--border-color);
+    vertical-align: middle;
+}
+
+.dinext-budget-monthly-amounts__table thead th,
+.dinext-budget-monthly-amounts__table tfoot th {
+    background: var(--subtle-fg);
+    color: var(--text-color);
+    font-weight: 600;
+}
+
+.dinext-budget-monthly-amounts__table .text-right {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
