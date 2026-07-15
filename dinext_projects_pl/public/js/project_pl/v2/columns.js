@@ -1,0 +1,299 @@
+/** Legacy period group width: 210 − 70 per hidden plan − 50 per hidden Δ. */
+const LEGACY_PERIOD_GROUP_WIDTH = 210;
+const LEGACY_PLAN_SUBCOL_WIDTH = 70;
+const LEGACY_DELTA_SUBCOL_WIDTH = 50;
+
+const ALIGN_CENTER = "dinext-table-cell--align-center";
+const HEADER_CENTER = "pl-v2-header--center";
+const CELL_ZERO = "pl-v2-cell--zero";
+const CELL_PROFIT_POS = "pl-v2-cell--profit-pos";
+const CELL_PROFIT_NEG = "pl-v2-cell--profit-neg";
+
+function periodLeafWidth(hidePlan, hideDelta) {
+	let group = LEGACY_PERIOD_GROUP_WIDTH;
+	if (hidePlan) group -= LEGACY_PLAN_SUBCOL_WIDTH;
+	if (hideDelta) group -= LEGACY_DELTA_SUBCOL_WIDTH;
+	const visible = 1 + (hidePlan ? 0 : 1) + (hideDelta ? 0 : 1);
+	return Math.round(group / visible);
+}
+
+function toNumber(value) {
+	const n = typeof value === "number" ? value : parseFloat(String(value ?? ""));
+	return Number.isFinite(n) ? n : null;
+}
+
+function isProfitabilityRow(data) {
+	return data?.summary_kind === "profitability";
+}
+
+function isProfitRow(data) {
+	return data?.summary_kind === "profit";
+}
+
+/** Legacy numberformat: integer + thin space; profitability = one decimal + %. */
+function formatAmount(params) {
+	const n = toNumber(params.value);
+	if (n == null) return "";
+	if (isProfitabilityRow(params.data)) {
+		return `${n.toFixed(1)}%`;
+	}
+	return n
+		.toFixed(0)
+		.toString()
+		.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
+/** Legacy delta: one decimal + %. */
+function formatDelta(params) {
+	const n = toNumber(params.value);
+	if (n == null) return "";
+	if (n === 0) return "0%";
+	return `${n.toFixed(1)}%`;
+}
+
+function isZeroValue(params) {
+	const n = toNumber(params.value);
+	return n != null && n === 0;
+}
+
+const AMOUNT_CELL_CLASS_RULES = {
+	[CELL_ZERO]: isZeroValue,
+	[CELL_PROFIT_POS]: (params) => {
+		if (!isProfitRow(params.data)) return false;
+		const n = toNumber(params.value);
+		return n != null && n > 0;
+	},
+	[CELL_PROFIT_NEG]: (params) => {
+		if (!isProfitRow(params.data)) return false;
+		const n = toNumber(params.value);
+		return n != null && n < 0;
+	},
+};
+
+function fixedWidth(width) {
+	return {
+		width,
+		minWidth: width,
+		maxWidth: width,
+		resizable: false,
+		suppressSizeToFit: true,
+	};
+}
+
+function mergeClassList(existing, next) {
+	if (!existing) return next;
+	if (typeof existing === "string") return `${existing} ${next}`;
+	if (Array.isArray(existing)) return [...existing, next];
+	return existing;
+}
+
+function withCenterAlign(col) {
+	return {
+		...col,
+		cellClass: mergeClassList(col.cellClass, ALIGN_CENTER),
+		headerClass: mergeClassList(col.headerClass, HEADER_CENTER),
+	};
+}
+
+/** Serial over every tree row (DFS), like StickyDataTable rowIndex + 1. */
+function buildRowSerialMap(rows) {
+	const map = new Map();
+	let serial = 0;
+
+	function walk(list) {
+		for (const row of list || []) {
+			if (row?.id != null) {
+				serial += 1;
+				map.set(row.id, serial);
+			}
+			if (row.children?.length) {
+				walk(row.children);
+			}
+		}
+	}
+
+	walk(rows);
+	return map;
+}
+
+function serialValueGetter(params) {
+	const data = params.data;
+	if (!data?.id || data.summary_kind) return "";
+
+	const sourceRows =
+		params.context?.dinextTable?.sourceData ||
+		params.context?.dinextTable?.options?.data ||
+		[];
+	const map = buildRowSerialMap(sourceRows);
+	return map.get(data.id) ?? "";
+}
+
+function buildPeriodLeaf(opts) {
+	const { field, colId, headerName, width, hide, valueFormatter, edit } = opts;
+	return withCenterAlign({
+		field,
+		colId,
+		headerName,
+		...fixedWidth(width),
+		sortable: false,
+		suppressMovable: true,
+		tree: false,
+		type: "number",
+		edit: edit === undefined ? false : edit,
+		hide: !!hide,
+		valueFormatter,
+		cellClassRules: { ...AMOUNT_CELL_CLASS_RULES },
+	});
+}
+
+function buildPeriodColumns(frm, periods) {
+	const hidePlan = !!frm.bg_hide_plan;
+	const hideDelta = !!frm.bg_hide_delta;
+	const leafWidth = periodLeafWidth(hidePlan, hideDelta);
+
+	return (periods || []).map((period) => {
+		const key = period.key;
+		const actualLabel = period.is_past ? __("Факт") : __("Прогноз");
+
+		return {
+			colId: `period_${key}`,
+			headerName: `${period.year} ${period.month}`,
+			headerClass: HEADER_CENTER,
+			marryChildren: true,
+			children: [
+				buildPeriodLeaf({
+					field: `plan_${key}`,
+					colId: `plan_${key}`,
+					headerName: __("План"),
+					width: leafWidth,
+					hide: hidePlan,
+					valueFormatter: formatAmount,
+				}),
+				buildPeriodLeaf({
+					field: `actual_${key}`,
+					colId: `actual_${key}`,
+					headerName: actualLabel,
+					width: leafWidth,
+					edit: (row) => !period.is_past && !row?.summary_kind,
+					valueFormatter: formatAmount,
+				}),
+				buildPeriodLeaf({
+					field: `delta_${key}`,
+					colId: `delta_${key}`,
+					headerName: "Δ",
+					width: leafWidth,
+					hide: hideDelta,
+					valueFormatter: formatDelta,
+				}),
+			],
+		};
+	});
+}
+
+function buildTotalColumn(frm, periods) {
+	const hidePlan = !!frm.bg_hide_plan;
+	const hideDelta = !!frm.bg_hide_delta;
+	const leafWidth = periodLeafWidth(hidePlan, hideDelta);
+	const last = periods?.[periods.length - 1];
+	const actualLabel = last?.is_past ? __("Факт") : __("Прогноз");
+
+	return {
+		colId: "total",
+		headerName: __("Итого"),
+		headerClass: HEADER_CENTER,
+		marryChildren: true,
+		children: [
+			buildPeriodLeaf({
+				field: "plan_total",
+				colId: "plan_total",
+				headerName: __("План"),
+				width: leafWidth,
+				hide: hidePlan,
+				valueFormatter: formatAmount,
+			}),
+			buildPeriodLeaf({
+				field: "actual_total",
+				colId: "actual_total",
+				headerName: actualLabel,
+				width: leafWidth,
+				valueFormatter: formatAmount,
+			}),
+			buildPeriodLeaf({
+				field: "delta_total",
+				colId: "delta_total",
+				headerName: "Δ",
+				width: leafWidth,
+				hide: hideDelta,
+				valueFormatter: formatDelta,
+			}),
+		],
+	};
+}
+
+/**
+ * Column set parity with legacy StickyDataTable:
+ * checkbox + # + Статья + period groups + Итого.
+ * Composite plan/forecast/Δ HTML → 3 leaf columns per period.
+ * Rows = CoA + Task + Risk tree (no cell merge).
+ */
+export function getColumns(frm, periods) {
+	const form = frm || (typeof cur_frm !== "undefined" ? cur_frm : null);
+	const periodList = periods || form?.pl_v2?.periods || [];
+
+	const baseColumns = [
+		{
+			field: "_selected",
+			colId: "_selected",
+			headerName: "",
+			headerClass: HEADER_CENTER,
+			// Legacy checkbox col ~33px.
+			...fixedWidth(33),
+			sortable: false,
+			suppressMovable: true,
+			pinned: "left",
+			tree: false,
+			type: "checkbox",
+			edit: true,
+		},
+		withCenterAlign({
+			field: "account_serial",
+			colId: "account_serial",
+			// Legacy index header is blank.
+			headerName: "",
+			...fixedWidth(41),
+			sortable: false,
+			suppressMovable: true,
+			pinned: "left",
+			tree: false,
+			valueGetter: serialValueGetter,
+		}),
+		{
+			field: "account_label",
+			headerName: __("Статья"),
+			headerClass: HEADER_CENTER,
+			width: 300,
+			minWidth: 220,
+			pinned: "left",
+			tree: true,
+			edit: false,
+			sortable: false,
+		},
+	];
+
+	return [
+		...baseColumns,
+		...buildPeriodColumns(form || {}, periodList),
+		buildTotalColumn(form || {}, periodList),
+	];
+}
+
+export function refreshColumns(frm) {
+	const state = frm.pl_v2;
+	if (!state?.table?.setOption) return;
+	state.table.setOption("columns", getColumns(frm, state.periods));
+}
+
+/** Toggle «План» / «Δ»: rebuild so leaf widths match legacy group. */
+export function applyPlanDeltaVisibility(frm) {
+	refreshColumns(frm);
+}

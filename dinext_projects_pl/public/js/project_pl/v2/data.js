@@ -1,0 +1,62 @@
+import { GRID_V2_API } from "./constants.js";
+import { initState } from "./state.js";
+
+/** Ensure checkbox + client defaults on every tree node (API is server-shaped). */
+function normalizeRows(rows) {
+	return (rows || []).map((row) => {
+		const next = {
+			...row,
+			_selected: !!row._selected,
+		};
+		if (Array.isArray(row.children) && row.children.length) {
+			next.children = normalizeRows(row.children);
+		}
+		return next;
+	});
+}
+
+function applyGridResponse(frm, message) {
+	const state = initState(frm);
+	state.periods = message.periods || [];
+	state.rows = normalizeRows(message.rows || []);
+	state.summaryRows = message.summary_rows || [];
+	return message;
+}
+
+export async function loadGridData(frm) {
+	const period_type = frm._pl_period_type || "month";
+
+	try {
+		const message = await frappe.xcall(GRID_V2_API, {
+			project: frm.doc.name,
+			period_type,
+			view_options: frm.budget_view_options || __("Forecast and actual"),
+		});
+		if (!message) {
+			throw new Error("Empty grid response");
+		}
+		return applyGridResponse(frm, message);
+	} catch (err) {
+		console.error("[Project P&L] grid load failed", err);
+		frappe.msgprint(__("Ошибка загрузки данных P&L"));
+		throw err;
+	}
+}
+
+export async function reloadTable(frm, initTable, refreshRuntime) {
+	if (!frm._pl_v2_enabled) {
+		return null;
+	}
+
+	const state = frm.pl_v2;
+	if (!state?.container) {
+		return null;
+	}
+
+	await loadGridData(frm);
+	if (state.table) {
+		await refreshRuntime(frm);
+		return state.table;
+	}
+	return initTable(frm);
+}

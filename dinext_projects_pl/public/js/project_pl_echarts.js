@@ -228,6 +228,15 @@ function build_pl_chart_data(frm) {
     if (pl_chart_debug_enabled()) {
         console.time("build_pl_chart_data");
     }
+    // Prefer P&L v2 grid (same walk as summary) when dual-preview / cutover has data.
+    const fromV2 = window.ProjectPlV2?.buildChartData?.(frm);
+    if (fromV2) {
+        if (pl_chart_debug_enabled()) {
+            console.timeEnd("build_pl_chart_data");
+        }
+        return fromV2;
+    }
+
     let periods = get_budget_display_periods(frm, "month");
     let labels = periods.map((p) => `${p.year}-${String(p.month).padStart(2, "0")}`);
 
