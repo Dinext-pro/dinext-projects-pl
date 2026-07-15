@@ -264,6 +264,7 @@ function addBudgetViewOptionsControl(frm, controls) {
                     frm.budget_view_options = this.value;
                     updateBudgetTable( frm, "month", "hours" );
                     render_pl_chart(frm);
+                    get_pl_v2_preview()?.onViewOptionsChange(frm);
                 }
             }
 		},
@@ -274,10 +275,31 @@ function addBudgetViewOptionsControl(frm, controls) {
 }
 
 /**
+ * Resolve at call time — doctype_js may load bridge/project_pl out of order;
+ * a module-level const can capture `undefined` and silently skip mount.
+ * @returns {{ whenReady?: Function, destroy?: Function } | undefined}
+ */
+function get_pl_v2_preview() {
+	return dinext_projects_pl.projectPlPreview;
+}
+
+/**
+ * @param {Form} frm
+ * @param {() => void} [callback]
+ */
+function with_pl_v2_ready(frm, callback) {
+	get_pl_v2_preview()?.whenReady(frm, callback);
+}
+
+/**
  * Отрисовка таблицы «Трудозатраты»
  */
 function render_budget_table(frm) {
     let wrapper = frm.get_field("custom_planning").$wrapper;
+    const plV2Preview = get_pl_v2_preview();
+    if (plV2Preview?.destroy) {
+        plV2Preview.destroy(frm);
+    }
     wrapper.addClass("budget-container").empty();;
 
     // Создаем панель для переключателей (период, единицы измерения) и для таблицы
@@ -307,6 +329,12 @@ function render_budget_table(frm) {
     add_pl_forecast_dropdown(frm, controls);
 
     controls.find('#bg-save_plan').on('click', function() {
+        const preview = get_pl_v2_preview();
+        if (frm._pl_v2_enabled && preview?.saveForecastAsPlan) {
+            // Dual-table: v2 selection first, else legacy checked rows (confirm inside).
+            preview.saveForecastAsPlan(frm);
+            return;
+        }
         frappe.confirm(
             __("Вы уверены, что хотите сохранить текущие прогнозные / фактические данные как плановые?"),
             () => {
@@ -325,16 +353,19 @@ function render_budget_table(frm) {
         $(this).text(frm.bg_hide_plan ? __("Показать план") : __("Скрыть план"));
         updateBudgetTable(frm, selectedPeriodType);
         render_pl_chart(frm);
+        get_pl_v2_preview()?.onTogglePlanOrDelta(frm);
     });
     controls.find('#bg-toggle_delta').on('click', function() {
         frm.bg_hide_delta = !frm.bg_hide_delta;
         $(this).text(frm.bg_hide_delta ? __("Показать Δ") : __("Скрыть Δ"));
         updateBudgetTable(frm, selectedPeriodType);
+        get_pl_v2_preview()?.onTogglePlanOrDelta(frm);
     });
     controls.find('#bg-toggle_empty').on('click', function() {
         frm.bg_hide_empty = !frm.bg_hide_empty;
         $(this).text(frm.bg_hide_empty ? __("Показать пустые строки") : __("Скрыть пустые строки"));
         updateBudgetTable(frm, selectedPeriodType);
+        // v2 hide_empty — отдельный срез (server filter), пока только legacy
     });
 
     // Инициализация таблицы с колонками
@@ -385,6 +416,7 @@ function render_budget_table(frm) {
         load_budget_data(frm, selectedPeriodType );
     }
     init_budget_table();
+    with_pl_v2_ready(frm);
 }
 
 function budget_total( frm, cell, periods ) {

@@ -1,0 +1,123 @@
+/* P&L v2 — dual-preview: dense StickyDataTable-like look */
+
+.project-pl-v2-section {
+	margin-top: 16px;
+	padding-top: 16px;
+	border-top: 2px dashed var(--border-color);
+}
+
+.budget-table-v2.dinext-table {
+	width: 100%;
+	min-height: 280px;
+	height: min(50vh, 560px);
+	max-height: 560px;
+	--pl-v2-row-height: 29px;
+	--ag-font-size: 14px;
+	--ag-header-font-weight: 600;
+	--ag-cell-horizontal-padding: 2px;
+}
+
+.project-pl-v2-badge {
+	display: inline-block;
+	margin-bottom: 8px;
+	padding: 2px 10px;
+	font-size: var(--text-sm);
+	font-weight: 600;
+	background: var(--bg-light-gray);
+	border: 1px solid var(--border-color);
+	border-radius: var(--border-radius);
+}
+
+.budget-table-v2:not(.dinext-table) {
+	width: 100%;
+	min-height: 280px;
+	height: min(50vh, 560px);
+	max-height: 560px;
+	box-sizing: border-box;
+	background: var(--card-bg, var(--bg-color));
+	border: 1px dashed var(--border-color);
+	border-radius: var(--border-radius);
+}
+
+/* Headers: compact + centered like budget-group-header */
+.budget-table-v2 .ag-header-cell,
+.budget-table-v2 .ag-header-group-cell {
+	font-weight: 600;
+}
+
+.budget-table-v2 .ag-header-cell.pl-v2-header--center .ag-header-cell-label,
+.budget-table-v2 .ag-header-group-cell.pl-v2-header--center .ag-header-group-cell-label,
+.budget-table-v2 .pl-v2-header--center .ag-header-cell-label,
+.budget-table-v2 .pl-v2-header--center .ag-header-group-cell-label {
+	justify-content: center;
+	width: 100%;
+	text-align: center;
+}
+
+/* Leaf План/Факт/Δ — legacy .budget-group-header > span = 10px */
+.budget-table-v2 .ag-header-row:not(.ag-header-row-column-group) .ag-header-cell-text {
+	font-size: 10px;
+	font-weight: 600;
+}
+
+/* Period group headers (2026 3) — smaller than Статья */
+.budget-table-v2 .ag-header-row-column-group .ag-header-group-text {
+	font-size: 12px;
+	font-weight: 600;
+}
+
+/* Sticky cols keep base header size (not leaf 10px) */
+.budget-table-v2 .ag-header-cell[col-id="_selected"] .ag-header-cell-text,
+.budget-table-v2 .ag-header-cell[col-id="account_serial"] .ag-header-cell-text,
+.budget-table-v2 .ag-header-cell[col-id="account_label"] .ag-header-cell-text {
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.budget-table-v2 .ag-cell {
+	line-height: 21px;
+	/* Legacy .dt-cell__content */
+	font-feature-settings: "tnum";
+}
+
+/* Period / Итого amount cells — body + summary */
+.budget-table-v2 .ag-cell[col-id^="plan_"],
+.budget-table-v2 .ag-cell[col-id^="actual_"],
+.budget-table-v2 .ag-cell[col-id^="delta_"],
+.budget-table-v2 .ag-floating-bottom .ag-cell[col-id^="plan_"],
+.budget-table-v2 .ag-floating-bottom .ag-cell[col-id^="actual_"],
+.budget-table-v2 .ag-floating-bottom .ag-cell[col-id^="delta_"] {
+	font-size: 12px;
+}
+
+.budget-table-v2 .dinext-table-cell--align-center .ag-cell-value,
+.budget-table-v2 .dinext-table-cell--align-center .ag-cell-wrapper {
+	justify-content: center;
+	text-align: center;
+}
+
+/* Zeros — legacy .budget-group > div.zero = var(--bg-dark-gray) = #999 */
+.budget-table-v2 .ag-cell.pl-v2-cell--zero,
+.budget-table-v2 .ag-cell.pl-v2-cell--zero .ag-cell-value {
+	color: var(--bg-dark-gray, #999) !important;
+}
+
+/* Summary pin — legacy totalRow: bold, no tinted strip */
+.budget-table-v2 .ag-floating-bottom .ag-row,
+.budget-table-v2 .dinext-table-row--summary {
+	font-weight: 700;
+	background: transparent !important;
+	background-color: transparent !important;
+}
+
+.budget-table-v2 .ag-cell.pl-v2-cell--profit-pos,
+.budget-table-v2 .ag-cell.pl-v2-cell--profit-pos .ag-cell-value {
+	/* Same as Bootstrap .text-success (legacy profit cells) */
+	color: #28a745 !important;
+}
+
+.budget-table-v2 .ag-cell.pl-v2-cell--profit-neg,
+.budget-table-v2 .ag-cell.pl-v2-cell--profit-neg .ag-cell-value {
+	/* Same as Bootstrap .text-danger / desk --red-500 */
+	color: #e03636 !important;
+}
