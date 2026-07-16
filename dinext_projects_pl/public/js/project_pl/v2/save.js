@@ -150,10 +150,7 @@ export async function onSaveCells(frm, { changes }) {
 	frappe.show_alert(__("Данные успешно обновлены"), 5);
 	patchLocalForecast(frm, changes);
 
-	// Dual-table: refresh both grids from server + chart from v2.
-	if (typeof load_budget_data === "function") {
-		load_budget_data(frm, frm._pl_period_type || "month");
-	}
+	// P1 v2-only: refresh DinextTable + chart (no Sticky load_budget_data).
 	if (window.ProjectPlV2?.refresh) {
 		await window.ProjectPlV2.refresh(frm);
 	} else if (window.ProjectPlV2?.refreshChart) {

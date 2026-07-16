@@ -1,19 +1,40 @@
-import { isPreviewEnabled, resolvePreviewContainer } from "./dual-preview-mount.js";
 import { initState } from "./state.js";
 import { reloadTable } from "./data.js";
 import { initTable, refreshRuntime } from "./table.js";
 
-export async function ensureMounted(frm) {
-	if (!isPreviewEnabled(frm)) {
-		return;
+const TABLE_CLASS = "budget-table";
+
+function resolveTableContainer(wrapper) {
+	// Drop leftover dual-preview chrome if any.
+	wrapper.find(".project-pl-v2-section").remove();
+
+	let $table = wrapper.find(`.${TABLE_CLASS}`).first();
+	if (!$table.length) {
+		$table = $(`<div class="${TABLE_CLASS}"></div>`);
+		const $controls = wrapper.find(".budget-controls").first();
+		if ($controls.length) {
+			$controls.after($table);
+		} else {
+			wrapper.append($table);
+		}
 	}
 
+	const el = $table[0];
+	if (el) {
+		el.style.height = "min(50vh, 560px)";
+		el.style.minHeight = "280px";
+		el.style.width = "100%";
+	}
+	return el || null;
+}
+
+export async function ensureMounted(frm) {
 	const field = frm.get_field("custom_planning");
 	if (!field?.$wrapper?.length) {
 		return;
 	}
 
-	const container = resolvePreviewContainer(frm, field.$wrapper);
+	const container = resolveTableContainer(field.$wrapper);
 	if (!container) {
 		return;
 	}
@@ -32,7 +53,6 @@ export async function ensureMounted(frm) {
 			} else {
 				await initTable(frm);
 			}
-			// Chart prefers pl_v2 once grid is loaded (see chart-adapter).
 			window.ProjectPlV2?.refreshChart?.(frm);
 		} finally {
 			state._mountPromise = null;

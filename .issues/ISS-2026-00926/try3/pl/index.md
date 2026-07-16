@@ -85,16 +85,16 @@ API:
 
 **DoD среза:** числа/поведение сверять с legacy `.budget-table` на том же Project, не «файл появился».
 
-### Dual-table (после появления клиента)
+### UI (P2 cutover 2026-07-16)
 
 ```
 controls
-├── .budget-table       ← legacy (не трогать до cutover)
-├── .budget-table-v2    ← DinextTable preview
+├── .budget-table       ← DinextTable (frm.pl_v2)
 └── chart / dashboard
 ```
 
-Флаг: `frm._pl_v2_enabled`.
+Entry: `v2-entry.js` + `pl-v2.bundle.js`. Sticky init удалён. Chart = pl_v2 only.  
+Остаток P3: dead `budget_cell*` / slim `project_pl_calc.js` — [`legacy-cutover.md`](legacy-cutover.md).
 
 ---
 

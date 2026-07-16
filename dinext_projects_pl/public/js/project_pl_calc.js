@@ -6,6 +6,15 @@ const _budgetIndexCache = new WeakMap();
 /** Разделитель для ключа строки-риска: parentKey + RISK_KEY_SEP + risk_docname */
 const RISK_KEY_SEP = "|risk|";
 
+/** Child-row match for aggregatedBudget walk (was in project_pl.js Sticky path). */
+function isChildOf(child, account, task, risk = null) {
+	const x = child.value == account && task && child.task?.parent_task == task;
+	const y = child.value == account && !task && child.task && !child.task.parent_task;
+	const z = child.parent_account == account && !task && !child.task && !child.risk;
+	const w = child._parentKey === account + (task || "") && !risk;
+	return x || y || z || w;
+}
+
 /**
  * Net P&L actual from a GL line by account root type.
  * Income: credit - debit; Expense: debit - credit.

@@ -1,10 +1,9 @@
-// TEMPORARY bridge: legacy project_pl.js ↔ ProjectPlV2 bundle. Cutover: delete file.
-// IIFE: doctype_js is concatenated into Project __js with other apps (WE).
-// Bare `function whenReady` / `previewBundlePath` collide and steal the last definition.
+// Desk entry: load pl-v2.bundle.js and mount ProjectPlV2 on Project form.
+// IIFE: doctype_js is concatenated into Project __js with other apps.
 frappe.provide("dinext_projects_pl.projectPlPreview");
 
 (function () {
-	function previewBundlePath() {
+	function bundlePath() {
 		return frappe.assets.bundled_asset("pl-v2.bundle.js");
 	}
 
@@ -25,7 +24,7 @@ frappe.provide("dinext_projects_pl.projectPlPreview");
 			return;
 		}
 
-		frappe.require([previewBundlePath()], () => {
+		frappe.require([bundlePath()], () => {
 			if (!window.ProjectPlV2?.isReady?.()) {
 				console.error("[Project P&L] pl-v2.bundle.js did not register ProjectPlV2");
 				callback?.();

@@ -54,14 +54,6 @@ export function buildSavePlanPayload(frm) {
 	return data;
 }
 
-function legacyCheckedCount(frm) {
-	try {
-		return frm.budget_dt?.rowmanager?.getCheckedRows?.()?.length || 0;
-	} catch (_e) {
-		return 0;
-	}
-}
-
 async function executeSavePlan(frm, data) {
 	const res = await frappe.xcall(SAVE_PLAN_API, {
 		project: frm.doc.name,
@@ -79,9 +71,6 @@ async function executeSavePlan(frm, data) {
 
 	frappe.show_alert(successMessage, 5);
 
-	if (typeof load_budget_data === "function") {
-		load_budget_data(frm, "month", true);
-	}
 	if (typeof load_and_render_project_dashboard === "function") {
 		load_and_render_project_dashboard(frm);
 	}
@@ -90,36 +79,15 @@ async function executeSavePlan(frm, data) {
 	}
 }
 
-function runLegacySavePlan(frm) {
-	if (typeof save_bg_forecast_as_plan === "function") {
-		save_bg_forecast_as_plan(frm);
-		return;
-	}
-	frappe.msgprint(__("Нет данных для сохранения."));
-}
-
 /**
- * Dual-table: prefer v2 selection; else legacy checked rows.
- * Confirm once, then save.
+ * Save plan for selected v2 rows. Confirm once, then save.
  */
 export function saveForecastAsPlan(frm) {
 	const v2Selected = getSelectedRows(frm);
-	const legacyCount = legacyCheckedCount(frm);
-
-	if (!v2Selected.length && !legacyCount) {
-		frappe.msgprint(
-			__("Выберите строки, для которых необходимо сохранить плановые данные.")
-		);
-		return;
-	}
 
 	if (!v2Selected.length) {
-		frappe.confirm(
-			__(
-				"Вы уверены, что хотите сохранить текущие прогнозные / фактические данные как плановые?"
-			),
-			() => runLegacySavePlan(frm),
-			() => frappe.show_alert(__("Операция отменена"), 3)
+		frappe.msgprint(
+			__("Выберите строки, для которых необходимо сохранить плановые данные.")
 		);
 		return;
 	}
