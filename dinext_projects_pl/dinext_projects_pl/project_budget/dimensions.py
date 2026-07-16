@@ -1,5 +1,5 @@
 # Copyright (c) 2026, Dinext
-"""Dimension fingerprint for P&L grid v2."""
+"""Dimension fingerprint for Project Budget grid."""
 
 from __future__ import annotations
 

@@ -1,13 +1,13 @@
 # Copyright (c) 2026, Dinext
-"""Периоды отображения для P&L grid v2."""
+"""Периоды отображения для Project Budget grid."""
 
 from __future__ import annotations
 
 import frappe
 from frappe.utils import add_months, get_first_day, getdate
 
-from dinext_projects_pl.dinext_projects_pl.project_pl.v2.models import (
-	PlV2DisplayPeriod,
+from dinext_projects_pl.dinext_projects_pl.project_budget.models import (
+	ProjectBudgetDisplayPeriod,
 	ViewMode,
 )
 
@@ -38,7 +38,7 @@ def get_display_periods(
 	project: str,
 	period_type: str = "month",
 	view_mode: ViewMode = VIEW_MODE_FORECAST_AND_FACT,
-) -> list[PlV2DisplayPeriod]:
+) -> list[ProjectBudgetDisplayPeriod]:
 	if period_type != "month":
 		frappe.throw(f"Unsupported period_type: {period_type}")
 
@@ -51,7 +51,7 @@ def get_display_periods(
 	current = getdate(f"{start_date.year}-{start_date.month:02d}-01")
 	end = getdate(f"{end_date.year}-{end_date.month:02d}-01")
 
-	periods: list[PlV2DisplayPeriod] = []
+	periods: list[ProjectBudgetDisplayPeriod] = []
 	while current <= end:
 		year = current.year
 		month = current.month

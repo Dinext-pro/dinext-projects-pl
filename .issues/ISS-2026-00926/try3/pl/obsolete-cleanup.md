@@ -27,7 +27,7 @@
 | README / legacy-cutover / index sync | ✅ 2026-07-16 |
 | Styles → `project_budget.css`; drop `project_pl_style.js` / `pl-v2.css` | ✅ 2026-07-16 |
 | Rename JS `project_pl` / `v2` → `project_budget` (+ `*_tab`) | ✅ 2026-07-16 |
-| Backend Python `project_pl/v2` API paths | leave (stable method names) |
+| Backend Python → `project_budget/` + new whitelist names | ✅ 2026-07-16; old `project_pl.v2.api.*` aliases kept |
 
 ## Dropped
 

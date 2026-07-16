@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Dinext
-"""Batch save forecast changes for P&L grid v2.
+"""Batch save forecast changes for Project Budget grid.
 
-API: pl_v2_save_forecast_changes
+API: save_project_budget_forecast
 Writes Project Budget.pba_expected for account × dimensions × period.
 """
 
@@ -13,13 +13,13 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
-from dinext_projects_pl.dinext_projects_pl.project_pl.v2.dimensions import (
+from dinext_projects_pl.dinext_projects_pl.project_budget.dimensions import (
 	dimension_fingerprint,
 	normalize_dimensions,
 )
-from dinext_projects_pl.dinext_projects_pl.project_pl.v2.models import (
-	PlV2SaveForecastChange,
-	PlV2SaveForecastFormInput,
+from dinext_projects_pl.dinext_projects_pl.project_budget.models import (
+	ProjectBudgetSaveForecastChange,
+	ProjectBudgetSaveForecastFormInput,
 )
 
 PROJECT_BUDGET = "Project Budget"
@@ -73,7 +73,7 @@ def _get_or_create_project_budget(
 	return doc
 
 
-def _save_one_change(project: str, change: PlV2SaveForecastChange) -> None:
+def _save_one_change(project: str, change: ProjectBudgetSaveForecastChange) -> None:
 	account = (change.get("account") or "").strip()
 	if not account:
 		frappe.throw(_("Account is required"))
@@ -117,7 +117,7 @@ def _save_one_change(project: str, change: PlV2SaveForecastChange) -> None:
 		doc.save()
 
 
-def run_save_forecast_changes(form_dict: PlV2SaveForecastFormInput) -> dict:
+def run_save_project_budget_forecast(form_dict: ProjectBudgetSaveForecastFormInput) -> dict:
 	project = form_dict.get("project")
 	if not project:
 		frappe.throw(_("Project is required"))
@@ -127,7 +127,7 @@ def run_save_forecast_changes(form_dict: PlV2SaveForecastFormInput) -> dict:
 
 	changes_raw = form_dict.get("changes")
 	if changes_raw is None:
-		changes: list[PlV2SaveForecastChange] = []
+		changes: list[ProjectBudgetSaveForecastChange] = []
 	elif isinstance(changes_raw, list):
 		changes = changes_raw
 	else:
