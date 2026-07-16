@@ -256,15 +256,14 @@ node --test tests/js/project_pl_echarts.test.js
     │   └── workflow_state.json
     ├── public/
     │   ├── css/
-    │   │   └── project_budget.css   # tab shell + DinextTable
+    │   │   └── project_budget.css
     │   └── js/
-    │       ├── project_pl.js
-    │       ├── project_pl/
-    │       │   ├── v2-entry.js
-    │       │   └── v2/          # DinextTable (→ rename project_budget)
-    │       ├── project_pl_dashboard.js
-    │       ├── project_pl_echarts.js
-    │       └── project_pl_financial_metrics.js
+    │       ├── project_budget/          # DinextTable module (ProjectBudget)
+    │       ├── project_budget_tab.js
+    │       ├── project_budget_navigation.js
+    │       ├── project_budget_chart.js
+    │       ├── project_budget_dashboard.js
+    │       └── project_budget_metrics.js
     ├── tests/
     │   └── js/
     │       ├── project_pl_financial_metrics.test.js

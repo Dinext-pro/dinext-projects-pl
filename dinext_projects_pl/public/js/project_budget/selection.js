@@ -14,7 +14,7 @@ const SAVE_PLAN_API =
 
 /** Selected body rows (checkbox), exclude summary. */
 export function getSelectedRows(frm) {
-	return flattenTree(frm.pl_v2?.rows || []).filter(
+	return flattenTree(frm.project_budget?.rows || []).filter(
 		(row) => row._selected && !row.summary_kind && row.account
 	);
 }
@@ -25,7 +25,7 @@ export function getSelectedRows(frm) {
  */
 export function buildSavePlanPayload(frm) {
 	const selected = getSelectedRows(frm);
-	const periods = frm.pl_v2?.periods || [];
+	const periods = frm.project_budget?.periods || [];
 	const data = [];
 
 	for (const row of selected) {
@@ -74,8 +74,8 @@ async function executeSavePlan(frm, data) {
 	if (typeof load_and_render_project_dashboard === "function") {
 		load_and_render_project_dashboard(frm);
 	}
-	if (window.ProjectPlV2?.refresh) {
-		await window.ProjectPlV2.refresh(frm);
+	if (window.ProjectBudget?.refresh) {
+		await window.ProjectBudget.refresh(frm);
 	}
 }
 

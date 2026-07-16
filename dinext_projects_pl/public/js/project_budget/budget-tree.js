@@ -1,5 +1,5 @@
 /**
- * Tree helpers on frm.pl_v2 for forecast limits, risk reserves, WE parent-adjust.
+ * Tree helpers on frm.project_budget for forecast limits, risk reserves, WE parent-adjust.
  * No Sticky aggregatedBudget.
  */
 
@@ -84,9 +84,9 @@ export function parentForecastLimit(rows, row, key) {
 	return null;
 }
 
-/** Display periods: prefer pl_v2, fallback get_budget_display_periods. */
-export function getPlDisplayPeriods(frm) {
-	const fromV2 = frm?.pl_v2?.periods;
+/** Display periods: prefer project_budget, fallback get_budget_display_periods. */
+export function getDisplayPeriods(frm) {
+	const fromV2 = frm?.project_budget?.periods;
 	if (fromV2?.length) {
 		return fromV2.map((p) => ({
 			year: p.year,
@@ -209,7 +209,7 @@ export function applyUpdatesToTree(rows, updates) {
 export function buildParentAdjustmentsFromUpdates(frm, updates) {
 	const parent_adjustments = [];
 	const adjusted_parents = [];
-	const rows = frm?.pl_v2?.rows;
+	const rows = frm?.project_budget?.rows;
 	if (!rows?.length || !updates?.length) {
 		return { parent_adjustments, adjusted_parents };
 	}
@@ -280,6 +280,6 @@ export function buildParentAdjustmentsFromUpdates(frm, updates) {
 	return { parent_adjustments, adjusted_parents };
 }
 
-export function isPlV2Ready(frm) {
-	return Boolean(frm?.pl_v2?.rows?.length || frm?.pl_v2?.table);
+export function isBudgetReady(frm) {
+	return Boolean(frm?.project_budget?.rows?.length || frm?.project_budget?.table);
 }

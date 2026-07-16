@@ -250,7 +250,7 @@
 	min-height: 280px;
 	height: min(50vh, 560px);
 	max-height: 560px;
-	--pl-v2-row-height: 29px;
+	--project-budget-row-height: 29px;
 	--ag-font-size: 14px;
 	--ag-header-font-weight: 600;
 	--ag-cell-horizontal-padding: 2px;
@@ -269,10 +269,10 @@
 	font-weight: 600;
 }
 
-.budget-table.dinext-table .ag-header-cell.pl-v2-header--center .ag-header-cell-label,
-.budget-table.dinext-table .ag-header-group-cell.pl-v2-header--center .ag-header-group-cell-label,
-.budget-table.dinext-table .pl-v2-header--center .ag-header-cell-label,
-.budget-table.dinext-table .pl-v2-header--center .ag-header-group-cell-label {
+.budget-table.dinext-table .ag-header-cell.project-budget-header--center .ag-header-cell-label,
+.budget-table.dinext-table .ag-header-group-cell.project-budget-header--center .ag-header-group-cell-label,
+.budget-table.dinext-table .project-budget-header--center .ag-header-cell-label,
+.budget-table.dinext-table .project-budget-header--center .ag-header-group-cell-label {
 	justify-content: center;
 	width: 100%;
 	text-align: center;
@@ -315,8 +315,8 @@
 	text-align: center;
 }
 
-.budget-table.dinext-table .ag-cell.pl-v2-cell--zero,
-.budget-table.dinext-table .ag-cell.pl-v2-cell--zero .ag-cell-value {
+.budget-table.dinext-table .ag-cell.project-budget-cell--zero,
+.budget-table.dinext-table .ag-cell.project-budget-cell--zero .ag-cell-value {
 	color: var(--bg-dark-gray, #999) !important;
 }
 
@@ -327,13 +327,13 @@
 	background-color: transparent !important;
 }
 
-.budget-table.dinext-table .ag-cell.pl-v2-cell--profit-pos,
-.budget-table.dinext-table .ag-cell.pl-v2-cell--profit-pos .ag-cell-value {
+.budget-table.dinext-table .ag-cell.project-budget-cell--profit-pos,
+.budget-table.dinext-table .ag-cell.project-budget-cell--profit-pos .ag-cell-value {
 	color: #28a745 !important;
 }
 
-.budget-table.dinext-table .ag-cell.pl-v2-cell--profit-neg,
-.budget-table.dinext-table .ag-cell.pl-v2-cell--profit-neg .ag-cell-value {
+.budget-table.dinext-table .ag-cell.project-budget-cell--profit-neg,
+.budget-table.dinext-table .ag-cell.project-budget-cell--profit-neg .ag-cell-value {
 	color: #e03636 !important;
 }
 

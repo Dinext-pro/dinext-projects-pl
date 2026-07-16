@@ -4,10 +4,10 @@ const LEGACY_PLAN_SUBCOL_WIDTH = 70;
 const LEGACY_DELTA_SUBCOL_WIDTH = 50;
 
 const ALIGN_CENTER = "dinext-table-cell--align-center";
-const HEADER_CENTER = "pl-v2-header--center";
-const CELL_ZERO = "pl-v2-cell--zero";
-const CELL_PROFIT_POS = "pl-v2-cell--profit-pos";
-const CELL_PROFIT_NEG = "pl-v2-cell--profit-neg";
+const HEADER_CENTER = "project-budget-header--center";
+const CELL_ZERO = "project-budget-cell--zero";
+const CELL_PROFIT_POS = "project-budget-cell--profit-pos";
+const CELL_PROFIT_NEG = "project-budget-cell--profit-neg";
 
 function periodLeafWidth(hidePlan, hideDelta) {
 	let group = LEGACY_PERIOD_GROUP_WIDTH;
@@ -238,7 +238,7 @@ function buildTotalColumn(frm, periods) {
  */
 export function getColumns(frm, periods) {
 	const form = frm || (typeof cur_frm !== "undefined" ? cur_frm : null);
-	const periodList = periods || form?.pl_v2?.periods || [];
+	const periodList = periods || form?.project_budget?.periods || [];
 
 	const baseColumns = [
 		{
@@ -288,7 +288,7 @@ export function getColumns(frm, periods) {
 }
 
 export function refreshColumns(frm) {
-	const state = frm.pl_v2;
+	const state = frm.project_budget;
 	if (!state?.table?.setOption) return;
 	state.table.setOption("columns", getColumns(frm, state.periods));
 }
