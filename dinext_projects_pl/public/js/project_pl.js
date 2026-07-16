@@ -373,26 +373,23 @@ function get_budget_display_periods(frm, periodType) {
     return periods;
 }
 
-/** Cross-app: WE sync after task tree change → refresh P&L v2. */
-globalThis.updateTaskDimension = (frm, updateRows = false) => {
-    with_pl_v2_ready(frm, () => {
-        window.ProjectPlV2?.refresh?.(frm);
-        render_pl_chart(frm);
-    });
-};
-
 /**
- * Cross-app refresh entry (risk / pl-from-we still call this name).
- * Reloads DinextTable + chart — does not rebuild Sticky aggregatedBudget.
+ * Reload DinextTable + chart after external budget changes (WE / risk / forecast).
+ * @param {Form} frm
  */
-function load_budget_data(frm, periodType, updateRows) {
-    with_pl_v2_ready(frm, () => {
-        window.ProjectPlV2?.refresh?.(frm);
-        render_pl_chart(frm);
-    });
+function refresh_project_pl(frm) {
+	with_pl_v2_ready(frm, () => {
+		window.ProjectPlV2?.refresh?.(frm);
+		render_pl_chart(frm);
+	});
 }
 
-/** True when P&L v2 grid has data (replaces frm.aggregatedBudget checks). */
+/** Cross-app: WE sync after task tree change → refresh P&L v2. */
+globalThis.updateTaskDimension = (frm) => {
+	refresh_project_pl(frm);
+};
+
+/** True when P&L v2 grid has data. */
 function is_project_pl_ready(frm) {
-    return Boolean(frm?.pl_v2?.rows?.length || frm?.pl_v2?.table);
+	return Boolean(frm?.pl_v2?.rows?.length || frm?.pl_v2?.table);
 }

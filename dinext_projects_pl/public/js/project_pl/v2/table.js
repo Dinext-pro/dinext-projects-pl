@@ -113,7 +113,7 @@ export async function initTable(frm) {
 			// doctype_css can lag behind boot cache — require CSS with the bundle.
 			await frappe.require([
 				"dinext-table.bundle.js",
-				"/assets/dinext_projects_pl/css/pl-v2.css",
+				"/assets/dinext_projects_pl/css/project_budget.css",
 			]);
 			await loadGridData(frm);
 

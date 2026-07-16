@@ -24,7 +24,7 @@
 | 0.8 | Cleanup pass: kill-switch / dead stubs / WE sync | ✅ 2026-07-16 |
 | 0.9 | Risk + pl-from-we rewrite on `pl_v2` (no adapter) | ✅ 2026-07-16 |
 | 0.10 | Delete `project_pl_calc.js` + tests | ✅ 2026-07-16 |
-| 0.11 | `hide_empty` на v2 | ⏳ drop или implement |
+| 0.11 | `hide_empty` на v2 | ❌ drop (2026-07-16) — не делаем |
 
 ---
 
@@ -48,7 +48,7 @@ Project → custom_planning
 | Save forecast | `pl_v2_save_forecast_changes` |
 | Save plan | `saveForecastAsPlan` |
 
-**Ещё живёт мёртвым кодом (P3):** `load_budget_data`, `budget_cell*`, `get_budget_columns_definition`, Sticky helpers в `project_pl.js` / `project_pl_calc.js` — не вызываются из UI path.
+Cross-app refresh: `refresh_project_pl(frm)` (+ alias `updateTaskDimension` для WE).
 
 ### hooks.py (сейчас)
 
@@ -58,7 +58,6 @@ doctype_js Project:
   project_pl_style.js
   project_pl/v2-entry.js            ← bootstrap ProjectPlV2
   project_pl.js                     ← controls + mount v2
-  project_pl_calc.js
   project_pl_echarts.js
   project_pl_financial_metrics.js
   project_pl_dashboard.js
@@ -69,19 +68,15 @@ doctype_css Project:
 
 ---
 
-## 2. Зависимости v2 от legacy (важно)
+## 2. Зависимости v2 (после cutover)
 
-| Модуль | Тянет legacy | Действие на cutover |
-|--------|--------------|---------------------|
-| `v2/save.js` | `load_budget_data` после forecast save | оставить refresh legacy **или** только `ProjectPlV2.refresh` + chart |
-| Chart | fallback `aggregatedBudget` | после cutover fallback мёртв — только adapter |
-| Controls / toggles | живут в `project_pl.js` | **оставить** shared; вызовы `get_pl_v2_preview()?.…` → прямой `ProjectPlV2` |
-| `project_pl_calc.js` | `calc_column_total`, indexes | нужен, пока chart/legacy path; после cutover — только если кто-то ещё зовёт |
-| `project_pl_style.js` | CSS Sticky `.budget-table` | удалить Sticky-правила; controls/chart CSS оставить |
-| Dashboard / metrics | могут читать aggregatedBudget | проверить grep; перевести на v2/API при необходимости |
-| Forecast dropdown («Добавить прогноз») | пишет в budget → `load_budget_data` | после save: `ProjectPlV2.refresh` + chart |
-
-**Вывод:** cutover ≠ удалить весь `project_pl.js`. Сначала «v2-only UI», потом снос Sticky-only, потом decoupling `aggregatedBudget`.
+| Модуль | Источник | Статус |
+|--------|----------|--------|
+| Table / save / chart | `ProjectPlV2` + `pl_v2` | ✅ |
+| Risk / WE parent-adjust | `budget-tree.js` helpers | ✅ |
+| Controls / toggles | `project_pl.js` → `ProjectPlV2` | ✅ |
+| `project_pl_calc.js` | — | ✅ удалён |
+| Sticky / `aggregatedBudget` | — | ✅ UI path нет |
 
 ---
 
@@ -194,7 +189,8 @@ bg-group-
 | P3.2 | `load_budget_data` / `updateBudgetTable` / `updateTaskDimension` → v2 refresh | ✅ |
 | P3.3 | Dashboard / metrics — grep `aggregatedBudget` | ✅ нет ссылок |
 | P3.4 | Dead Sticky helpers (`budget_cell*`, `refreshBudget`, …) | ✅ вырезаны из `project_pl.js` |
-| P3.5 | `project_pl_calc.js` slim + docs | ⏳ calc ещё на диске (orphan); `isChildOf` перенесён |
+| P3.5 | `project_pl_calc.js` deleted + docs | ✅ 2026-07-16 |
+| P3.6 | `load_budget_data` → `refresh_project_pl` | ✅ 2026-07-16 |
 
 API `get_pl_grid_v2` / `pl_v2_save_forecast_changes` / save plan **не** удалять.
 

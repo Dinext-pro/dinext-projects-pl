@@ -97,7 +97,7 @@ export async function onSaveCells(frm, { changes }) {
 	frappe.show_alert(__("Данные успешно обновлены"), 5);
 	patchLocalForecast(frm, changes);
 
-	// P1 v2-only: refresh DinextTable + chart (no Sticky load_budget_data).
+	// Refresh DinextTable + chart after forecast save.
 	if (window.ProjectPlV2?.refresh) {
 		await window.ProjectPlV2.refresh(frm);
 	} else if (window.ProjectPlV2?.refreshChart) {

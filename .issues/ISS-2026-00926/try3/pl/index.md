@@ -94,7 +94,7 @@ controls
 ```
 
 Entry: `v2-entry.js` + `pl-v2.bundle.js`. Sticky init удалён. Chart = pl_v2 only.  
-Остаток P3: dead `budget_cell*` / slim `project_pl_calc.js` — [`legacy-cutover.md`](legacy-cutover.md).
+P3 cutover closed (`project_pl_calc` deleted, consumers on `ProjectPlV2`). Optional polish: [`obsolete-cleanup.md`](obsolete-cleanup.md).
 
 ---
 
