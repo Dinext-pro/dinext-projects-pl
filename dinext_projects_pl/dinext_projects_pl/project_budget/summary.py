@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import frappe
 
-from dinext_projects_pl.dinext_projects_pl.project_budget.models import (
+from dinext_projects_pl.models import (
 	ProjectBudgetDisplayPeriod,
 	ProjectBudgetRow,
 )

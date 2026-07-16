@@ -1,5 +1,5 @@
 # Copyright (c) 2026, Dinext
-"""TypedDict для Project Budget grid (scalar rows + periods)."""
+"""TypedDict models for dinext_projects_pl (API + domain packages)."""
 
 from __future__ import annotations
 
@@ -74,3 +74,10 @@ class ProjectBudgetGridResponse(TypedDict):
 	periods: list[ProjectBudgetDisplayPeriod]
 	rows: list[ProjectBudgetRow]
 	summary_rows: list[ProjectBudgetRow]
+
+
+class BucketAmounts(TypedDict, total=False):
+	"""Amounts bucket keyed by dimension fingerprint (Project Budget grid)."""
+
+	dimensions: list[dict[str, str]]
+	pb_docname: str | None

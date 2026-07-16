@@ -6,7 +6,7 @@ from __future__ import annotations
 import frappe
 from frappe.utils import add_months, get_first_day, getdate
 
-from dinext_projects_pl.dinext_projects_pl.project_budget.models import (
+from dinext_projects_pl.models import (
 	ProjectBudgetDisplayPeriod,
 	ViewMode,
 )
