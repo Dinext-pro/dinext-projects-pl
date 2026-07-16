@@ -1,62 +1,9 @@
 import { SAVE_FORECAST_API } from "./constants.js";
-
-function flattenTree(rows) {
-	const result = [];
-	for (const row of rows || []) {
-		result.push(row);
-		if (row.children?.length) {
-			result.push(...flattenTree(row.children));
-		}
-	}
-	return result;
-}
-
-function forecastOf(row, periodKey) {
-	return Number(row?.[`forecast_${periodKey}`] ?? row?.[`actual_${periodKey}`] ?? 0);
-}
-
-function findParent(rows, childId, parent = null) {
-	for (const row of rows || []) {
-		if (row.id === childId) return parent;
-		if (row.children?.length) {
-			const found = findParent(row.children, childId, row);
-			if (found !== undefined) return found;
-		}
-	}
-	return undefined;
-}
-
-function childForecastSum(row, periodKey, excludeId = null) {
-	let sum = 0;
-	for (const child of row.children || []) {
-		if (excludeId && child.id === excludeId) continue;
-		const own = forecastOf(child, periodKey);
-		if (own) {
-			sum += own;
-		} else {
-			sum += childForecastSum(child, periodKey);
-		}
-	}
-	return sum;
-}
-
-function parentForecastLimit(rows, row, periodKey) {
-	let current = row;
-	while (current) {
-		const parent = findParent(rows, current.id);
-		if (!parent) return null;
-		const parentForecast = forecastOf(parent, periodKey);
-		if (parentForecast > 0) {
-			const siblings = childForecastSum(parent, periodKey, current.id);
-			return {
-				maxAllowed: parentForecast - siblings,
-				parentLabel: parent.account_label || parent.account,
-			};
-		}
-		current = parent;
-	}
-	return null;
-}
+import {
+	childForecastSum,
+	flattenTree,
+	parentForecastLimit,
+} from "./budget-tree.js";
 
 function validateForecastChange(frm, change) {
 	const field = change.field;
