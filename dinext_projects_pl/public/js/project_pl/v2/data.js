@@ -44,10 +44,6 @@ export async function loadGridData(frm) {
 }
 
 export async function reloadTable(frm, initTable, refreshRuntime) {
-	if (!frm._pl_v2_enabled) {
-		return null;
-	}
-
 	const state = frm.pl_v2;
 	if (!state?.container) {
 		return null;

@@ -21,7 +21,10 @@
 | 0.5 | **P2** remove dual/bridge/Sticky init | ✅ код 2026-07-16 |
 | 0.6 | Smoke P2 (после redis FLUSH + backend restart) | ✅ 2026-07-16 |
 | 0.7 | P3.4 dead Sticky helpers вырезаны + smoke | ✅ 2026-07-16 |
-| 0.8 | `hide_empty` на v2 + slim `project_pl_calc.js` | ⏳ |
+| 0.8 | Cleanup pass: kill-switch / dead stubs / WE sync | ✅ 2026-07-16 |
+| 0.9 | Adapter `pl_v2 → aggregatedBudget` (risk reserves) | ⏳ блокер risk |
+| 0.10 | Slim/delete orphan `project_pl_calc.js` + tests | ⏳ после 0.9 |
+| 0.11 | `hide_empty` на v2 | ⏳ drop или implement |
 
 ---
 

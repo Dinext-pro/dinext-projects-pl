@@ -5,9 +5,6 @@ import { initTable, refreshRuntime } from "./table.js";
 const TABLE_CLASS = "budget-table";
 
 function resolveTableContainer(wrapper) {
-	// Drop leftover dual-preview chrome if any.
-	wrapper.find(".project-pl-v2-section").remove();
-
 	let $table = wrapper.find(`.${TABLE_CLASS}`).first();
 	if (!$table.length) {
 		$table = $(`<div class="${TABLE_CLASS}"></div>`);
