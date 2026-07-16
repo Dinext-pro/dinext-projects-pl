@@ -14,38 +14,38 @@
 
 | # | Условие | Статус |
 |---|---------|--------|
-| 0.1 | Срезы 1–7 (shell → chart adapter) + UI polish | ✅ |
+| 0.1 | Срезы 1–8 + UI polish | ✅ |
 | 0.2 | Clipboard enabled (`clipboard` + `fillHandle`) | ✅ код; smoke вручную ⏳ |
-| 0.3 | Dual-table smoke на `TEST-V15.106.0 (HEAD)` (числа, summary, edit, save plan, toggles, chart) | ⏳ |
-| 0.4 | Решение по `hide_empty` на v2 (сделать или явно out-of-scope cutover) | ⏳ |
-
-Пока 0.3 не зелёный — **не** выключать Sticky P&L и **не** удалять файлы.
+| 0.3 | **P1 v2-only mount** (одна таблица в `.budget-table`) | ✅ |
+| 0.4 | Smoke P1 на `TEST-V15.106.0 (HEAD)` | ✅ 2026-07-16 |
+| 0.5 | **P2** remove dual/bridge/Sticky init | ✅ код 2026-07-16 |
+| 0.6 | Smoke P2 (после redis FLUSH + backend restart) | ✅ 2026-07-16 |
+| 0.7 | P3.4 dead Sticky helpers вырезаны + smoke | ✅ 2026-07-16 |
+| 0.8 | `hide_empty` на v2 + slim `project_pl_calc.js` | ⏳ |
 
 ---
 
-## 1. Карта поверхностей (сейчас — dual)
+## 1. Карта поверхностей (P2 — v2-only, Sticky init удалён)
 
 ```text
 Project → custom_planning
 ├── .budget-controls          ← shared (toggles, view options, save plan)
-├── .budget-table             ← LEGACY StickyDataTable (frm.budget_dt)
-├── .project-pl-v2-section    ← TEMP dual
-│     badge «P&L v2 (preview)»
-│     └── .budget-table-v2    ← DinextTable (frm.pl_v2)
-├── chart (custom_pl_chart)   ← echarts; source prefers pl_v2 via chart-adapter
+├── .budget-table             ← DinextTable (frm.pl_v2)
+├── chart (custom_pl_chart)   ← echarts; source = pl_v2 chart-adapter
 └── financial metrics / dashboard
 ```
 
 | Символ | Где |
 |--------|-----|
 | Entry | `public/js/project_pl.js` → `render_budget_table` |
-| Flag | `frm._pl_v2_enabled` (default `true` в dual-preview-mount) |
-| Bridge | `v2-preview-bridge.js` → `frappe.require(pl-v2.bundle.js)` → `ProjectPlV2` |
-| Legacy data | `frm.aggregatedBudget` ← client `load_budget_data` |
+| Bootstrap | `v2-entry.js` → `frappe.require(pl-v2.bundle.js)` → `ProjectPlV2` |
+| Mount | `v2/mount.js` → `.budget-table` |
 | v2 data | `get_pl_grid_v2` → `frm.pl_v2.rows` / `summaryRows` / `periods` |
-| Chart | `project_pl_echarts.js` → `build_pl_chart_data` → **сначала** `ProjectPlV2.buildChartData`, иначе aggregatedBudget |
-| Save forecast | v2 → `pl_v2_save_forecast_changes`; legacy → jQuery cell path |
-| Save plan | button → v2 `saveForecastAsPlan` если есть selection, иначе legacy checked rows |
+| Chart | `build_pl_chart_data` → `ProjectPlV2.buildChartData` |
+| Save forecast | `pl_v2_save_forecast_changes` |
+| Save plan | `saveForecastAsPlan` |
+
+**Ещё живёт мёртвым кодом (P3):** `load_budget_data`, `budget_cell*`, `get_budget_columns_definition`, Sticky helpers в `project_pl.js` / `project_pl_calc.js` — не вызываются из UI path.
 
 ### hooks.py (сейчас)
 
@@ -53,8 +53,8 @@ Project → custom_planning
 doctype_js Project:
   project_pl_navigation.js
   project_pl_style.js
-  project_pl/v2-preview-bridge.js   ← TEMP
-  project_pl.js                     ← legacy Sticky + dual mount hook
+  project_pl/v2-entry.js            ← bootstrap ProjectPlV2
+  project_pl.js                     ← controls + mount v2
   project_pl_calc.js
   project_pl_echarts.js
   project_pl_financial_metrics.js
@@ -185,13 +185,13 @@ bg-group-
 
 ### Фаза P3 — Decouple `aggregatedBudget`
 
-| Шаг | Действие |
-|-----|----------|
-| P3.1 | Chart: только `ProjectPlV2.buildChartData` (убрать legacy branch в `build_pl_chart_data`) |
-| P3.2 | Удалить/сузить `load_budget_data` если никто не читает `aggregatedBudget` |
-| P3.3 | Dashboard / metrics — grep `aggregatedBudget`, перевести |
-| P3.4 | `project_pl_calc.js` — оставить только то, что ещё нужно вне таблицы |
-| P3.5 | Обновить `index.md` / этот файл — cutover ✅ |
+| Шаг | Действие | Статус |
+|-----|----------|--------|
+| P3.1 | Chart: только `ProjectPlV2.buildChartData` | ✅ 2026-07-16 |
+| P3.2 | `load_budget_data` / `updateBudgetTable` / `updateTaskDimension` → v2 refresh | ✅ |
+| P3.3 | Dashboard / metrics — grep `aggregatedBudget` | ✅ нет ссылок |
+| P3.4 | Dead Sticky helpers (`budget_cell*`, `refreshBudget`, …) | ✅ вырезаны из `project_pl.js` |
+| P3.5 | `project_pl_calc.js` slim + docs | ⏳ calc ещё на диске (orphan); `isChildOf` перенесён |
 
 API `get_pl_grid_v2` / `pl_v2_save_forecast_changes` / save plan **не** удалять.
 

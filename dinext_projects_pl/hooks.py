@@ -102,7 +102,7 @@ doctype_js = {"Project":
     [
         "public/js/project_pl_navigation.js",
         "public/js/project_pl_style.js",
-        "public/js/project_pl/v2-preview-bridge.js",
+        "public/js/project_pl/v2-entry.js",
         "public/js/project_pl.js",
         "public/js/project_pl_calc.js",
         "public/js/project_pl_echarts.js",

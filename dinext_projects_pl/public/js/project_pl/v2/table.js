@@ -4,8 +4,51 @@ import { applyPlanDeltaVisibility, getColumns, refreshColumns } from "./columns.
 import { attachTreePersistence, getExpandedIds, syncExpandedIds } from "./tree.js";
 import { onSaveCells, onValidateCells } from "./save.js";
 
-function buildTableOptions(frm, state) {
+const FS_SHELL_CLASS = "budget-container--fullscreen";
+
+/** Fullscreen shell = .budget-container (controls + table), like WR. */
+function resolveFullscreenOpts(container) {
+	const shell = container?.closest?.(".budget-container");
+	if (!shell) {
+		return null;
+	}
+
+	const afterLayout = () => {
+		requestAnimationFrame(() => {
+			window.dispatchEvent(new Event("resize"));
+		});
+	};
+
 	return {
+		target: "shell",
+		shell,
+		onEnter: ({ element }) => {
+			element?.classList.add(FS_SHELL_CLASS);
+			if (container) {
+				container.dataset.plV2PrevHeight = container.style.height || "";
+				container.dataset.plV2PrevMinHeight = container.style.minHeight || "";
+				container.style.height = "auto";
+				container.style.minHeight = "0";
+				container.style.flex = "1 1 auto";
+			}
+			afterLayout();
+		},
+		onExit: ({ element }) => {
+			element?.classList.remove(FS_SHELL_CLASS);
+			if (container) {
+				container.style.height = container.dataset.plV2PrevHeight || "min(50vh, 560px)";
+				container.style.minHeight = container.dataset.plV2PrevMinHeight || "280px";
+				container.style.flex = "";
+				delete container.dataset.plV2PrevHeight;
+				delete container.dataset.plV2PrevMinHeight;
+			}
+			afterLayout();
+		},
+	};
+}
+
+function buildTableOptions(frm, state) {
+	const opts = {
 		container: state.container,
 		data: state.rows,
 		columns: getColumns(frm, state.periods),
@@ -17,7 +60,8 @@ function buildTableOptions(frm, state) {
 		// Excel UX: TSV copy/paste + fill-handle (same as WE v2).
 		clipboard: { enabled: true },
 		fillHandle: { enabled: true },
-		selectionStatus: { enabled: false },
+		// Excel-like Average | Count | Sum under grid (min 2 cells).
+		selectionStatus: { enabled: true },
 		rowReorder: { enabled: false },
 		theme: {
 			cellHorizontalPadding: 2,
@@ -38,6 +82,12 @@ function buildTableOptions(frm, state) {
 			groupHeaderHeight: 22,
 		},
 	};
+
+	const fullscreen = resolveFullscreenOpts(state.container);
+	if (fullscreen) {
+		opts.fullscreen = fullscreen;
+	}
+	return opts;
 }
 
 function applyRuntime(frm, table) {
