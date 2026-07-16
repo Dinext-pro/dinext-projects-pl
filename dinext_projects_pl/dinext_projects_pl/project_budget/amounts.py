@@ -1,5 +1,5 @@
 # Copyright (c) 2026, Dinext
-"""Загрузка plan/forecast/fact по account × dimension buckets для P&L grid v2."""
+"""Загрузка plan/forecast/fact по account × dimension buckets для Project Budget grid."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from frappe.query_builder import DocType
 from frappe.query_builder.functions import Coalesce, Sum
 from frappe.utils import add_days, get_first_day, getdate
 
-from dinext_projects_pl.dinext_projects_pl.project_pl.v2.dimensions import (
+from dinext_projects_pl.dinext_projects_pl.project_budget.dimensions import (
 	dimension_fingerprint,
 	normalize_dimensions,
 )

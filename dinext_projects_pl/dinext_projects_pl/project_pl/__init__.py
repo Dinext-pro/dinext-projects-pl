@@ -1,2 +1,2 @@
 # Copyright (c) 2026, Dinext
-"""Project P&L package (form tab grid + related APIs)."""
+"""Deprecated package root — Project Budget grid lives in project_budget."""

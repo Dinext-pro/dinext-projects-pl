@@ -1,5 +1,5 @@
 # Copyright (c) 2026, Dinext
-"""TypedDict для Project P&L grid v2 (scalar rows + periods)."""
+"""TypedDict для Project Budget grid (scalar rows + periods)."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from typing import Any, Literal, TypedDict
 ViewMode = Literal["forecast_and_fact", "forecast_only", "fact_only"]
 
 
-class PlV2GridFormInput(TypedDict, total=False):
-	"""Входные параметры get_pl_grid_v2."""
+class ProjectBudgetGridFormInput(TypedDict, total=False):
+	"""Входные параметры get_project_budget_grid."""
 
 	project: str
 	period_type: str
@@ -17,8 +17,8 @@ class PlV2GridFormInput(TypedDict, total=False):
 	view_options: str
 
 
-class PlV2SaveForecastChange(TypedDict, total=False):
-	"""Одно изменение прогноза из P&L grid v2."""
+class ProjectBudgetSaveForecastChange(TypedDict, total=False):
+	"""Одно изменение прогноза из Project Budget grid."""
 
 	account: str
 	dimensions: list[Any] | str | None
@@ -28,14 +28,14 @@ class PlV2SaveForecastChange(TypedDict, total=False):
 	value: float | int | str
 
 
-class PlV2SaveForecastFormInput(TypedDict, total=False):
-	"""Входные параметры pl_v2_save_forecast_changes."""
+class ProjectBudgetSaveForecastFormInput(TypedDict, total=False):
+	"""Входные параметры save_project_budget_forecast."""
 
 	project: str
-	changes: str | list[PlV2SaveForecastChange]
+	changes: str | list[ProjectBudgetSaveForecastChange]
 
 
-class PlV2DisplayPeriod(TypedDict):
+class ProjectBudgetDisplayPeriod(TypedDict):
 	"""Период отображения (месяц)."""
 
 	year: int
@@ -44,7 +44,7 @@ class PlV2DisplayPeriod(TypedDict):
 	is_past: bool
 
 
-class PlV2Row(TypedDict, total=False):
+class ProjectBudgetRow(TypedDict, total=False):
 	"""Одна строка grid: account / task / risk tree node."""
 
 	id: str
@@ -59,18 +59,18 @@ class PlV2Row(TypedDict, total=False):
 	risk: str
 	root_type: str
 	pb_docname: str
-	children: list[PlV2Row]
+	children: list[ProjectBudgetRow]
 	summary_kind: str
 	# периоды: plan_2026_7, forecast_2026_7, fact_2026_7, actual_2026_7, delta_2026_7
 	# итого: plan_total, actual_total, delta_total
 
 
-class PlV2GridResponse(TypedDict):
-	"""Ответ get_pl_grid_v2."""
+class ProjectBudgetGridResponse(TypedDict):
+	"""Ответ get_project_budget_grid."""
 
 	project: str
 	period_type: str
 	view_mode: ViewMode
-	periods: list[PlV2DisplayPeriod]
-	rows: list[PlV2Row]
-	summary_rows: list[PlV2Row]
+	periods: list[ProjectBudgetDisplayPeriod]
+	rows: list[ProjectBudgetRow]
+	summary_rows: list[ProjectBudgetRow]

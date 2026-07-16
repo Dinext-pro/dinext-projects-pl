@@ -1,5 +1,5 @@
 # Copyright (c) 2026, Dinext
-"""Сборка scalar P&L grid v2.
+"""Сборка scalar Project Budget grid.
 
 Дерево строк как legacy StickyDataTable: CoA + Task + Project Risk.
 Без cell merge. Периоды — атомарные plan/actual/delta.
@@ -10,28 +10,28 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
-from dinext_projects_pl.dinext_projects_pl.project_pl.v2.amounts import (
+from dinext_projects_pl.dinext_projects_pl.project_budget.amounts import (
 	load_budget_buckets,
 	load_gl_fact_buckets,
 	merge_bucket_stores,
 	period_date_bounds,
 )
-from dinext_projects_pl.dinext_projects_pl.project_pl.v2.dimensions import (
+from dinext_projects_pl.dinext_projects_pl.project_budget.dimensions import (
 	dimension_fingerprint,
 	normalize_dimensions,
 )
-from dinext_projects_pl.dinext_projects_pl.project_pl.v2.models import (
-	PlV2DisplayPeriod,
-	PlV2GridFormInput,
-	PlV2GridResponse,
-	PlV2Row,
+from dinext_projects_pl.dinext_projects_pl.project_budget.models import (
+	ProjectBudgetDisplayPeriod,
+	ProjectBudgetGridFormInput,
+	ProjectBudgetGridResponse,
+	ProjectBudgetRow,
 	ViewMode,
 )
-from dinext_projects_pl.dinext_projects_pl.project_pl.v2.periods import (
+from dinext_projects_pl.dinext_projects_pl.project_budget.periods import (
 	get_display_periods,
 	normalize_view_mode,
 )
-from dinext_projects_pl.dinext_projects_pl.project_pl.v2.summary import build_pl_v2_summary_rows
+from dinext_projects_pl.dinext_projects_pl.project_budget.summary import build_project_budget_summary_rows
 
 RISK_KEY_SEP = "|risk|"
 EXCLUDED_DIMENSIONS = ("Project", "Cost Center", "Project Portfolio")
@@ -216,9 +216,9 @@ def _collapse_task_buckets(buckets: list[dict]) -> list[dict]:
 
 
 def _apply_amounts_from_buckets(
-	row: PlV2Row,
+	row: ProjectBudgetRow,
 	buckets: list[dict],
-	periods: list[PlV2DisplayPeriod],
+	periods: list[ProjectBudgetDisplayPeriod],
 	view_mode: ViewMode,
 ) -> None:
 	combined: dict = {}
@@ -246,7 +246,7 @@ def _apply_amounts_from_buckets(
 	_apply_row_totals(row, periods)
 
 
-def _apply_row_totals(row: PlV2Row, periods: list[PlV2DisplayPeriod]) -> None:
+def _apply_row_totals(row: ProjectBudgetRow, periods: list[ProjectBudgetDisplayPeriod]) -> None:
 	plan_total = 0.0
 	actual_total = 0.0
 	for period in periods:
@@ -259,9 +259,9 @@ def _apply_row_totals(row: PlV2Row, periods: list[PlV2DisplayPeriod]) -> None:
 
 
 def _add_fact_from_child(
-	parent: PlV2Row,
-	child: PlV2Row,
-	periods: list[PlV2DisplayPeriod],
+	parent: ProjectBudgetRow,
+	child: ProjectBudgetRow,
+	periods: list[ProjectBudgetDisplayPeriod],
 	view_mode: ViewMode,
 ) -> None:
 	for period in periods:
@@ -306,8 +306,8 @@ def _make_base_row(
 	root_type: str | None,
 	task: str | None = None,
 	risk: str | None = None,
-) -> PlV2Row:
-	row: PlV2Row = {
+) -> ProjectBudgetRow:
+	row: ProjectBudgetRow = {
 		"id": row_id,
 		"account": account,
 		"account_label": account_label,
@@ -333,11 +333,11 @@ def _build_risk_rows(
 	root_type: str | None,
 	indent: int,
 	risk_buckets: list[tuple[str, dict]],
-	periods: list[PlV2DisplayPeriod],
+	periods: list[ProjectBudgetDisplayPeriod],
 	view_mode: ViewMode,
 	risk_titles: dict[str, str],
-) -> list[PlV2Row]:
-	rows: list[PlV2Row] = []
+) -> list[ProjectBudgetRow]:
+	rows: list[ProjectBudgetRow] = []
 	for risk_name, bucket in risk_buckets:
 		label = f"⚠ {risk_titles.get(risk_name) or risk_name}"
 		row = _make_base_row(
@@ -359,11 +359,11 @@ def _build_tree_rows(
 	accounts: list[dict],
 	tasks: list[dict],
 	task_allowed_accounts: set[str],
-	periods: list[PlV2DisplayPeriod],
+	periods: list[ProjectBudgetDisplayPeriod],
 	view_mode: ViewMode,
 	buckets_by_account: dict[str, dict[str, dict]],
 	risk_titles: dict[str, str],
-) -> list[PlV2Row]:
+) -> list[ProjectBudgetRow]:
 	by_parent: dict[str | None, list[dict]] = {}
 	for acc in accounts:
 		parent = acc.get("parent_account") or None
@@ -393,8 +393,8 @@ def _build_tree_rows(
 		parent_task: str | None,
 		indent: int,
 		account_task_buckets: dict[str, list[dict]],
-	) -> list[PlV2Row]:
-		rows: list[PlV2Row] = []
+	) -> list[ProjectBudgetRow]:
+		rows: list[ProjectBudgetRow] = []
 		for task in tasks:
 			task_parent = task.get("parent_task") or None
 			if (task_parent or None) != parent_task:
@@ -446,8 +446,8 @@ def _build_tree_rows(
 			rows.append(row)
 		return rows
 
-	def walk_accounts(parent_name: str | None, indent: int) -> list[PlV2Row]:
-		rows: list[PlV2Row] = []
+	def walk_accounts(parent_name: str | None, indent: int) -> list[ProjectBudgetRow]:
+		rows: list[ProjectBudgetRow] = []
 		for acc in children_of(parent_name):
 			name = acc["name"]
 			raw_buckets = account_buckets_list(name)
@@ -488,7 +488,7 @@ def _build_tree_rows(
 			_apply_amounts_from_buckets(row, kept, periods, view_mode)
 
 			# Legacy under account: root tasks, then child accounts, then risks.
-			task_rows: list[PlV2Row] = []
+			task_rows: list[ProjectBudgetRow] = []
 			if allows_task and tasks:
 				task_rows = walk_tasks(
 					name,
@@ -523,7 +523,7 @@ def _build_tree_rows(
 	return walk_accounts(None, 0)
 
 
-def run_get_pl_grid_v2(form_input: PlV2GridFormInput) -> PlV2GridResponse:
+def run_get_project_budget_grid(form_input: ProjectBudgetGridFormInput) -> ProjectBudgetGridResponse:
 	project = form_input.get("project")
 	if not project:
 		frappe.throw(_("Project is required"))
@@ -565,7 +565,7 @@ def run_get_pl_grid_v2(form_input: PlV2GridFormInput) -> PlV2GridResponse:
 		buckets_by_account,
 		risk_titles,
 	)
-	summary_rows = build_pl_v2_summary_rows(rows, periods)
+	summary_rows = build_project_budget_summary_rows(rows, periods)
 
 	return {
 		"project": project,

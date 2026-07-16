@@ -1,4 +1,4 @@
-import { GRID_V2_API } from "./constants.js";
+import { GRID_API } from "./constants.js";
 import { initState } from "./state.js";
 
 /** Ensure checkbox + client defaults on every tree node (API is server-shaped). */
@@ -27,7 +27,7 @@ export async function loadGridData(frm) {
 	const period_type = frm._pl_period_type || "month";
 
 	try {
-		const message = await frappe.xcall(GRID_V2_API, {
+		const message = await frappe.xcall(GRID_API, {
 			project: frm.doc.name,
 			period_type,
 			view_options: frm.budget_view_options || __("Forecast and actual"),

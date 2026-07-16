@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import frappe
 
-from dinext_projects_pl.dinext_projects_pl.project_pl.v2.models import (
-	PlV2DisplayPeriod,
-	PlV2Row,
+from dinext_projects_pl.dinext_projects_pl.project_budget.models import (
+	ProjectBudgetDisplayPeriod,
+	ProjectBudgetRow,
 )
 
 PL_V2_SUMMARY_PROFIT_ID = "pl-v2-profit"
@@ -27,11 +27,11 @@ def _calc_delta_pct(plan: float, actual: float) -> float:
 	return round(((actual - plan) / plan) * 100, 1)
 
 
-def _root_type(row: PlV2Row) -> str:
+def _root_type(row: ProjectBudgetRow) -> str:
 	return str(row.get("root_type") or "")
 
 
-def _row_period_amount(row: PlV2Row, period_key: str, value_key: str) -> float:
+def _row_period_amount(row: ProjectBudgetRow, period_key: str, value_key: str) -> float:
 	"""Legacy get_row_period_total: own/direct if nonzero, else sum descendants.
 
 	Uses own_fact_* for fact (not rolled fact_* / actual_*) so rollup display
@@ -53,8 +53,8 @@ def _row_period_amount(row: PlV2Row, period_key: str, value_key: str) -> float:
 
 
 def calc_period_income_expense(
-	root_rows: list[PlV2Row],
-	period: PlV2DisplayPeriod,
+	root_rows: list[ProjectBudgetRow],
+	period: ProjectBudgetDisplayPeriod,
 ) -> tuple[float, float, float, float]:
 	"""plan_income, plan_expenses, actual_income, actual_expenses — like calc_column_total."""
 	period_key = period["key"]
@@ -80,11 +80,11 @@ def calc_period_income_expense(
 	return plan_income, plan_expenses, actual_income, actual_expenses
 
 
-def build_pl_v2_summary_rows(
-	root_rows: list[PlV2Row],
-	periods: list[PlV2DisplayPeriod],
-) -> list[PlV2Row]:
-	profit: PlV2Row = {
+def build_project_budget_summary_rows(
+	root_rows: list[ProjectBudgetRow],
+	periods: list[ProjectBudgetDisplayPeriod],
+) -> list[ProjectBudgetRow]:
+	profit: ProjectBudgetRow = {
 		"id": PL_V2_SUMMARY_PROFIT_ID,
 		"account": PL_V2_SUMMARY_PROFIT_ID,
 		"account_label": frappe._("Валовая прибыль"),
@@ -95,7 +95,7 @@ def build_pl_v2_summary_rows(
 		"expandable": 0,
 		"summary_kind": "profit",
 	}
-	profitability: PlV2Row = {
+	profitability: ProjectBudgetRow = {
 		"id": PL_V2_SUMMARY_PROFITABILITY_ID,
 		"account": PL_V2_SUMMARY_PROFITABILITY_ID,
 		"account_label": frappe._("Рентабельность"),
