@@ -1,17 +1,24 @@
 # Copyright (c) 2026, Dinext
-"""Whitelisted API for Project Budget grid."""
+"""Whitelisted Project Budget API (Desk / frappe.call entrypoints).
+
+Core logic lives in `dinext_projects_pl.project_budget.*` (no whitelist there).
+"""
 
 from __future__ import annotations
 
 import frappe
 
-from dinext_projects_pl.dinext_projects_pl.project_budget.grid_data import run_get_project_budget_grid
+from dinext_projects_pl.dinext_projects_pl.project_budget.grid_data import (
+	run_get_project_budget_grid,
+)
 from dinext_projects_pl.dinext_projects_pl.project_budget.models import (
 	ProjectBudgetGridFormInput,
 	ProjectBudgetGridResponse,
 	ProjectBudgetSaveForecastFormInput,
 )
-from dinext_projects_pl.dinext_projects_pl.project_budget.save import run_save_project_budget_forecast
+from dinext_projects_pl.dinext_projects_pl.project_budget.save import (
+	run_save_project_budget_forecast,
+)
 
 
 @frappe.whitelist()
