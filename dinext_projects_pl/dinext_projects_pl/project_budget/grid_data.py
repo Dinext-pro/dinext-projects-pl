@@ -20,7 +20,7 @@ from dinext_projects_pl.dinext_projects_pl.project_budget.dimensions import (
 	dimension_fingerprint,
 	normalize_dimensions,
 )
-from dinext_projects_pl.dinext_projects_pl.project_budget.models import (
+from dinext_projects_pl.models import (
 	ProjectBudgetDisplayPeriod,
 	ProjectBudgetGridFormInput,
 	ProjectBudgetGridResponse,

@@ -3,22 +3,16 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
-
 import frappe
 from frappe.query_builder import DocType
 from frappe.query_builder.functions import Coalesce, Sum
 from frappe.utils import add_days, get_first_day, getdate
 
+from dinext_projects_pl.models import BucketAmounts
 from dinext_projects_pl.dinext_projects_pl.project_budget.dimensions import (
 	dimension_fingerprint,
 	normalize_dimensions,
 )
-
-
-class BucketAmounts(TypedDict, total=False):
-	dimensions: list[dict[str, str]]
-	pb_docname: str | None
 
 
 def _to_float(value: object) -> float:

@@ -11,7 +11,7 @@ import frappe
 from dinext_projects_pl.dinext_projects_pl.project_budget.grid_data import (
 	run_get_project_budget_grid,
 )
-from dinext_projects_pl.dinext_projects_pl.project_budget.models import (
+from dinext_projects_pl.models import (
 	ProjectBudgetGridFormInput,
 	ProjectBudgetGridResponse,
 	ProjectBudgetSaveForecastFormInput,
