@@ -98,7 +98,7 @@ function applyRuntime(frm, table) {
 export async function initTable(frm) {
 	const state = initState(frm);
 
-	if (!frm._pl_v2_enabled || !state.container) {
+	if (!state.container) {
 		return null;
 	}
 	if (state.table) {

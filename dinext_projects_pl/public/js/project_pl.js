@@ -164,8 +164,6 @@ function scroll_to_project_pl_table(frm) {
 
 frappe.ui.form.on("Project", {
     refresh: function(frm) {
-        console.log("refresh");
-        // При первом открытии добавляем кастомную вкладку "Трудозатраты", если ещё не создана
         render_budget_table(frm);
         schedule_open_project_pl_tab(frm);
     },
@@ -290,7 +288,7 @@ function with_pl_v2_ready(frm, callback) {
 }
 
 /**
- * P&L / Budget table — DinextTable in `.budget-table` (Sticky path removed, P2).
+ * P&L / Budget table — DinextTable in `.budget-table`.
  */
 function render_budget_table(frm) {
     let wrapper = frm.get_field("custom_planning").$wrapper;
@@ -298,8 +296,6 @@ function render_budget_table(frm) {
     if (plV2Preview?.destroy) {
         plV2Preview.destroy(frm);
     }
-    frm.budget_dt = null;
-    frm._pl_v2_enabled = true;
     wrapper.addClass("budget-container").empty();
 
     let controls = $('<div class="budget-controls"></div>').appendTo(wrapper);
@@ -313,8 +309,7 @@ function render_budget_table(frm) {
 
     frm.bg_hide_plan = frm.bg_hide_plan || true;
     frm.bg_hide_delta = frm.bg_hide_delta || true;
-    frm.bg_hide_empty = frm.bg_hide_empty || true;
-    
+
     addBudgetViewOptionsControl(frm, controls);
     add_pl_forecast_dropdown(frm, controls);
 
@@ -326,7 +321,7 @@ function render_budget_table(frm) {
         }
         frappe.msgprint(__("P&L v2 не загружен"));
     });
-    
+
     controls.find('#bg-toggle_plan').on('click', function() {
         frm.bg_hide_plan = !frm.bg_hide_plan;
         $(this).text(frm.bg_hide_plan ? __("Показать план") : __("Скрыть план"));
@@ -342,168 +337,62 @@ function render_budget_table(frm) {
     with_pl_v2_ready(frm);
 }
 
+/** Month periods for P&L / risk / WE forecast (quarter/year branches removed). */
 function get_budget_display_periods(frm, periodType) {
-    let periods = [];
-    
-    // Если даты не заданы, возвращаем пустой массив
-    if (!frm.doc.expected_start_date || !frm.doc.expected_end_date) {
-        console.warn("Даты проекта не заданы");
+    const periods = [];
+    if (!frm?.doc?.expected_start_date || !frm.doc.expected_end_date) {
         return periods;
     }
-    
-    let month_start = frappe.datetime.month_start();
-    let start = frappe.datetime.str_to_obj(frm.doc.expected_start_date);
-    let end = frappe.datetime.str_to_obj(frm.doc.expected_end_date);
-    
-    // Корректируем начальную дату на ПЕРВЫЙ ЧИСЛО месяца старта
-    // Это ключевое изменение!
+    // Only month granularity is used by live callers.
+    if (periodType && periodType !== "month") {
+        periodType = "month";
+    }
+
+    const month_start = frappe.datetime.month_start();
+    const start = frappe.datetime.str_to_obj(frm.doc.expected_start_date);
+    const end = frappe.datetime.str_to_obj(frm.doc.expected_end_date);
     let current = new Date(start.getFullYear(), start.getMonth(), 1);
-    
-    // Корректируем конечную дату на ПЕРВОЕ ЧИСЛО месяца окончания
-    let last = new Date(end.getFullYear(), end.getMonth(), 1);
-    
-    if (periodType === "month") {
-        // Итерируемся по месяцам, пока current <= last
-        while (current <= last) {
-            let year = current.getFullYear();
-            let month = current.getMonth() + 1; // +1 потому что getMonth() возвращает 0-11
-            
-            // Определяем, является ли период прошлым
-            let is_past;
-            if (frm.budget_view_options == __("Actual only")) {
-                is_past = true;
-            } else if (frm.budget_view_options == __("Forecast only")) {
-                is_past = false;
-            } else { // "Forecast and actual"
-                let current_date_str = frappe.datetime.obj_to_str(current);
-                is_past = current_date_str < month_start;
-            }
-            
-            periods.push({ 
-                year: year, 
-                month: month, 
-                is_past: is_past 
-            });
-            
-            // Переходим к следующему месяцу
-            current = frappe.datetime.str_to_obj(
-                frappe.datetime.add_months(
-                    frappe.datetime.obj_to_str(current), 
-                    1
-                )
-            );
+    const last = new Date(end.getFullYear(), end.getMonth(), 1);
+
+    while (current <= last) {
+        const year = current.getFullYear();
+        const month = current.getMonth() + 1;
+        let is_past;
+        if (frm.budget_view_options == __("Actual only")) {
+            is_past = true;
+        } else if (frm.budget_view_options == __("Forecast only")) {
+            is_past = false;
+        } else {
+            is_past = frappe.datetime.obj_to_str(current) < month_start;
         }
+        periods.push({ year, month, is_past });
+        current = frappe.datetime.str_to_obj(
+            frappe.datetime.add_months(frappe.datetime.obj_to_str(current), 1)
+        );
     }
-    
-    else if (periodType === "quarter") {
-        let lastQuarter = null;
-        let lastYear = null;
-        
-        while (current <= last) {
-            const year = current.getFullYear();
-            const quarter = Math.floor(current.getMonth() / 3) + 1;
-            
-            // Добавляем квартал только если он отличается от предыдущего
-            if (lastQuarter !== quarter || lastYear !== year) {
-                // Для квартала определяем is_past по последнему месяцу квартала
-                let quarterEndMonth = quarter * 3 - 1; // 0-11 формат
-                let quarterEndDate = new Date(year, quarterEndMonth, 1);
-                let quarterEndDateStr = frappe.datetime.obj_to_str(quarterEndDate);
-                
-                let is_past;
-                if (frm.budget_view_options == __("Actual only")) {
-                    is_past = true;
-                } else if (frm.budget_view_options == __("Forecast only")) {
-                    is_past = false;
-                } else {
-                    is_past = quarterEndDateStr < month_start;
-                }
-                
-                periods.push({ 
-                    year: year, 
-                    quarter: quarter, 
-                    is_past: is_past 
-                });
-                
-                lastQuarter = quarter;
-                lastYear = year;
-            }
-            
-            // Переходим к следующему месяцу
-            current = frappe.datetime.str_to_obj(
-                frappe.datetime.add_months(
-                    frappe.datetime.obj_to_str(current), 
-                    1
-                )
-            );
-        }
-    }
-    
-    else if (periodType === "year") {
-        let lastYear = null;
-        
-        while (current <= last) {
-            const year = current.getFullYear();
-            
-            // Добавляем год только если он отличается от предыдущего
-            if (lastYear !== year) {
-                // Для года определяем is_past по декабрю
-                let yearEndDate = new Date(year, 11, 1); // Декабрь
-                let yearEndDateStr = frappe.datetime.obj_to_str(yearEndDate);
-                
-                let is_past;
-                if (frm.budget_view_options == __("Actual only")) {
-                    is_past = true;
-                } else if (frm.budget_view_options == __("Forecast only")) {
-                    is_past = false;
-                } else {
-                    is_past = yearEndDateStr < month_start;
-                }
-                
-                periods.push({ 
-                    year: year, 
-                    quarter: 0, 
-                    is_past: is_past 
-                });
-                
-                lastYear = year;
-            }
-            
-            // Переходим к следующему месяцу
-            current = frappe.datetime.str_to_obj(
-                frappe.datetime.add_months(
-                    frappe.datetime.obj_to_str(current), 
-                    1
-                )
-            );
-        }
-    }
-    
-    console.log("Сгенерированы периоды:", periods);
     return periods;
 }
 
-function updateBudgetTable(frm, periodType="month") {
-    get_pl_v2_preview()?.onTogglePlanOrDelta(frm);
-}
+/** Cross-app: WE sync after task tree change → refresh P&L v2. */
+globalThis.updateTaskDimension = (frm, updateRows = false) => {
+    with_pl_v2_ready(frm, () => {
+        window.ProjectPlV2?.refresh?.(frm);
+        render_pl_chart(frm);
+    });
+};
 
-globalThis.updateTaskDimension = (frm, updateRows=false) => {
+/**
+ * Cross-app refresh entry (risk / pl-from-we still call this name).
+ * Reloads DinextTable + chart — does not rebuild Sticky aggregatedBudget.
+ */
+function load_budget_data(frm, periodType, updateRows) {
     with_pl_v2_ready(frm, () => {
         window.ProjectPlV2?.refresh?.(frm);
         render_pl_chart(frm);
     });
 }
 
-/**
- * Refresh P&L grid (v2). Sticky aggregatedBudget loader removed (P3).
- */
-function load_budget_data(frm, periodType, updateRows) {
-    with_pl_v2_ready(frm, () => {
-        window.ProjectPlV2?.refresh?.(frm);
-        if (typeof render_revenue_percentage_chart === "function") {
-            render_revenue_percentage_chart(frm);
-        }
-    });
+/** True when P&L v2 grid has data (replaces frm.aggregatedBudget checks). */
+function is_project_pl_ready(frm) {
+    return Boolean(frm?.pl_v2?.rows?.length || frm?.pl_v2?.table);
 }
-
-// Sticky HTML/cell helpers removed (P3.4). Grid = ProjectPlV2.

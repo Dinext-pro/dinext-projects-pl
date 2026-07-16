@@ -50,9 +50,6 @@ function calcPeriodIncomeExpense(rootRows, period) {
  * @returns {object|null} chart payload or null if v2 grid not ready
  */
 export function buildChartData(frm) {
-	if (!frm?._pl_v2_enabled) {
-		return null;
-	}
 	const periods = frm.pl_v2?.periods;
 	const rows = frm.pl_v2?.rows;
 	if (!periods?.length || !rows?.length) {
