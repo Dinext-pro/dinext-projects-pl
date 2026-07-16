@@ -1,5 +1,5 @@
 /**
- * Chart data from frm.pl_v2 (same shape as legacy build_pl_chart_data).
+ * Chart data from frm.project_budget (same shape as legacy build_pl_chart_data).
  * Walk mirrors summary.py: plan / fact|forecast via own_fact, not rolled actual_*.
  */
 
@@ -50,8 +50,8 @@ function calcPeriodIncomeExpense(rootRows, period) {
  * @returns {object|null} chart payload or null if v2 grid not ready
  */
 export function buildChartData(frm) {
-	const periods = frm.pl_v2?.periods;
-	const rows = frm.pl_v2?.rows;
+	const periods = frm.project_budget?.periods;
+	const rows = frm.project_budget?.rows;
 	if (!periods?.length || !rows?.length) {
 		return null;
 	}
@@ -121,7 +121,7 @@ export function buildChartData(frm) {
 		cumulative_expenses_plan,
 		cumulative_expenses_actual,
 		periods,
-		source: "pl_v2",
+		source: "project_budget",
 	};
 }
 

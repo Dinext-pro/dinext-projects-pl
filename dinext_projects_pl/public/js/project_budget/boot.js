@@ -1,15 +1,15 @@
-// Desk entry: load pl-v2.bundle.js and mount ProjectPlV2 on Project form.
+// Desk entry: load project-budget.bundle.js and mount ProjectBudget on Project form.
 // IIFE: doctype_js is concatenated into Project __js with other apps.
-frappe.provide("dinext_projects_pl.projectPlPreview");
+frappe.provide("dinext_projects_pl.projectBudget");
 
 (function () {
 	function bundlePath() {
-		return frappe.assets.bundled_asset("pl-v2.bundle.js");
+		return frappe.assets.bundled_asset("project-budget.bundle.js");
 	}
 
 	function whenReady(frm, callback) {
 		const run = () => {
-			const mountPromise = window.ProjectPlV2.ensureMounted(frm);
+			const mountPromise = window.ProjectBudget.ensureMounted(frm);
 			Promise.resolve(mountPromise)
 				.catch((err) => {
 					console.error("[Project P&L] ensureMounted failed", err);
@@ -19,14 +19,14 @@ frappe.provide("dinext_projects_pl.projectPlPreview");
 				});
 		};
 
-		if (window.ProjectPlV2?.isReady?.()) {
+		if (window.ProjectBudget?.isReady?.()) {
 			run();
 			return;
 		}
 
 		frappe.require([bundlePath()], () => {
-			if (!window.ProjectPlV2?.isReady?.()) {
-				console.error("[Project P&L] pl-v2.bundle.js did not register ProjectPlV2");
+			if (!window.ProjectBudget?.isReady?.()) {
+				console.error("[Project P&L] project-budget.bundle.js did not register ProjectBudget");
 				callback?.();
 				return;
 			}
@@ -36,29 +36,29 @@ frappe.provide("dinext_projects_pl.projectPlPreview");
 
 	function onTogglePlanOrDelta(frm) {
 		whenReady(frm, () => {
-			window.ProjectPlV2.onTogglePlanOrDelta(frm);
+			window.ProjectBudget.onTogglePlanOrDelta(frm);
 		});
 	}
 
 	function onViewOptionsChange(frm) {
 		whenReady(frm, () => {
-			window.ProjectPlV2.onViewOptionsChange(frm);
+			window.ProjectBudget.onViewOptionsChange(frm);
 		});
 	}
 
 	function saveForecastAsPlan(frm) {
 		whenReady(frm, () => {
-			window.ProjectPlV2.saveForecastAsPlan(frm);
+			window.ProjectBudget.saveForecastAsPlan(frm);
 		});
 	}
 
-	Object.assign(dinext_projects_pl.projectPlPreview, {
+	Object.assign(dinext_projects_pl.projectBudget, {
 		whenReady,
 		onTogglePlanOrDelta,
 		onViewOptionsChange,
 		saveForecastAsPlan,
 		destroy(frm) {
-			window.ProjectPlV2?.destroy(frm);
+			window.ProjectBudget?.destroy(frm);
 		},
 	});
 })();

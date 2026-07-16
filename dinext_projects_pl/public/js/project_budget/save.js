@@ -14,7 +14,7 @@ function validateForecastChange(frm, change) {
 	if (!row || row.summary_kind) return true;
 
 	const value = Number(change.newValue || 0);
-	const rows = frm.pl_v2?.rows || [];
+	const rows = frm.project_budget?.rows || [];
 
 	const childrenSum = childForecastSum(row, periodKey);
 	if (childrenSum > 0 && value < childrenSum) {
@@ -69,7 +69,7 @@ function buildSavePayload(changes) {
 }
 
 function patchLocalForecast(frm, changes) {
-	const flat = flattenTree(frm.pl_v2?.rows || []);
+	const flat = flattenTree(frm.project_budget?.rows || []);
 	for (const change of changes) {
 		if (!change.field?.startsWith("actual_")) continue;
 		const periodKey = change.field.slice("actual_".length);
@@ -98,10 +98,10 @@ export async function onSaveCells(frm, { changes }) {
 	patchLocalForecast(frm, changes);
 
 	// Refresh DinextTable + chart after forecast save.
-	if (window.ProjectPlV2?.refresh) {
-		await window.ProjectPlV2.refresh(frm);
-	} else if (window.ProjectPlV2?.refreshChart) {
-		window.ProjectPlV2.refreshChart(frm);
+	if (window.ProjectBudget?.refresh) {
+		await window.ProjectBudget.refresh(frm);
+	} else if (window.ProjectBudget?.refreshChart) {
+		window.ProjectBudget.refreshChart(frm);
 	}
 	return true;
 }

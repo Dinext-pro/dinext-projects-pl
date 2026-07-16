@@ -228,8 +228,8 @@ function build_pl_chart_data(frm) {
     if (pl_chart_debug_enabled()) {
         console.time("build_pl_chart_data");
     }
-    // P3: chart only from pl_v2 (Sticky aggregatedBudget path removed).
-    const fromV2 = window.ProjectPlV2?.buildChartData?.(frm);
+    // P3: chart only from project_budget (Sticky aggregatedBudget path removed).
+    const fromV2 = window.ProjectBudget?.buildChartData?.(frm);
     if (fromV2) {
         if (pl_chart_debug_enabled()) {
             console.timeEnd("build_pl_chart_data");
@@ -1132,7 +1132,7 @@ function render_pl_chart_impl(frm, init = true) {
     const plRowCount = (() => {
         const walk = (rows) =>
             (rows || []).reduce((n, r) => n + 1 + walk(r.children), 0);
-        return walk(frm.pl_v2?.rows);
+        return walk(frm.project_budget?.rows);
     })();
     if (plRowCount > LARGE_DATA_THRESHOLD) {
         if (pl_chart_debug_enabled()) {

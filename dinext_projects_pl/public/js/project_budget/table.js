@@ -134,7 +134,7 @@ export async function initTable(frm) {
 }
 
 export async function refreshRuntime(frm) {
-	const state = frm.pl_v2;
+	const state = frm.project_budget;
 	if (!state?.table) {
 		return;
 	}
@@ -160,8 +160,8 @@ export function onTogglePlanOrDelta(frm) {
 /** View options change actual/forecast mapping → reload grid + chart. */
 export async function onViewOptionsChange(frm) {
 	const table = await reloadTable(frm, initTable, refreshRuntime);
-	if (window.ProjectPlV2?.refreshChart) {
-		window.ProjectPlV2.refreshChart(frm);
+	if (window.ProjectBudget?.refreshChart) {
+		window.ProjectBudget.refreshChart(frm);
 	}
 	return table;
 }

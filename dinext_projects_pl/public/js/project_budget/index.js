@@ -19,13 +19,13 @@ import {
 	accountAllowsTask,
 	buildParentAdjustmentsFromUpdates,
 	getBasisForecastMap,
-	getPlDisplayPeriods,
-	isPlV2Ready,
+	getDisplayPeriods,
+	isBudgetReady,
 } from "./budget-tree.js";
 
 let ready = false;
 
-const ProjectPlV2 = {
+const ProjectBudget = {
 	isReady() {
 		return ready;
 	},
@@ -52,15 +52,15 @@ const ProjectPlV2 = {
 	buildChartData,
 	refreshChart,
 
-	/** Cross-app: risk reserves / WE parent-adjust (pl_v2 tree, no aggregatedBudget). */
-	isPlV2Ready,
-	getPlDisplayPeriods,
+	/** Cross-app: risk reserves / WE parent-adjust (project_budget tree, no aggregatedBudget). */
+	isBudgetReady,
+	getDisplayPeriods,
 	accountAllowsTask,
 	getBasisForecastMap,
 	buildParentAdjustments: buildParentAdjustmentsFromUpdates,
 };
 
 ready = true;
-window.ProjectPlV2 = ProjectPlV2;
+window.ProjectBudget = ProjectBudget;
 
-export { ProjectPlV2 };
+export { ProjectBudget };

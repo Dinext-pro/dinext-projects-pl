@@ -6,12 +6,12 @@ export function getDefaultExpandedIds(rows) {
 }
 
 export function syncExpandedIds(frm) {
-	const table = frm.pl_v2?.table;
+	const table = frm.project_budget?.table;
 	if (!table?.expandedIds) return;
 	const ids = [...table.expandedIds];
-	frm._pl_v2_expanded_ids = ids;
-	if (frm.pl_v2) {
-		frm.pl_v2.expandedIds = ids;
+	frm._project_budget_expanded_ids = ids;
+	if (frm.project_budget) {
+		frm.project_budget.expandedIds = ids;
 	}
 }
 
@@ -43,11 +43,11 @@ export function attachTreePersistence(frm, table) {
 }
 
 export function getExpandedIds(frm) {
-	if (frm._pl_v2_expanded_ids?.length) {
-		return frm._pl_v2_expanded_ids;
+	if (frm._project_budget_expanded_ids?.length) {
+		return frm._project_budget_expanded_ids;
 	}
-	if (frm.pl_v2?.expandedIds?.length) {
-		return frm.pl_v2.expandedIds;
+	if (frm.project_budget?.expandedIds?.length) {
+		return frm.project_budget.expandedIds;
 	}
-	return getDefaultExpandedIds(frm.pl_v2?.rows || []);
+	return getDefaultExpandedIds(frm.project_budget?.rows || []);
 }

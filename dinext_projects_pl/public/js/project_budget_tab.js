@@ -1,14 +1,14 @@
 // Клиентский скрипт для Doctype "Project"
 frappe.provide("dinext_projects_pl");
 
-const PROJECT_PL_TAB_FIELDNAME = "custom_pl";
-const PROJECT_PL_TABLE_SELECTOR = ".budget-container .budget-table";
+const PROJECT_BUDGET_TAB_FIELDNAME = "custom_pl";
+const PROJECT_BUDGET_TABLE_SELECTOR = ".budget-container .budget-table";
 
-function get_project_pl_open_tab_storage_key() {
-	return dinext_projects_pl.PROJECT_PL_OPEN_TAB_STORAGE_KEY || "dinext_projects_pl_open_tab";
+function get_project_budget_open_tab_storage_key() {
+	return dinext_projects_pl.PROJECT_BUDGET_OPEN_TAB_STORAGE_KEY || "dinext_projects_pl_open_budget_tab";
 }
 
-function should_open_project_pl_tab(frm) {
+function should_open_project_budget_tab(frm) {
 	if (!frm || frm.doctype !== "Project" || !frm.docname) {
 		return false;
 	}
@@ -16,37 +16,37 @@ function should_open_project_pl_tab(frm) {
 		return true;
 	}
 	try {
-		return sessionStorage.getItem(get_project_pl_open_tab_storage_key()) === frm.docname;
+		return sessionStorage.getItem(get_project_budget_open_tab_storage_key()) === frm.docname;
 	} catch (e) {
 		return false;
 	}
 }
 
-function clear_project_pl_open_tab_request(project) {
+function clear_project_budget_open_tab_request(project) {
 	if (frappe.route_options && cint(frappe.route_options.open_pl_tab)) {
 		delete frappe.route_options.open_pl_tab;
 	}
 	try {
-		if (sessionStorage.getItem(get_project_pl_open_tab_storage_key()) === project) {
-			sessionStorage.removeItem(get_project_pl_open_tab_storage_key());
+		if (sessionStorage.getItem(get_project_budget_open_tab_storage_key()) === project) {
+			sessionStorage.removeItem(get_project_budget_open_tab_storage_key());
 		}
 	} catch (e) {
 		// ignore
 	}
 }
 
-function activate_project_pl_tab(frm) {
+function activate_project_budget_tab(frm) {
 	if (frm.layout && typeof frm.layout.select_tab === "function") {
-		frm.layout.select_tab(PROJECT_PL_TAB_FIELDNAME);
+		frm.layout.select_tab(PROJECT_BUDGET_TAB_FIELDNAME);
 		return;
 	}
 
 	const $wrapper = frm.$wrapper || $(frm.wrapper);
-	const tab_selector = '[data-fieldname="' + PROJECT_PL_TAB_FIELDNAME + '"]';
+	const tab_selector = '[data-fieldname="' + PROJECT_BUDGET_TAB_FIELDNAME + '"]';
 
 	if (frm.layout && frm.layout.tabs) {
 		const tab = frm.layout.tabs.find(function (item) {
-			return item.df && item.df.fieldname === PROJECT_PL_TAB_FIELDNAME;
+			return item.df && item.df.fieldname === PROJECT_BUDGET_TAB_FIELDNAME;
 		});
 		if (tab) {
 			tab.set_active();
@@ -59,28 +59,28 @@ function activate_project_pl_tab(frm) {
 	}
 }
 
-function open_project_pl_tab_and_scroll(frm) {
-	activate_project_pl_tab(frm);
-	scroll_to_project_pl_table(frm);
+function open_project_budget_tab_and_scroll(frm) {
+	activate_project_budget_tab(frm);
+	scroll_to_project_budget_table(frm);
 }
 
-function schedule_open_project_pl_tab(frm) {
-	if (!should_open_project_pl_tab(frm)) {
+function schedule_open_project_budget_tab(frm) {
+	if (!should_open_project_budget_tab(frm)) {
 		return;
 	}
-	clear_project_pl_open_tab_request(frm.docname);
+	clear_project_budget_open_tab_request(frm.docname);
 
 	const $wrapper = frm.$wrapper || $(frm.wrapper);
-	const tab_selector = '[data-fieldname="' + PROJECT_PL_TAB_FIELDNAME + '"]';
+	const tab_selector = '[data-fieldname="' + PROJECT_BUDGET_TAB_FIELDNAME + '"]';
 
 	const apply = function () {
-		open_project_pl_tab_and_scroll(frm);
+		open_project_budget_tab_and_scroll(frm);
 	};
 
 	$wrapper
 		.off("shown.bs.tab.project_pl_open", tab_selector)
 		.one("shown.bs.tab.project_pl_open", tab_selector, function () {
-			scroll_to_project_pl_table(frm);
+			scroll_to_project_budget_table(frm);
 		});
 
 	apply();
@@ -94,10 +94,10 @@ function schedule_open_project_pl_tab(frm) {
 	}
 }
 
-dinext_projects_pl.open_project_pl_tab = schedule_open_project_pl_tab;
+dinext_projects_pl.open_project_budget_tab = schedule_open_project_budget_tab;
 
-if (!dinext_projects_pl._project_pl_route_hook_installed) {
-	dinext_projects_pl._project_pl_route_hook_installed = true;
+if (!dinext_projects_pl._project_budget_route_hook_installed) {
+	dinext_projects_pl._project_budget_route_hook_installed = true;
 	frappe.router.on("change", function () {
 		var route = frappe.get_route();
 		if (
@@ -110,18 +110,18 @@ if (!dinext_projects_pl._project_pl_route_hook_installed) {
 		) {
 			return;
 		}
-		schedule_open_project_pl_tab(cur_frm);
+		schedule_open_project_budget_tab(cur_frm);
 	});
 }
 
-function scroll_to_project_pl_table(frm) {
+function scroll_to_project_budget_table(frm) {
 	const max_attempts = 40;
 	let attempts = 0;
 	const $wrapper = frm.$wrapper || $(frm.wrapper);
 	const $tabPane = $wrapper.find("#project-custom_pl");
 
 	function find_target() {
-		let $target = $wrapper.find(PROJECT_PL_TABLE_SELECTOR).first();
+		let $target = $wrapper.find(PROJECT_BUDGET_TABLE_SELECTOR).first();
 		if ($target.length) {
 			return $target;
 		}
@@ -145,7 +145,7 @@ function scroll_to_project_pl_table(frm) {
 	function try_scroll() {
 		attempts += 1;
 		if ($tabPane.length && !$tabPane.hasClass("active")) {
-			activate_project_pl_tab(frm);
+			activate_project_budget_tab(frm);
 		}
 
 		const $target = find_target();
@@ -165,26 +165,26 @@ function scroll_to_project_pl_table(frm) {
 frappe.ui.form.on("Project", {
     refresh: function(frm) {
         render_budget_table(frm);
-        schedule_open_project_pl_tab(frm);
+        schedule_open_project_budget_tab(frm);
     },
     onload_post_render: function(frm) {
-        schedule_open_project_pl_tab(frm);
+        schedule_open_project_budget_tab(frm);
     }
 });
 
 /**
  * Реестр подпунктов меню "Рассчитать прогноз" над таблицей P&L.
  * Другие приложения могут добавлять пункты так:
- *   frappe.provide("dinext_projects.project_pl_forecast_menu");
- *   dinext_projects.project_pl_forecast_menu = dinext_projects.project_pl_forecast_menu || [];
- *   dinext_projects.project_pl_forecast_menu.push({ label: __("Мой прогноз"), action: function(frm) { ... } });
+ *   frappe.provide("dinext_projects.project_budget_forecast_menu");
+ *   dinext_projects.project_budget_forecast_menu = dinext_projects.project_budget_forecast_menu || [];
+ *   dinext_projects.project_budget_forecast_menu.push({ label: __("Мой прогноз"), action: function(frm) { ... } });
  * Кнопка меню отображается только если добавлен хотя бы один подпункт.
  * Если меню изменено или дополнено после первичной отрисовки кнопки, вызвать
- * dinext_projects.refresh_pl_forecast_dropdown(frm) для обновления выпадающего списка.
+ * dinext_projects.refresh_project_budget_forecast_dropdown(frm) для обновления выпадающего списка.
  */
-frappe.provide("dinext_projects.project_pl_forecast_menu");
-if (!Array.isArray(dinext_projects.project_pl_forecast_menu)) {
-    dinext_projects.project_pl_forecast_menu = [];
+frappe.provide("dinext_projects.project_budget_forecast_menu");
+if (!Array.isArray(dinext_projects.project_budget_forecast_menu)) {
+    dinext_projects.project_budget_forecast_menu = [];
 }
 
 function render_pl_chart(frm, init = true) {
@@ -197,7 +197,7 @@ function render_pl_chart(frm, init = true) {
 }
 
 function add_pl_forecast_dropdown(frm, controls) {
-    const raw = dinext_projects.project_pl_forecast_menu;
+    const raw = dinext_projects.project_budget_forecast_menu;
     const menu_array = Array.isArray(raw) ? raw : [];
     const items = menu_array.filter(
         (x) => x && typeof x.label === "string" && typeof x.action === "function"
@@ -229,7 +229,7 @@ function add_pl_forecast_dropdown(frm, controls) {
     controls.append($wrapper);
 }
 
-function refresh_pl_forecast_dropdown(frm) {
+function refresh_project_budget_forecast_dropdown(frm) {
     const $planning = frm.get_field("custom_planning") && frm.get_field("custom_planning").$wrapper;
     if (!$planning || !$planning.length) return;
     const $existing = $planning.find(".pl-forecast-dropdown-wrapper");
@@ -240,7 +240,7 @@ function refresh_pl_forecast_dropdown(frm) {
 }
 
 frappe.provide("dinext_projects");
-dinext_projects.refresh_pl_forecast_dropdown = refresh_pl_forecast_dropdown;
+dinext_projects.refresh_project_budget_forecast_dropdown = refresh_project_budget_forecast_dropdown;
 
 function addBudgetViewOptionsControl(frm, controls) {
     frm.budget_view_options = frm.budget_view_options || __("Forecast and actual");
@@ -260,7 +260,7 @@ function addBudgetViewOptionsControl(frm, controls) {
             change: async function(i){
                 if ( this.value != this.last_value ) {
                     frm.budget_view_options = this.value;
-                    get_pl_v2_preview()?.onViewOptionsChange(frm);
+                    get_project_budget_api()?.onViewOptionsChange(frm);
                 }
             }
 		},
@@ -275,16 +275,16 @@ function addBudgetViewOptionsControl(frm, controls) {
  * a module-level const can capture `undefined` and silently skip mount.
  * @returns {{ whenReady?: Function, destroy?: Function } | undefined}
  */
-function get_pl_v2_preview() {
-	return dinext_projects_pl.projectPlPreview;
+function get_project_budget_api() {
+	return dinext_projects_pl.projectBudget;
 }
 
 /**
  * @param {Form} frm
  * @param {() => void} [callback]
  */
-function with_pl_v2_ready(frm, callback) {
-	get_pl_v2_preview()?.whenReady(frm, callback);
+function when_project_budget_ready(frm, callback) {
+	get_project_budget_api()?.whenReady(frm, callback);
 }
 
 /**
@@ -292,9 +292,9 @@ function with_pl_v2_ready(frm, callback) {
  */
 function render_budget_table(frm) {
     let wrapper = frm.get_field("custom_planning").$wrapper;
-    const plV2Preview = get_pl_v2_preview();
-    if (plV2Preview?.destroy) {
-        plV2Preview.destroy(frm);
+    const budgetApi = get_project_budget_api();
+    if (budgetApi?.destroy) {
+        budgetApi.destroy(frm);
     }
     wrapper.addClass("budget-container").empty();
 
@@ -314,27 +314,27 @@ function render_budget_table(frm) {
     add_pl_forecast_dropdown(frm, controls);
 
     controls.find('#bg-save_plan').on('click', function() {
-        const preview = get_pl_v2_preview();
+        const preview = get_project_budget_api();
         if (preview?.saveForecastAsPlan) {
             preview.saveForecastAsPlan(frm);
             return;
         }
-        frappe.msgprint(__("P&L v2 не загружен"));
+        frappe.msgprint(__("Project Budget не загружен"));
     });
 
     controls.find('#bg-toggle_plan').on('click', function() {
         frm.bg_hide_plan = !frm.bg_hide_plan;
         $(this).text(frm.bg_hide_plan ? __("Показать план") : __("Скрыть план"));
-        get_pl_v2_preview()?.onTogglePlanOrDelta(frm);
+        get_project_budget_api()?.onTogglePlanOrDelta(frm);
         render_pl_chart(frm);
     });
     controls.find('#bg-toggle_delta').on('click', function() {
         frm.bg_hide_delta = !frm.bg_hide_delta;
         $(this).text(frm.bg_hide_delta ? __("Показать Δ") : __("Скрыть Δ"));
-        get_pl_v2_preview()?.onTogglePlanOrDelta(frm);
+        get_project_budget_api()?.onTogglePlanOrDelta(frm);
     });
 
-    with_pl_v2_ready(frm);
+    when_project_budget_ready(frm);
 }
 
 /** Month periods for P&L / risk / WE forecast (quarter/year branches removed). */
@@ -377,19 +377,19 @@ function get_budget_display_periods(frm, periodType) {
  * Reload DinextTable + chart after external budget changes (WE / risk / forecast).
  * @param {Form} frm
  */
-function refresh_project_pl(frm) {
-	with_pl_v2_ready(frm, () => {
-		window.ProjectPlV2?.refresh?.(frm);
+function refresh_project_budget(frm) {
+	when_project_budget_ready(frm, () => {
+		window.ProjectBudget?.refresh?.(frm);
 		render_pl_chart(frm);
 	});
 }
 
-/** Cross-app: WE sync after task tree change → refresh P&L v2. */
+/** Cross-app: WE sync after task tree change → refresh Project Budget. */
 globalThis.updateTaskDimension = (frm) => {
-	refresh_project_pl(frm);
+	refresh_project_budget(frm);
 };
 
-/** True when P&L v2 grid has data. */
-function is_project_pl_ready(frm) {
-	return Boolean(frm?.pl_v2?.rows?.length || frm?.pl_v2?.table);
+/** True when Project Budget grid has data. */
+function is_project_budget_ready(frm) {
+	return Boolean(frm?.project_budget?.rows?.length || frm?.project_budget?.table);
 }

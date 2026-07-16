@@ -26,7 +26,8 @@
 | Rename `load_budget_data` → `refresh_project_pl` | ✅ 2026-07-16 |
 | README / legacy-cutover / index sync | ✅ 2026-07-16 |
 | Styles → `project_budget.css`; drop `project_pl_style.js` / `pl-v2.css` | ✅ 2026-07-16 |
-| Next: rename JS `project_pl` / `v2` → `project_budget` (+ optional `*_tab`) | pending |
+| Rename JS `project_pl` / `v2` → `project_budget` (+ `*_tab`) | ✅ 2026-07-16 |
+| Backend Python `project_pl/v2` API paths | leave (stable method names) |
 
 ## Dropped
 

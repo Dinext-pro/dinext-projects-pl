@@ -44,7 +44,7 @@ export async function loadGridData(frm) {
 }
 
 export async function reloadTable(frm, initTable, refreshRuntime) {
-	const state = frm.pl_v2;
+	const state = frm.project_budget;
 	if (!state?.container) {
 		return null;
 	}

@@ -50,7 +50,7 @@ export async function ensureMounted(frm) {
 			} else {
 				await initTable(frm);
 			}
-			window.ProjectPlV2?.refreshChart?.(frm);
+			window.ProjectBudget?.refreshChart?.(frm);
 		} finally {
 			state._mountPromise = null;
 		}

@@ -1,6 +1,6 @@
 export function initState(frm) {
-	if (!frm.pl_v2) {
-		frm.pl_v2 = {
+	if (!frm.project_budget) {
+		frm.project_budget = {
 			table: null,
 			rows: [],
 			periods: [],
@@ -9,11 +9,11 @@ export function initState(frm) {
 			container: null,
 		};
 	}
-	return frm.pl_v2;
+	return frm.project_budget;
 }
 
 export function destroyTable(frm) {
-	const state = frm.pl_v2;
+	const state = frm.project_budget;
 	if (state?.table?.destroy) {
 		state.table.destroy();
 	}
