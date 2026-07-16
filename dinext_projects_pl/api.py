@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Dinext
-"""Whitelisted Project Budget API (Desk / frappe.call entrypoints).
+"""Whitelisted Desk / frappe.call entrypoints for dinext_projects_pl.
 
-Core logic lives in `dinext_projects_pl.project_budget.*` (no whitelist there).
+Project Budget core: `dinext_projects_pl.project_budget.*` (no whitelist there).
 """
 
 from __future__ import annotations
