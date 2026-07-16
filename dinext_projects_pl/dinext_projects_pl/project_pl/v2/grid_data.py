@@ -64,7 +64,7 @@ def _resolve_actual(
 
 
 def _load_pl_accounts(company: str) -> list[dict]:
-	# Same order as legacy load_budget_data (project_pl.js): root_type desc.
+	# Same order as legacy Project P&L roots: root_type desc.
 	return frappe.get_all(
 		"Account",
 		filters={

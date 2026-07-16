@@ -101,7 +101,6 @@ fixtures = [
 doctype_js = {"Project":
     [
         "public/js/project_pl_navigation.js",
-        "public/js/project_pl_style.js",
         "public/js/project_pl/v2-entry.js",
         "public/js/project_pl.js",
         "public/js/project_pl_echarts.js",
@@ -112,7 +111,7 @@ doctype_js = {"Project":
 
 doctype_css = {
 	"Project": [
-		"public/css/pl-v2.css",
+		"public/css/project_budget.css",
 	],
 }
 # doctype_js = {"doctype" : "public/js/doctype.js"}
