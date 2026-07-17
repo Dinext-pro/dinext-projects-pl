@@ -334,7 +334,41 @@ function render_budget_table(frm) {
         get_project_budget_api()?.onTogglePlanOrDelta(frm);
     });
 
-    when_project_budget_ready(frm);
+    schedule_pl_mount(frm);
+}
+
+/** Shell on refresh; grid only when tab P&L is visible. */
+function schedule_pl_mount(frm) {
+	const mountWhenVisible = () => {
+		when_project_budget_ready(frm, () => {
+			if (frm._plRefreshPending) {
+				frm._plRefreshPending = false;
+				window.ProjectBudget?.refresh?.(frm);
+				render_pl_chart(frm);
+			}
+		});
+	};
+
+	const tryBind = () => {
+		const bind = window.project_workload_assignment?.bindLazyTabMount;
+		if (typeof bind !== "function") {
+			return false;
+		}
+		bind(frm, "custom_planning", mountWhenVisible);
+		return true;
+	};
+
+	if (tryBind()) {
+		return;
+	}
+
+	// Bundle installs bindLazyTabMount; do not call whenReady here (that mounts eagerly).
+	const bundle = frappe.assets.bundled_asset("project-budget.bundle.js");
+	frappe.require([bundle], () => {
+		if (!tryBind()) {
+			console.error("[Project P&L] bindLazyTabMount missing after bundle — refuse eager mount");
+		}
+	});
 }
 
 /** Month periods for P&L / risk / WE forecast (quarter/year branches removed). */
@@ -375,9 +409,16 @@ function get_budget_display_periods(frm, periodType) {
 
 /**
  * Reload DinextTable + chart after external budget changes (WE / risk / forecast).
+ * If P&L tab hidden — defer until next tab show (see schedule_pl_mount).
  * @param {Form} frm
  */
 function refresh_project_budget(frm) {
+	const visible = window.project_workload_assignment?.isFieldTabVisible?.(frm, "custom_planning");
+	// Only mount/refresh when visibly on P&L. undefined/false → defer.
+	if (visible !== true) {
+		frm._plRefreshPending = true;
+		return;
+	}
 	when_project_budget_ready(frm, () => {
 		window.ProjectBudget?.refresh?.(frm);
 		render_pl_chart(frm);

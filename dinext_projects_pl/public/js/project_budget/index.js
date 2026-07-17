@@ -1,3 +1,4 @@
+import { installLazyTabMountApi } from "./lazy-tab-mount.js";
 import { destroyTable } from "./state.js";
 import { ensureMounted } from "./mount.js";
 import { reloadTable } from "./data.js";
@@ -62,5 +63,6 @@ const ProjectBudget = {
 
 ready = true;
 window.ProjectBudget = ProjectBudget;
+installLazyTabMountApi();
 
 export { ProjectBudget };
