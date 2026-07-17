@@ -3,6 +3,7 @@ import { reloadTable } from "./data.js";
 import { initTable, refreshRuntime } from "./table.js";
 
 const TABLE_CLASS = "budget-table";
+const FIELD = "custom_planning";
 
 function resolveTableContainer(wrapper) {
 	let $table = wrapper.find(`.${TABLE_CLASS}`).first();
@@ -25,8 +26,9 @@ function resolveTableContainer(wrapper) {
 	return el || null;
 }
 
+/** Mount DinextTable into `.budget-table`. Caller must ensure tab is visible. */
 export async function ensureMounted(frm) {
-	const field = frm.get_field("custom_planning");
+	const field = frm.get_field(FIELD);
 	if (!field?.$wrapper?.length) {
 		return;
 	}
