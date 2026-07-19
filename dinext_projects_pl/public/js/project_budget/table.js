@@ -62,6 +62,9 @@ function buildTableOptions(frm, state) {
 		fillHandle: { enabled: true },
 		// Excel-like Average | Count | Sum under grid (min 2 cells).
 		selectionStatus: { enabled: true },
+		// Checkbox select for «Сохранить план»; tree rows, no cell merge.
+		rowCheck: { enabled: true, unit: "row", selectAll: true },
+		canCheckRow: ({ row }) => !row?.summary_kind && !!row?.account,
 		rowReorder: { enabled: false },
 		theme: {
 			cellHorizontalPadding: 2,
