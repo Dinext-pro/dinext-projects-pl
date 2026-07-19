@@ -288,7 +288,7 @@
 	font-weight: 600;
 }
 
-.budget-table.dinext-table .ag-header-cell[col-id="_selected"] .ag-header-cell-text,
+.budget-table.dinext-table .ag-header-cell[col-id="__dinext_row_check"] .ag-header-cell-text,
 .budget-table.dinext-table .ag-header-cell[col-id="account_serial"] .ag-header-cell-text,
 .budget-table.dinext-table .ag-header-cell[col-id="account_label"] .ag-header-cell-text {
 	font-size: 14px;

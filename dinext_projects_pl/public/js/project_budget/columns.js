@@ -232,7 +232,8 @@ function buildTotalColumn(frm, periods) {
 
 /**
  * Column set parity with legacy StickyDataTable:
- * checkbox + # + Статья + period groups + Итого.
+ * # + Статья + period groups + Итого.
+ * Checkbox select → DinextTable rowCheck (not a domain col).
  * Composite plan/forecast/Δ HTML → 3 leaf columns per period.
  * Rows = CoA + Task + Risk tree (no cell merge).
  */
@@ -241,20 +242,6 @@ export function getColumns(frm, periods) {
 	const periodList = periods || form?.project_budget?.periods || [];
 
 	const baseColumns = [
-		{
-			field: "_selected",
-			colId: "_selected",
-			headerName: "",
-			headerClass: HEADER_CENTER,
-			// Legacy checkbox col ~33px.
-			...fixedWidth(33),
-			sortable: false,
-			suppressMovable: true,
-			pinned: "left",
-			tree: false,
-			type: "checkbox",
-			edit: true,
-		},
 		withCenterAlign({
 			field: "account_serial",
 			colId: "account_serial",

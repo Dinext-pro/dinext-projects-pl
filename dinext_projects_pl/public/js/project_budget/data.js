@@ -1,24 +1,10 @@
 import { GRID_API } from "./constants.js";
 import { initState } from "./state.js";
 
-/** Ensure checkbox + client defaults on every tree node (API is server-shaped). */
-function normalizeRows(rows) {
-	return (rows || []).map((row) => {
-		const next = {
-			...row,
-			_selected: !!row._selected,
-		};
-		if (Array.isArray(row.children) && row.children.length) {
-			next.children = normalizeRows(row.children);
-		}
-		return next;
-	});
-}
-
 function applyGridResponse(frm, message) {
 	const state = initState(frm);
 	state.periods = message.periods || [];
-	state.rows = normalizeRows(message.rows || []);
+	state.rows = message.rows || [];
 	state.summaryRows = message.summary_rows || [];
 	return message;
 }

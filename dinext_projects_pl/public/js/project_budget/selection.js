@@ -1,22 +1,15 @@
-function flattenTree(rows) {
-	const result = [];
-	for (const row of rows || []) {
-		result.push(row);
-		if (row.children?.length) {
-			result.push(...flattenTree(row.children));
-		}
-	}
-	return result;
-}
-
 const SAVE_PLAN_API =
 	"dinext_projects_pl.dinext_projects_pl.budget_approval.service.save_budget_plan_for_approval";
 
-/** Selected body rows (checkbox), exclude summary. */
+/** Selected body rows (rowCheck), exclude summary / non-account. */
 export function getSelectedRows(frm) {
-	return flattenTree(frm.project_budget?.rows || []).filter(
-		(row) => row._selected && !row.summary_kind && row.account
-	);
+	const table = frm.project_budget?.table;
+	if (!table?.getCheckedRows) {
+		return [];
+	}
+	return table
+		.getCheckedRows()
+		.filter((row) => row && !row.summary_kind && row.account);
 }
 
 /**
