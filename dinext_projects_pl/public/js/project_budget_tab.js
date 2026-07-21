@@ -281,10 +281,23 @@ function get_project_budget_api() {
 
 /**
  * @param {Form} frm
- * @param {() => void} [callback]
+ * @param {() => void|Promise} [callback]
+ * @returns {Promise}
  */
 function when_project_budget_ready(frm, callback) {
-	get_project_budget_api()?.whenReady(frm, callback);
+	return new Promise((resolve, reject) => {
+		const api = get_project_budget_api();
+		if (!api?.whenReady) {
+			resolve();
+			return;
+		}
+		api.whenReady(frm, () => {
+			Promise.resolve()
+				.then(() => callback?.())
+				.then(resolve)
+				.catch(reject);
+		});
+	});
 }
 
 /**
@@ -339,15 +352,15 @@ function render_budget_table(frm) {
 
 /** Shell on refresh; grid only when tab P&L is visible. */
 function schedule_pl_mount(frm) {
-	const mountWhenVisible = () => {
+	const mountWhenVisible = () =>
 		when_project_budget_ready(frm, () => {
 			if (frm._plRefreshPending) {
 				frm._plRefreshPending = false;
-				window.ProjectBudget?.refresh?.(frm);
-				render_pl_chart(frm);
+				return Promise.resolve(window.ProjectBudget?.refresh?.(frm)).then(() => {
+					render_pl_chart(frm);
+				});
 			}
 		});
-	};
 
 	const tryBind = () => {
 		const bind = window.project_workload_assignment?.bindLazyTabMount;

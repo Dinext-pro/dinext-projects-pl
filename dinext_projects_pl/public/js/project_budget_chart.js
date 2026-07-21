@@ -1155,10 +1155,8 @@ function _render_pl_chart(frm, init = true) {
     return load_pl_echarts()
         .then(function () {
             try {
-                const renderFinancialMetrics = globalThis.render_financial_metrics;
-                if (typeof renderFinancialMetrics === "function") {
-                    renderFinancialMetrics(frm);
-                }
+                // Financial metrics: owned by project_budget_dashboard (lazy tab mount).
+                // Do not call render_financial_metrics here — avoids duplicate API on P&L open.
 
                 const chartData = get_pl_chart_data(frm);
                 const option = get_pl_echarts_option(frm, chartData);
