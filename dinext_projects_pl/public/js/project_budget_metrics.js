@@ -89,15 +89,21 @@ function fetch_financial_metrics(frm) {
         });
     }
 
+    const reportingDate = frm._financial_metrics_reporting_date;
+    const inflightKey = `${frm.doc.name}::${reportingDate || ""}`;
+    if (frm._financial_metrics_inflight && frm._financial_metrics_inflight_key === inflightKey) {
+        return frm._financial_metrics_inflight;
+    }
+
     const requestId = (frm._financial_metrics_request_id || 0) + 1;
     frm._financial_metrics_request_id = requestId;
 
-    return frappe
+    const request = frappe
         .call({
             method: FINANCIAL_METRICS_API,
             args: {
                 project: frm.doc.name,
-                reporting_date: frm._financial_metrics_reporting_date,
+                reporting_date: reportingDate,
             },
         })
         .then((response) => {
@@ -125,7 +131,17 @@ function fetch_financial_metrics(frm) {
                 warning: null,
                 tracks: [],
             };
+        })
+        .finally(() => {
+            if (frm._financial_metrics_inflight_key === inflightKey) {
+                frm._financial_metrics_inflight = null;
+                frm._financial_metrics_inflight_key = null;
+            }
         });
+
+    frm._financial_metrics_inflight_key = inflightKey;
+    frm._financial_metrics_inflight = request;
+    return request;
 }
 
 function render_financial_metrics_content(frm, metricsData) {
@@ -248,7 +264,7 @@ function render_financial_metrics(frm) {
         `<div class="evm-metrics-empty">${frappe.utils.escape_html(__("Загрузка финансовых метрик..."))}</div>`
     );
 
-    fetch_financial_metrics(frm).then((metricsData) => {
+    return fetch_financial_metrics(frm).then((metricsData) => {
         if (!metricsData) {
             return;
         }
