@@ -3,52 +3,10 @@ import { loadGridData, reloadTable } from "./data.js";
 import { applyPlanDeltaVisibility, getColumns, refreshColumns } from "./columns.js";
 import { attachTreePersistence, getExpandedIds, syncExpandedIds } from "./tree.js";
 import { onSaveCells, onValidateCells } from "./save.js";
-
-const FS_SHELL_CLASS = "budget-container--fullscreen";
-
-/** Fullscreen shell = .budget-container (controls + table), like WR. */
-function resolveFullscreenOpts(container) {
-	const shell = container?.closest?.(".budget-container");
-	if (!shell) {
-		return null;
-	}
-
-	const afterLayout = () => {
-		requestAnimationFrame(() => {
-			window.dispatchEvent(new Event("resize"));
-		});
-	};
-
-	return {
-		target: "shell",
-		shell,
-		onEnter: ({ element }) => {
-			element?.classList.add(FS_SHELL_CLASS);
-			if (container) {
-				container.dataset.plV2PrevHeight = container.style.height || "";
-				container.dataset.plV2PrevMinHeight = container.style.minHeight || "";
-				container.style.height = "auto";
-				container.style.minHeight = "0";
-				container.style.flex = "1 1 auto";
-			}
-			afterLayout();
-		},
-		onExit: ({ element }) => {
-			element?.classList.remove(FS_SHELL_CLASS);
-			if (container) {
-				container.style.height = container.dataset.plV2PrevHeight || "min(50vh, 560px)";
-				container.style.minHeight = container.dataset.plV2PrevMinHeight || "280px";
-				container.style.flex = "";
-				delete container.dataset.plV2PrevHeight;
-				delete container.dataset.plV2PrevMinHeight;
-			}
-			afterLayout();
-		},
-	};
-}
+import { buildToolbarItems } from "./toolbar.js";
 
 function buildTableOptions(frm, state) {
-	const opts = {
+	return {
 		container: state.container,
 		data: state.rows,
 		columns: getColumns(frm, state.periods),
@@ -66,6 +24,10 @@ function buildTableOptions(frm, state) {
 		rowCheck: { enabled: true, unit: "row", selectAll: true },
 		canCheckRow: ({ row }) => !row?.summary_kind && !!row?.account,
 		rowReorder: { enabled: false },
+		toolbar: {
+			persistKey: `project-budget:${frm.doc?.name || "new"}`,
+			items: buildToolbarItems(frm),
+		},
 		theme: {
 			cellHorizontalPadding: 2,
 			columnBorder: true,
@@ -84,13 +46,8 @@ function buildTableOptions(frm, state) {
 			headerHeight: 22,
 			groupHeaderHeight: 22,
 		},
+		// Fullscreen: core default (target: container). Domain controls live in toolbar.
 	};
-
-	const fullscreen = resolveFullscreenOpts(state.container);
-	if (fullscreen) {
-		opts.fullscreen = fullscreen;
-	}
-	return opts;
 }
 
 function applyRuntime(frm, table) {

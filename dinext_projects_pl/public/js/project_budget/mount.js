@@ -8,13 +8,7 @@ const FIELD = "custom_planning";
 function resolveTableContainer(wrapper) {
 	let $table = wrapper.find(`.${TABLE_CLASS}`).first();
 	if (!$table.length) {
-		$table = $(`<div class="${TABLE_CLASS}"></div>`);
-		const $controls = wrapper.find(".budget-controls").first();
-		if ($controls.length) {
-			$controls.after($table);
-		} else {
-			wrapper.append($table);
-		}
+		$table = $(`<div class="${TABLE_CLASS}"></div>`).appendTo(wrapper);
 	}
 
 	const el = $table[0];
