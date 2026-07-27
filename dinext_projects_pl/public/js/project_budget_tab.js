@@ -232,11 +232,13 @@ function add_pl_forecast_dropdown(frm, controls) {
 function refresh_project_budget_forecast_dropdown(frm) {
     const $planning = frm.get_field("custom_planning") && frm.get_field("custom_planning").$wrapper;
     if (!$planning || !$planning.length) return;
-    const $existing = $planning.find(".pl-forecast-dropdown-wrapper");
-    let $controls = $existing.length ? $existing.parent() : $planning.find(".budget-controls");
-    if (!$controls || !$controls.length) return;
+    // Host is toolbar custom node (class budget-controls), not shell strip.
+    const $controls = $planning.find(".budget-controls").first();
+    if (!$controls.length) return;
+    const $existing = $controls.find(".pl-forecast-dropdown-wrapper");
     if ($existing.length) $existing.remove();
     add_pl_forecast_dropdown(frm, $controls);
+    bindBudgetDropdownPortal($controls.find(".pl-forecast-dropdown-wrapper"));
 }
 
 frappe.provide("dinext_projects");
@@ -301,53 +303,162 @@ function when_project_budget_ready(frm, callback) {
 }
 
 /**
- * P&L / Budget table — DinextTable in `.budget-table`.
+ * Portal Bootstrap dropdown menu to body (toolbar overflow clips in-place menus).
+ * @param {JQuery} $wrapper — .dropdown / .btn-group with .dropdown-toggle + .dropdown-menu
+ */
+function bindBudgetDropdownPortal($wrapper) {
+	if (!$wrapper?.length || $wrapper.data("pl-dropdown-portal")) {
+		return;
+	}
+	$wrapper.data("pl-dropdown-portal", true);
+
+	const $toggle = $wrapper.find(".dropdown-toggle").first();
+	const $menu = $wrapper.find(".dropdown-menu").first();
+	if (!$toggle.length || !$menu.length) {
+		return;
+	}
+	$toggle.removeAttr("data-toggle");
+
+	const closeMenu = () => {
+		if (!$menu.parent().is(document.body)) {
+			return;
+		}
+		$menu
+			.hide()
+			.removeClass("pl-toolbar-dropdown-menu")
+			.appendTo($wrapper)
+			.css({
+				display: "",
+				position: "",
+				top: "",
+				left: "",
+				right: "",
+				width: "",
+				zIndex: "",
+			});
+		$toggle.attr("aria-expanded", "false");
+		document.removeEventListener("mousedown", onDocDown, true);
+		window.removeEventListener("resize", closeMenu);
+		window.removeEventListener("scroll", closeMenu, true);
+	};
+
+	const onDocDown = (event) => {
+		if ($menu[0].contains(event.target) || $toggle[0].contains(event.target)) {
+			return;
+		}
+		closeMenu();
+	};
+
+	const openMenu = () => {
+		const rect = $toggle[0].getBoundingClientRect();
+		$menu
+			.appendTo(document.body)
+			.addClass("pl-toolbar-dropdown-menu")
+			.css({
+				display: "block",
+				position: "fixed",
+				top: rect.bottom + 2,
+				right: "auto",
+				width: "max-content",
+				zIndex: 1050,
+			});
+		const menuWidth = $menu.outerWidth() || 180;
+		let left = rect.right - menuWidth;
+		if (left < 8) {
+			left = 8;
+		}
+		$menu.css({ left });
+		$toggle.attr("aria-expanded", "true");
+		setTimeout(() => {
+			document.addEventListener("mousedown", onDocDown, true);
+			window.addEventListener("resize", closeMenu);
+			window.addEventListener("scroll", closeMenu, true);
+		}, 0);
+	};
+
+	$toggle.on("click", (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+		if ($menu.parent().is(document.body) && $menu.is(":visible")) {
+			closeMenu();
+			return;
+		}
+		openMenu();
+	});
+
+	$menu.on("click", "a, li", () => {
+		closeMenu();
+	});
+}
+
+/**
+ * Mount former shell controls into DinextTable toolbar custom host (once).
+ * @param {Form} frm
+ * @param {JQuery} host
+ */
+function mount_budget_toolbar_controls(frm, host) {
+	if (host.data("pl-controls-mounted")) {
+		return;
+	}
+	host.data("pl-controls-mounted", true);
+	host.addClass("budget-controls");
+
+	host.append(`
+		<button class="btn btn-default" id="bg-save_plan" type="button">${__("Сохранить план")}</button>
+		<button class="btn btn-default" id="bg-toggle_plan" type="button">${__("Показать план")}</button>
+		<button class="btn btn-default" id="bg-toggle_delta" type="button">${__("Показать Δ")}</button>
+	`);
+
+	if (frm.bg_hide_plan === undefined) {
+		frm.bg_hide_plan = true;
+	}
+	if (frm.bg_hide_delta === undefined) {
+		frm.bg_hide_delta = true;
+	}
+	host.find("#bg-toggle_plan").text(frm.bg_hide_plan ? __("Показать план") : __("Скрыть план"));
+	host.find("#bg-toggle_delta").text(frm.bg_hide_delta ? __("Показать Δ") : __("Скрыть Δ"));
+
+	addBudgetViewOptionsControl(frm, host);
+	add_pl_forecast_dropdown(frm, host);
+	bindBudgetDropdownPortal(host.find(".pl-forecast-dropdown-wrapper"));
+
+	host.find("#bg-save_plan").on("click", function () {
+		const preview = get_project_budget_api();
+		if (preview?.saveForecastAsPlan) {
+			preview.saveForecastAsPlan(frm);
+			return;
+		}
+		frappe.msgprint(__("Project Budget не загружен"));
+	});
+
+	host.find("#bg-toggle_plan").on("click", function () {
+		frm.bg_hide_plan = !frm.bg_hide_plan;
+		$(this).text(frm.bg_hide_plan ? __("Показать план") : __("Скрыть план"));
+		get_project_budget_api()?.onTogglePlanOrDelta(frm);
+		render_pl_chart(frm);
+	});
+
+	host.find("#bg-toggle_delta").on("click", function () {
+		frm.bg_hide_delta = !frm.bg_hide_delta;
+		$(this).text(frm.bg_hide_delta ? __("Показать Δ") : __("Скрыть Δ"));
+		get_project_budget_api()?.onTogglePlanOrDelta(frm);
+	});
+}
+
+dinext_projects_pl.mount_budget_toolbar_controls = mount_budget_toolbar_controls;
+
+/**
+ * P&L / Budget shell — table host only; domain buttons live in DinextTable toolbar.
  */
 function render_budget_table(frm) {
-    let wrapper = frm.get_field("custom_planning").$wrapper;
-    const budgetApi = get_project_budget_api();
-    if (budgetApi?.destroy) {
-        budgetApi.destroy(frm);
-    }
-    wrapper.addClass("budget-container").empty();
-
-    let controls = $('<div class="budget-controls"></div>').appendTo(wrapper);
-    $('<div class="budget-table"></div>').appendTo(wrapper);
-
-    controls.append(`
-        <button class="btn btn-default" id="bg-save_plan">${__('Сохранить план')}</button>
-        <button class="btn btn-default" id="bg-toggle_plan">${__("Показать план")}</button>
-        <button class="btn btn-default" id="bg-toggle_delta">${__("Показать Δ")}</button>
-    `);
-
-    frm.bg_hide_plan = frm.bg_hide_plan || true;
-    frm.bg_hide_delta = frm.bg_hide_delta || true;
-
-    addBudgetViewOptionsControl(frm, controls);
-    add_pl_forecast_dropdown(frm, controls);
-
-    controls.find('#bg-save_plan').on('click', function() {
-        const preview = get_project_budget_api();
-        if (preview?.saveForecastAsPlan) {
-            preview.saveForecastAsPlan(frm);
-            return;
-        }
-        frappe.msgprint(__("Project Budget не загружен"));
-    });
-
-    controls.find('#bg-toggle_plan').on('click', function() {
-        frm.bg_hide_plan = !frm.bg_hide_plan;
-        $(this).text(frm.bg_hide_plan ? __("Показать план") : __("Скрыть план"));
-        get_project_budget_api()?.onTogglePlanOrDelta(frm);
-        render_pl_chart(frm);
-    });
-    controls.find('#bg-toggle_delta').on('click', function() {
-        frm.bg_hide_delta = !frm.bg_hide_delta;
-        $(this).text(frm.bg_hide_delta ? __("Показать Δ") : __("Скрыть Δ"));
-        get_project_budget_api()?.onTogglePlanOrDelta(frm);
-    });
-
-    schedule_pl_mount(frm);
+	const wrapper = frm.get_field("custom_planning").$wrapper;
+	const budgetApi = get_project_budget_api();
+	if (budgetApi?.destroy) {
+		budgetApi.destroy(frm);
+	}
+	wrapper.addClass("budget-container").empty();
+	$('<div class="budget-table"></div>').appendTo(wrapper);
+	schedule_pl_mount(frm);
 }
 
 /** Shell on refresh; grid only when tab P&L is visible. */

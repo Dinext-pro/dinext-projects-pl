@@ -6,26 +6,70 @@
 	max-width: 100% !important;
 }
 
-.budget-container .budget-controls {
-	display: inline-flex;
+/*
+ * Domain controls on toolbar custom host.
+ * Host itself gets .budget-controls (not a child) — do not nest those selectors.
+ */
+.budget-container .dinext-table-toolbar-custom.budget-controls {
+	display: flex;
 	align-items: center;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
 	gap: 6px;
-	width: 100%;
-	margin-bottom: 0.5rem;
+	flex: 0 0 auto;
+	min-width: max-content;
+	width: max-content;
 }
 
-.budget-container .budget-controls .pl-forecast-dropdown-wrapper {
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-forecast-dropdown-wrapper {
 	margin-left: auto;
+	flex: 0 0 auto;
 }
 
-.budget-container .budget-controls .frappe-control {
-	flex: 0 1 150px;
-	margin-bottom: 0;
+/* View-options Select (only_input): wrapper is itself `.form-group.frappe-control`. */
+.budget-container .dinext-table-toolbar-custom.budget-controls > .frappe-control[data-fieldname="view-options"] {
+	position: relative;
+	flex: 0 0 150px;
+	width: 150px;
+	margin: 0 !important;
+	padding: 0;
+	align-self: center;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls > .frappe-control[data-fieldname="view-options"] .form-control {
+	width: 150px;
+	height: 28px;
+	min-height: 28px;
+	padding: 2px 24px 2px 8px;
+	margin: 0;
+	line-height: 1.2;
+}
+
+/* Portaled forecast menu (body). */
+.pl-toolbar-dropdown-menu {
+	right: auto !important;
+	width: max-content;
+	min-width: 0;
+	max-width: min(360px, calc(100vw - 16px));
+}
+
+.pl-toolbar-dropdown-menu li,
+.pl-toolbar-dropdown-menu .dropdown-item {
+	cursor: pointer;
 }
 
 .budget-container .budget-table.dinext-table {
-	margin-top: 0.25rem;
+	width: 100%;
+	min-height: 280px;
+	height: min(50vh, 560px);
+	max-height: 560px;
+}
+
+/* Host has fixed height (+ inline from mount) — clear for core container fullscreen. */
+.budget-container .budget-table.dinext-table:fullscreen,
+.budget-container .budget-table.dinext-table.dinext-table--fullscreen {
+	height: 100% !important;
+	max-height: none !important;
+	min-height: 0 !important;
 }
 
 @media (min-width: 576px) {
@@ -337,29 +381,3 @@
 	color: #e03636 !important;
 }
 
-.budget-container:fullscreen,
-.budget-container.budget-container--fullscreen {
-	height: 100%;
-	box-sizing: border-box;
-	padding: 8px;
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	background-color: var(--card-bg, var(--bg-color, #fff));
-}
-
-.budget-container:fullscreen .budget-controls,
-.budget-container.budget-container--fullscreen .budget-controls {
-	flex: 0 0 auto;
-	margin-bottom: 0;
-}
-
-.budget-container:fullscreen .budget-table,
-.budget-container.budget-container--fullscreen .budget-table,
-.budget-container:fullscreen .budget-table.dinext-table,
-.budget-container.budget-container--fullscreen .budget-table.dinext-table {
-	flex: 1 1 auto;
-	min-height: 0;
-	height: auto !important;
-	max-height: none !important;
-}

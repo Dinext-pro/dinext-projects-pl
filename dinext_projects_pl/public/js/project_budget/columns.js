@@ -129,8 +129,8 @@ function serialValueGetter(params) {
 }
 
 function buildPeriodLeaf(opts) {
-	const { field, colId, headerName, width, hide, valueFormatter, edit } = opts;
-	return withCenterAlign({
+	const { field, colId, headerName, width, hide, valueFormatter, edit, pinned } = opts;
+	const col = withCenterAlign({
 		field,
 		colId,
 		headerName,
@@ -144,6 +144,10 @@ function buildPeriodLeaf(opts) {
 		valueFormatter,
 		cellClassRules: { ...AMOUNT_CELL_CLASS_RULES },
 	});
+	if (pinned) {
+		col.pinned = pinned;
+	}
+	return col;
 }
 
 function buildPeriodColumns(frm, periods) {
@@ -202,6 +206,7 @@ function buildTotalColumn(frm, periods) {
 		headerName: __("Итого"),
 		headerClass: HEADER_CENTER,
 		marryChildren: true,
+		pinned: "right",
 		children: [
 			buildPeriodLeaf({
 				field: "plan_total",
@@ -209,6 +214,7 @@ function buildTotalColumn(frm, periods) {
 				headerName: __("План"),
 				width: leafWidth,
 				hide: hidePlan,
+				pinned: "right",
 				valueFormatter: formatAmount,
 			}),
 			buildPeriodLeaf({
@@ -216,6 +222,7 @@ function buildTotalColumn(frm, periods) {
 				colId: "actual_total",
 				headerName: actualLabel,
 				width: leafWidth,
+				pinned: "right",
 				valueFormatter: formatAmount,
 			}),
 			buildPeriodLeaf({
@@ -224,6 +231,7 @@ function buildTotalColumn(frm, periods) {
 				headerName: "Δ",
 				width: leafWidth,
 				hide: hideDelta,
+				pinned: "right",
 				valueFormatter: formatDelta,
 			}),
 		],
@@ -251,6 +259,7 @@ export function getColumns(frm, periods) {
 			sortable: false,
 			suppressMovable: true,
 			pinned: "left",
+			hide: true,
 			tree: false,
 			valueGetter: serialValueGetter,
 		}),
