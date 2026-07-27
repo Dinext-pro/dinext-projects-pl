@@ -98,14 +98,16 @@ function fetch_financial_metrics(frm) {
     const requestId = (frm._financial_metrics_request_id || 0) + 1;
     frm._financial_metrics_request_id = requestId;
 
-    const request = frappe
-        .call({
+    // frappe.call returns a thenable (not always a native Promise) — wrap for .finally.
+    const request = Promise.resolve(
+        frappe.call({
             method: FINANCIAL_METRICS_API,
             args: {
                 project: frm.doc.name,
                 reporting_date: reportingDate,
             },
         })
+    )
         .then((response) => {
             if (frm._financial_metrics_request_id !== requestId) {
                 return null;

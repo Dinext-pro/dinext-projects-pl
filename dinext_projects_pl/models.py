@@ -15,6 +15,8 @@ class ProjectBudgetGridFormInput(TypedDict, total=False):
 	period_type: str
 	view_mode: ViewMode
 	view_options: str
+	show_dimensions: bool | int | str
+	aggregate_fact: bool | int | str
 
 
 class ProjectBudgetSaveForecastChange(TypedDict, total=False):
@@ -35,13 +37,16 @@ class ProjectBudgetSaveForecastFormInput(TypedDict, total=False):
 	changes: str | list[ProjectBudgetSaveForecastChange]
 
 
-class ProjectBudgetDisplayPeriod(TypedDict):
-	"""Период отображения (месяц)."""
+class ProjectBudgetDisplayPeriod(TypedDict, total=False):
+	"""Период отображения (month / quarter / year)."""
 
 	year: int
 	month: int
+	quarter: int
 	key: str
+	label: str
 	is_past: bool
+	monthly_keys: list[str]
 
 
 class ProjectBudgetRow(TypedDict, total=False):
@@ -52,6 +57,7 @@ class ProjectBudgetRow(TypedDict, total=False):
 	account_label: str | None
 	parent_account: str | None
 	dimensions: list[Any]
+	dimension_label: str
 	has_children: bool
 	indent: int
 	expandable: int | bool
@@ -61,16 +67,21 @@ class ProjectBudgetRow(TypedDict, total=False):
 	pb_docname: str
 	children: list[ProjectBudgetRow]
 	summary_kind: str
+	merge_group_id: str
+	merge_group_index: int
+	merge_group_size: int
 	# периоды: plan_2026_7, forecast_2026_7, fact_2026_7, actual_2026_7, delta_2026_7
 	# итого: plan_total, actual_total, delta_total
 
 
-class ProjectBudgetGridResponse(TypedDict):
+class ProjectBudgetGridResponse(TypedDict, total=False):
 	"""Ответ get_project_budget_grid."""
 
 	project: str
 	period_type: str
 	view_mode: ViewMode
+	show_dimensions: bool
+	aggregate_fact: bool
 	periods: list[ProjectBudgetDisplayPeriod]
 	rows: list[ProjectBudgetRow]
 	summary_rows: list[ProjectBudgetRow]

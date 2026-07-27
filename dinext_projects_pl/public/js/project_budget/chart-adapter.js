@@ -11,6 +11,7 @@ function toFloat(value) {
 function rowPeriodAmount(row, periodKey, valueKey) {
 	const field = valueKey === "fact" ? `own_fact_${periodKey}` : `${valueKey}_${periodKey}`;
 	const direct = toFloat(row?.[field]);
+	// Merge tails are siblings under parent — parent walk includes them.
 	if (direct) {
 		return direct;
 	}
@@ -57,7 +58,13 @@ export function buildChartData(frm) {
 	}
 
 	const labels = periods.map(
-		(p) => `${p.year}-${String(p.month).padStart(2, "0")}`
+		(p) =>
+			p.label ||
+			(p.quarter
+				? `Q${p.quarter} ${p.year}`
+				: p.month
+					? `${p.year}-${String(p.month).padStart(2, "0")}`
+					: String(p.year))
 	);
 
 	const plan_income = [];

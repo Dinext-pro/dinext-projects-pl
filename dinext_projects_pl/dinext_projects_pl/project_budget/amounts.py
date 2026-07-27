@@ -32,16 +32,37 @@ def signed_gl_pl_amount(root_type: str | None, debit: object, credit: object) ->
 
 
 def period_date_bounds(periods: list[dict]) -> tuple[str | None, str | None]:
+	"""Bounds from first/last monthly_keys (or year/month) across display periods."""
 	if not periods:
 		return None, None
-	first = periods[0]
-	last = periods[-1]
-	start = f"{first['year']}-{int(first['month']):02d}-01"
-	y, m = int(last["year"]), int(last["month"])
-	if m == 12:
-		end = f"{y}-12-31"
+
+	def _months_from_period(period: dict) -> list[tuple[int, int]]:
+		out: list[tuple[int, int]] = []
+		for key in period.get("monthly_keys") or []:
+			parts = str(key).split("_")
+			if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+				out.append((int(parts[0]), int(parts[1])))
+		if out:
+			return out
+		year = period.get("year")
+		month = period.get("month")
+		if year and month:
+			return [(int(year), int(month))]
+		return []
+
+	all_months: list[tuple[int, int]] = []
+	for period in periods:
+		all_months.extend(_months_from_period(period))
+	if not all_months:
+		return None, None
+	all_months.sort()
+	y0, m0 = all_months[0]
+	y1, m1 = all_months[-1]
+	start = f"{y0}-{m0:02d}-01"
+	if m1 == 12:
+		end = f"{y1}-12-31"
 	else:
-		next_first = get_first_day(f"{y}-{m + 1:02d}-01")
+		next_first = get_first_day(f"{y1}-{m1 + 1:02d}-01")
 		end = str(add_days(next_first, -1))
 	return start, end
 

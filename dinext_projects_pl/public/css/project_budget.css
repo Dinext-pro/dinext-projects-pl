@@ -26,7 +26,8 @@
 }
 
 /* View-options Select (only_input): wrapper is itself `.form-group.frappe-control`. */
-.budget-container .dinext-table-toolbar-custom.budget-controls > .frappe-control[data-fieldname="view-options"] {
+.budget-container .dinext-table-toolbar-custom.budget-controls > .frappe-control[data-fieldname="view-options"],
+.budget-container .dinext-table-toolbar-custom.budget-controls > .frappe-control[data-fieldname="period-type"] {
 	position: relative;
 	flex: 0 0 150px;
 	width: 150px;
@@ -35,13 +36,34 @@
 	align-self: center;
 }
 
-.budget-container .dinext-table-toolbar-custom.budget-controls > .frappe-control[data-fieldname="view-options"] .form-control {
-	width: 150px;
+.budget-container .dinext-table-toolbar-custom.budget-controls > .frappe-control[data-fieldname="period-type"] {
+	flex: 0 0 110px;
+	width: 110px;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls > .frappe-control[data-fieldname="view-options"] .form-control,
+.budget-container .dinext-table-toolbar-custom.budget-controls > .frappe-control[data-fieldname="period-type"] .form-control {
+	width: 100%;
 	height: 28px;
 	min-height: 28px;
 	padding: 2px 24px 2px 8px;
 	margin: 0;
 	line-height: 1.2;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-aggregate-fact-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0;
+	font-weight: normal;
+	white-space: nowrap;
+	user-select: none;
+	cursor: pointer;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-aggregate-fact-toggle input {
+	margin: 0;
 }
 
 /* Portaled forecast menu (body). */
@@ -379,5 +401,35 @@
 .budget-table.dinext-table .ag-cell.project-budget-cell--profit-neg,
 .budget-table.dinext-table .ag-cell.project-budget-cell--profit-neg .ag-cell-value {
 	color: #e03636 !important;
+}
+
+/* Dimension column (+ add, WE-like) */
+.budget-table.dinext-table .pl-dim-cell {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	width: 100%;
+	min-height: 100%;
+	box-sizing: border-box;
+}
+
+.budget-table.dinext-table .pl-dim-label {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.budget-table.dinext-table .pl-dim-add {
+	flex: 0 0 auto;
+	padding: 0 4px;
+	line-height: 1.2;
+	margin-left: auto;
+}
+
+.pl-dim-add-menu {
+	max-height: 280px;
+	overflow: auto;
 }
 

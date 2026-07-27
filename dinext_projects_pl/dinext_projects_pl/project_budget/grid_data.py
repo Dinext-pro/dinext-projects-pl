@@ -2,13 +2,15 @@
 """Сборка scalar Project Budget grid.
 
 Дерево строк как legacy StickyDataTable: CoA + Task + Project Risk.
-Без cell merge. Периоды — атомарные plan/actual/delta.
+Периоды — атомарные plan/actual/delta.
+При show_dimensions: 1 bucket = 1 строка + merge Статья + dimension_label.
 """
 
 from __future__ import annotations
 
 import frappe
 from frappe import _
+from frappe.utils import cint
 
 from dinext_projects_pl.dinext_projects_pl.project_budget.amounts import (
 	load_budget_buckets,
@@ -18,6 +20,7 @@ from dinext_projects_pl.dinext_projects_pl.project_budget.amounts import (
 )
 from dinext_projects_pl.dinext_projects_pl.project_budget.dimensions import (
 	dimension_fingerprint,
+	format_dimension_label,
 	normalize_dimensions,
 )
 from dinext_projects_pl.models import (
@@ -29,12 +32,44 @@ from dinext_projects_pl.models import (
 )
 from dinext_projects_pl.dinext_projects_pl.project_budget.periods import (
 	get_display_periods,
+	normalize_period_type,
 	normalize_view_mode,
+	period_month_keys,
 )
 from dinext_projects_pl.dinext_projects_pl.project_budget.summary import build_project_budget_summary_rows
 
 RISK_KEY_SEP = "|risk|"
+DIM_KEY_SEP = "|dim|"
 EXCLUDED_DIMENSIONS = ("Project", "Cost Center", "Project Portfolio")
+
+
+def _as_bool(value: object) -> bool:
+	if isinstance(value, bool):
+		return value
+	return bool(cint(value))
+
+
+def _attach_merge_group(rows: list[ProjectBudgetRow], group_id: str) -> list[ProjectBudgetRow]:
+	"""Consecutive siblings → merge meta. Size 1 → no merge fields."""
+	size = len(rows)
+	if size < 2:
+		return rows
+	for index, row in enumerate(rows):
+		row["merge_group_id"] = group_id
+		row["merge_group_index"] = index
+		row["merge_group_size"] = size
+		if index > 0:
+			row.pop("children", None)
+			row["has_children"] = False
+			row["expandable"] = 0
+	return rows
+
+
+def _bucket_row_id(base_id: str, dimensions: list[dict], *, is_head: bool) -> str:
+	if is_head:
+		return base_id
+	fp = dimension_fingerprint(dimensions) or "empty"
+	return f"{base_id}{DIM_KEY_SEP}{fp}"
 
 
 def _to_float(value: object) -> float:
@@ -232,9 +267,10 @@ def _apply_amounts_from_buckets(
 
 	for period in periods:
 		key = period["key"]
-		plan = _to_float(combined.get(f"plan_{key}"))
-		forecast = _to_float(combined.get(f"forecast_{key}"))
-		fact = _to_float(combined.get(f"fact_{key}"))
+		month_keys = period_month_keys(period)
+		plan = sum(_to_float(combined.get(f"plan_{mk}")) for mk in month_keys)
+		forecast = sum(_to_float(combined.get(f"forecast_{mk}")) for mk in month_keys)
+		fact = sum(_to_float(combined.get(f"fact_{mk}")) for mk in month_keys)
 		actual = _resolve_actual(forecast, fact, period["is_past"], view_mode)
 		row[f"plan_{key}"] = plan  # type: ignore[literal-required]
 		row[f"forecast_{key}"] = forecast  # type: ignore[literal-required]
@@ -306,6 +342,7 @@ def _make_base_row(
 	root_type: str | None,
 	task: str | None = None,
 	risk: str | None = None,
+	dimension_label: str | None = None,
 ) -> ProjectBudgetRow:
 	row: ProjectBudgetRow = {
 		"id": row_id,
@@ -323,6 +360,8 @@ def _make_base_row(
 		row["task"] = task
 	if risk:
 		row["risk"] = risk
+	if dimension_label is not None:
+		row["dimension_label"] = dimension_label
 	return row
 
 
@@ -363,6 +402,9 @@ def _build_tree_rows(
 	view_mode: ViewMode,
 	buckets_by_account: dict[str, dict[str, dict]],
 	risk_titles: dict[str, str],
+	*,
+	show_dimensions: bool = False,
+	aggregate_fact: bool = True,
 ) -> list[ProjectBudgetRow]:
 	by_parent: dict[str | None, list[dict]] = {}
 	for acc in accounts:
@@ -387,6 +429,10 @@ def _build_tree_rows(
 			return [{"dimensions": []}]
 		return raw
 
+	def rollup_fact(parent: ProjectBudgetRow, child: ProjectBudgetRow) -> None:
+		if aggregate_fact:
+			_add_fact_from_child(parent, child, periods, view_mode)
+
 	def walk_tasks(
 		account_name: str,
 		root_type: str | None,
@@ -405,19 +451,11 @@ def _build_tree_rows(
 				buckets = [{"dimensions": [{"doc": "Task", "docname": task_name}]}]
 
 			kept, risk_parts = _split_risk_buckets(buckets)
-			row_id = f"{account_name}{task_name}"
-			row = _make_base_row(
-				row_id=row_id,
-				account=account_name,
-				account_label=task.get("subject") or task_name,
-				parent_account=None,
-				dimensions=kept[0].get("dimensions") if kept else [{"doc": "Task", "docname": task_name}],
-				indent=indent,
-				root_type=root_type,
-				task=task_name,
-			)
-			_apply_amounts_from_buckets(row, kept or buckets, periods, view_mode)
+			if not kept:
+				kept = [{"dimensions": [{"doc": "Task", "docname": task_name}]}]
 
+			base_id = f"{account_name}{task_name}"
+			label = task.get("subject") or task_name
 			nested_tasks = walk_tasks(
 				account_name,
 				root_type,
@@ -426,7 +464,7 @@ def _build_tree_rows(
 				account_task_buckets,
 			)
 			risk_rows = _build_risk_rows(
-				parent_id=row_id,
+				parent_id=base_id,
 				account=account_name,
 				root_type=root_type,
 				indent=indent + 1,
@@ -436,14 +474,55 @@ def _build_tree_rows(
 				risk_titles=risk_titles,
 			)
 			# Legacy sibling order under task: child tasks, then risks.
-			children = nested_tasks + risk_rows
-			for child in children:
-				_add_fact_from_child(row, child, periods, view_mode)
-			if children:
-				row["children"] = children
-				row["has_children"] = True
-				row["expandable"] = 1
-			rows.append(row)
+			tree_children = nested_tasks + risk_rows
+
+			if show_dimensions:
+				group: list[ProjectBudgetRow] = []
+				for index, bucket in enumerate(kept):
+					dims = bucket.get("dimensions") or [
+						{"doc": "Task", "docname": task_name}
+					]
+					is_head = index == 0
+					row = _make_base_row(
+						row_id=_bucket_row_id(base_id, dims, is_head=is_head),
+						account=account_name,
+						account_label=label,
+						parent_account=None,
+						dimensions=dims,
+						indent=indent,
+						root_type=root_type,
+						task=task_name,
+						dimension_label=format_dimension_label(dims),
+					)
+					_apply_amounts_from_buckets(row, [bucket], periods, view_mode)
+					if is_head and tree_children:
+						for child in tree_children:
+							rollup_fact(row, child)
+						row["children"] = tree_children
+						row["has_children"] = True
+						row["expandable"] = 1
+					group.append(row)
+				rows.extend(_attach_merge_group(group, base_id))
+			else:
+				row = _make_base_row(
+					row_id=base_id,
+					account=account_name,
+					account_label=label,
+					parent_account=None,
+					dimensions=kept[0].get("dimensions")
+					or [{"doc": "Task", "docname": task_name}],
+					indent=indent,
+					root_type=root_type,
+					task=task_name,
+				)
+				_apply_amounts_from_buckets(row, kept, periods, view_mode)
+				for child in tree_children:
+					rollup_fact(row, child)
+				if tree_children:
+					row["children"] = tree_children
+					row["has_children"] = True
+					row["expandable"] = 1
+				rows.append(row)
 		return rows
 
 	def walk_accounts(parent_name: str | None, indent: int) -> list[ProjectBudgetRow]:
@@ -476,18 +555,6 @@ def _build_tree_rows(
 			if not kept:
 				kept = [{"dimensions": []}]
 
-			row = _make_base_row(
-				row_id=name,
-				account=name,
-				account_label=acc.get("account_name") or name,
-				parent_account=acc.get("parent_account"),
-				dimensions=kept[0].get("dimensions") or [],
-				indent=indent,
-				root_type=acc.get("root_type"),
-			)
-			_apply_amounts_from_buckets(row, kept, periods, view_mode)
-
-			# Legacy under account: root tasks, then child accounts, then risks.
 			task_rows: list[ProjectBudgetRow] = []
 			if allows_task and tasks:
 				task_rows = walk_tasks(
@@ -509,15 +576,51 @@ def _build_tree_rows(
 				view_mode=view_mode,
 				risk_titles=risk_titles,
 			)
+			tree_children = task_rows + nested_accounts + risk_rows
+			label = acc.get("account_name") or name
 
-			children = task_rows + nested_accounts + risk_rows
-			for child in children:
-				_add_fact_from_child(row, child, periods, view_mode)
-			if children:
-				row["children"] = children
-				row["has_children"] = True
-				row["expandable"] = 1
-			rows.append(row)
+			if show_dimensions:
+				group: list[ProjectBudgetRow] = []
+				for index, bucket in enumerate(kept):
+					dims = bucket.get("dimensions") or []
+					is_head = index == 0
+					row = _make_base_row(
+						row_id=_bucket_row_id(name, dims, is_head=is_head),
+						account=name,
+						account_label=label,
+						parent_account=acc.get("parent_account"),
+						dimensions=dims,
+						indent=indent,
+						root_type=acc.get("root_type"),
+						dimension_label=format_dimension_label(dims),
+					)
+					_apply_amounts_from_buckets(row, [bucket], periods, view_mode)
+					if is_head and tree_children:
+						for child in tree_children:
+							rollup_fact(row, child)
+						row["children"] = tree_children
+						row["has_children"] = True
+						row["expandable"] = 1
+					group.append(row)
+				rows.extend(_attach_merge_group(group, name))
+			else:
+				row = _make_base_row(
+					row_id=name,
+					account=name,
+					account_label=label,
+					parent_account=acc.get("parent_account"),
+					dimensions=kept[0].get("dimensions") or [],
+					indent=indent,
+					root_type=acc.get("root_type"),
+				)
+				_apply_amounts_from_buckets(row, kept, periods, view_mode)
+				for child in tree_children:
+					rollup_fact(row, child)
+				if tree_children:
+					row["children"] = tree_children
+					row["has_children"] = True
+					row["expandable"] = 1
+				rows.append(row)
 		return rows
 
 	return walk_accounts(None, 0)
@@ -536,10 +639,17 @@ def run_get_project_budget_grid(form_input: ProjectBudgetGridFormInput) -> Proje
 	if not company:
 		frappe.throw(_("Project company is required"))
 
-	period_type = form_input.get("period_type") or "month"
+	period_type = normalize_period_type(form_input.get("period_type") or "month")
 	view_mode = normalize_view_mode(
 		form_input.get("view_options"),
 		form_input.get("view_mode"),
+	)
+	show_dimensions = _as_bool(form_input.get("show_dimensions"))
+	# Default on — matches legacy rolled fact on parents.
+	aggregate_fact = (
+		True
+		if form_input.get("aggregate_fact") is None
+		else _as_bool(form_input.get("aggregate_fact"))
 	)
 	periods = get_display_periods(project, period_type, view_mode)
 	accounts = _load_pl_accounts(company)
@@ -564,6 +674,8 @@ def run_get_project_budget_grid(form_input: ProjectBudgetGridFormInput) -> Proje
 		view_mode,
 		buckets_by_account,
 		risk_titles,
+		show_dimensions=show_dimensions,
+		aggregate_fact=aggregate_fact,
 	)
 	summary_rows = build_project_budget_summary_rows(rows, periods)
 
@@ -571,6 +683,8 @@ def run_get_project_budget_grid(form_input: ProjectBudgetGridFormInput) -> Proje
 		"project": project,
 		"period_type": period_type,
 		"view_mode": view_mode,
+		"show_dimensions": show_dimensions,
+		"aggregate_fact": aggregate_fact,
 		"periods": periods,
 		"rows": rows,
 		"summary_rows": summary_rows,

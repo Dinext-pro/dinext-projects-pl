@@ -29,3 +29,18 @@ def dimension_fingerprint(dimensions: list[DimItem] | None) -> str:
 	if not dims:
 		return ""
 	return "|".join(f"{d['doc']}\x1f{d['docname']}" for d in dims)
+
+
+def format_dimension_label(
+	dimensions: list[DimItem] | None,
+	*,
+	hide_docs: set[str] | None = None,
+) -> str:
+	"""UI label for Dimension column. Task/Risk live in Статья — omit by default."""
+	hidden = hide_docs if hide_docs is not None else {"Task", "Project Risk"}
+	parts: list[str] = []
+	for dim in normalize_dimensions(dimensions):
+		if dim["doc"] in hidden:
+			continue
+		parts.append(f"{dim['doc']}: {dim['docname']}")
+	return " | ".join(parts)

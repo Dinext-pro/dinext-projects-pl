@@ -1,3 +1,6 @@
+import { MERGE_GROUP } from "./constants.js";
+import { dimensionCellRenderer } from "./dimensions-ui.js";
+
 /** Legacy period group width: 210 − 70 per hidden plan − 50 per hidden Δ. */
 const LEGACY_PERIOD_GROUP_WIDTH = 210;
 const LEGACY_PLAN_SUBCOL_WIDTH = 70;
@@ -151,17 +154,28 @@ function buildPeriodLeaf(opts) {
 }
 
 function buildPeriodColumns(frm, periods) {
-	const hidePlan = !!frm.bg_hide_plan;
-	const hideDelta = !!frm.bg_hide_delta;
+	const form = frm || {};
+	const hidePlan = !!form.bg_hide_plan;
+	const hideDelta = !!form.bg_hide_delta;
 	const leafWidth = periodLeafWidth(hidePlan, hideDelta);
+
+	const periodType = form._pl_period_type || "month";
+	const canEditForecast = periodType === "month";
 
 	return (periods || []).map((period) => {
 		const key = period.key;
 		const actualLabel = period.is_past ? __("Факт") : __("Прогноз");
+		const headerName =
+			period.label ||
+			(period.quarter
+				? `Q${period.quarter} ${period.year}`
+				: period.month
+					? `${period.year}-${String(period.month).padStart(2, "0")}`
+					: String(period.year));
 
 		return {
 			colId: `period_${key}`,
-			headerName: `${period.year} ${period.month}`,
+			headerName,
 			headerClass: HEADER_CENTER,
 			marryChildren: true,
 			children: [
@@ -178,7 +192,8 @@ function buildPeriodColumns(frm, periods) {
 					colId: `actual_${key}`,
 					headerName: actualLabel,
 					width: leafWidth,
-					edit: (row) => !period.is_past && !row?.summary_kind,
+					edit: (row) =>
+						canEditForecast && !period.is_past && !row?.summary_kind,
 					valueFormatter: formatAmount,
 				}),
 				buildPeriodLeaf({
@@ -239,15 +254,16 @@ function buildTotalColumn(frm, periods) {
 }
 
 /**
- * Column set parity with legacy StickyDataTable:
- * # + Статья + period groups + Итого.
- * Checkbox select → DinextTable rowCheck (not a domain col).
- * Composite plan/forecast/Δ HTML → 3 leaf columns per period.
- * Rows = CoA + Task + Risk tree (no cell merge).
+ * Column set: # + Статья [+ Измерение] + period groups + Итого.
+ * show_dimensions → merge Статья + Dimension column (non-Task fingerprint).
  */
 export function getColumns(frm, periods) {
 	const form = frm || (typeof cur_frm !== "undefined" ? cur_frm : null);
 	const periodList = periods || form?.project_budget?.periods || [];
+	const showDimensions = !!form?.bg_show_dimensions;
+	const spanRows = showDimensions
+		? DinextTable.createMergeGroupSpanRows({ mergeGroup: MERGE_GROUP })
+		: undefined;
 
 	const baseColumns = [
 		withCenterAlign({
@@ -261,20 +277,39 @@ export function getColumns(frm, periods) {
 			pinned: "left",
 			hide: true,
 			tree: false,
+			spanRows,
 			valueGetter: serialValueGetter,
 		}),
 		{
 			field: "account_label",
 			headerName: __("Статья"),
 			headerClass: HEADER_CENTER,
-			width: 300,
-			minWidth: 220,
+			width: showDimensions ? 260 : 300,
+			minWidth: 200,
 			pinned: "left",
 			tree: true,
 			edit: false,
 			sortable: false,
+			spanRows,
 		},
 	];
+
+	if (showDimensions) {
+		baseColumns.push({
+			field: "dimension_label",
+			colId: "dimension_label",
+			headerName: __("Измерение"),
+			headerClass: HEADER_CENTER,
+			width: 220,
+			minWidth: 160,
+			pinned: "left",
+			tree: false,
+			edit: false,
+			sortable: false,
+			suppressMovable: true,
+			cellRenderer: dimensionCellRenderer(form || {}),
+		});
+	}
 
 	return [
 		...baseColumns,
