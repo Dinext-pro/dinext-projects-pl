@@ -76,6 +76,13 @@ async function executeSavePlan(frm, data) {
  * Save plan for selected v2 rows. Confirm once, then save.
  */
 export function saveForecastAsPlan(frm) {
+	if ((frm._pl_period_type || "month") !== "month") {
+		frappe.msgprint(
+			__("Сохранение плана доступно только в помесячном режиме отображения.")
+		);
+		return;
+	}
+
 	const v2Selected = getSelectedRows(frm);
 
 	if (!v2Selected.length) {

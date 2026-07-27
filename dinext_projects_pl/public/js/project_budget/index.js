@@ -5,7 +5,9 @@ import { reloadTable } from "./data.js";
 import {
 	applyPlanDeltaVisibility,
 	initTable,
+	onToggleDimensions,
 	onTogglePlanOrDelta,
+	onPeriodOrAggregateChange,
 	onViewOptionsChange,
 	refreshColumns,
 	refreshRuntime,
@@ -46,6 +48,8 @@ const ProjectBudget = {
 	refreshColumns,
 	applyPlanDeltaVisibility,
 	onTogglePlanOrDelta,
+	onToggleDimensions,
+	onPeriodOrAggregateChange,
 	onViewOptionsChange,
 	getSelectedRows,
 	buildSavePlanPayload,

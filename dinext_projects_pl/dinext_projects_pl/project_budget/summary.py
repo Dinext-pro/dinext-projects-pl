@@ -36,6 +36,9 @@ def _row_period_amount(row: ProjectBudgetRow, period_key: str, value_key: str) -
 
 	Uses own_fact_* for fact (not rolled fact_* / actual_*) so rollup display
 	cannot double-count when walking the tree.
+
+	Merge tails are siblings under the parent (not in head.children); parent walk
+	already includes them. Head with own + nested children: own wins (legacy).
 	"""
 	if value_key == "fact":
 		field = f"own_fact_{period_key}"

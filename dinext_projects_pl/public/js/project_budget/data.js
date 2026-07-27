@@ -17,6 +17,8 @@ export async function loadGridData(frm) {
 			project: frm.doc.name,
 			period_type,
 			view_options: frm.budget_view_options || __("Forecast and actual"),
+			show_dimensions: frm.bg_show_dimensions ? 1 : 0,
+			aggregate_fact: frm.bg_aggregate_fact === false ? 0 : 1,
 		});
 		if (!message) {
 			throw new Error("Empty grid response");

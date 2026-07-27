@@ -246,7 +246,7 @@ dinext_projects.refresh_project_budget_forecast_dropdown = refresh_project_budge
 
 function addBudgetViewOptionsControl(frm, controls) {
     frm.budget_view_options = frm.budget_view_options || __("Forecast and actual");
-    const control = frappe.ui.form.make_control({
+    frappe.ui.form.make_control({
 		parent: controls,
 		df: {
 			fieldtype: 'Select',
@@ -269,6 +269,60 @@ function addBudgetViewOptionsControl(frm, controls) {
 		value: frm.budget_view_options,
 		only_input: true,
         render_input: true
+	});
+}
+
+function addBudgetPeriodTypeControl(frm, controls) {
+	frm._pl_period_type = frm._pl_period_type || "month";
+	const labelByValue = {
+		month: __("Месяц"),
+		quarter: __("Квартал"),
+		year: __("Год"),
+	};
+	const valueByLabel = {
+		[__("Месяц")]: "month",
+		[__("Квартал")]: "quarter",
+		[__("Год")]: "year",
+		Month: "month",
+		Quarter: "quarter",
+		Year: "year",
+	};
+	frappe.ui.form.make_control({
+		parent: controls,
+		df: {
+			fieldtype: "Select",
+			fieldname: "period-type",
+			options: [__("Месяц"), __("Квартал"), __("Год")],
+			get_status: () => "Write",
+			change: function () {
+				if (this.value === this.last_value) return;
+				const next = valueByLabel[this.value] || "month";
+				frm._pl_period_type = next;
+				get_project_budget_api()?.onPeriodOrAggregateChange(frm);
+			},
+		},
+		value: labelByValue[frm._pl_period_type] || __("Месяц"),
+		only_input: true,
+		render_input: true,
+	});
+}
+
+function addBudgetAggregateFactControl(frm, controls) {
+	if (frm.bg_aggregate_fact === undefined) {
+		frm.bg_aggregate_fact = true;
+	}
+	const $wrap = $(`
+		<label class="pl-aggregate-fact-toggle mb-0">
+			<input type="checkbox" id="bg-aggregate_fact" />
+			<span>${__("Агрегация факта")}</span>
+		</label>
+	`);
+	controls.append($wrap);
+	const $input = $wrap.find("input");
+	$input.prop("checked", !!frm.bg_aggregate_fact);
+	$input.on("change", function () {
+		frm.bg_aggregate_fact = !!this.checked;
+		get_project_budget_api()?.onPeriodOrAggregateChange(frm);
 	});
 }
 
@@ -407,6 +461,9 @@ function mount_budget_toolbar_controls(frm, host) {
 		<button class="btn btn-default" id="bg-save_plan" type="button">${__("Сохранить план")}</button>
 		<button class="btn btn-default" id="bg-toggle_plan" type="button">${__("Показать план")}</button>
 		<button class="btn btn-default" id="bg-toggle_delta" type="button">${__("Показать Δ")}</button>
+		<button class="btn btn-default" id="bg-toggle_dimensions" type="button">${__("Показать измерения")}</button>
+		<button class="btn btn-default" id="bg-open_budgets" type="button">${__("Бюджеты")}</button>
+		<button class="btn btn-default" id="bg-open_variance" type="button">${__("Budget Variance")}</button>
 	`);
 
 	if (frm.bg_hide_plan === undefined) {
@@ -415,10 +472,24 @@ function mount_budget_toolbar_controls(frm, host) {
 	if (frm.bg_hide_delta === undefined) {
 		frm.bg_hide_delta = true;
 	}
+	if (frm.bg_show_dimensions === undefined) {
+		frm.bg_show_dimensions = false;
+	}
+	if (frm.bg_aggregate_fact === undefined) {
+		frm.bg_aggregate_fact = true;
+	}
+	if (!frm._pl_period_type) {
+		frm._pl_period_type = "month";
+	}
 	host.find("#bg-toggle_plan").text(frm.bg_hide_plan ? __("Показать план") : __("Скрыть план"));
 	host.find("#bg-toggle_delta").text(frm.bg_hide_delta ? __("Показать Δ") : __("Скрыть Δ"));
+	host
+		.find("#bg-toggle_dimensions")
+		.text(frm.bg_show_dimensions ? __("Скрыть измерения") : __("Показать измерения"));
 
+	addBudgetPeriodTypeControl(frm, host);
 	addBudgetViewOptionsControl(frm, host);
+	addBudgetAggregateFactControl(frm, host);
 	add_pl_forecast_dropdown(frm, host);
 	bindBudgetDropdownPortal(host.find(".pl-forecast-dropdown-wrapper"));
 
@@ -442,6 +513,22 @@ function mount_budget_toolbar_controls(frm, host) {
 		frm.bg_hide_delta = !frm.bg_hide_delta;
 		$(this).text(frm.bg_hide_delta ? __("Показать Δ") : __("Скрыть Δ"));
 		get_project_budget_api()?.onTogglePlanOrDelta(frm);
+	});
+
+	host.find("#bg-toggle_dimensions").on("click", function () {
+		frm.bg_show_dimensions = !frm.bg_show_dimensions;
+		$(this).text(
+			frm.bg_show_dimensions ? __("Скрыть измерения") : __("Показать измерения")
+		);
+		get_project_budget_api()?.onToggleDimensions(frm);
+	});
+
+	host.find("#bg-open_budgets").on("click", function () {
+		dinext_projects_pl.navigate_to_active_budgets?.(frm);
+	});
+
+	host.find("#bg-open_variance").on("click", function () {
+		dinext_projects_pl.navigate_to_budget_variance_report?.(frm);
 	});
 }
 
