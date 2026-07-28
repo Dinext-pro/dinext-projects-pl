@@ -51,7 +51,7 @@
 	line-height: 1.2;
 }
 
-.budget-container .dinext-table-toolbar-custom.budget-controls .pl-aggregate-fact-toggle {
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-toolbar-check-toggle {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
@@ -62,7 +62,7 @@
 	cursor: pointer;
 }
 
-.budget-container .dinext-table-toolbar-custom.budget-controls .pl-aggregate-fact-toggle input {
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-toolbar-check-toggle input {
 	margin: 0;
 }
 

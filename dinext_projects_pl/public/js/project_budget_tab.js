@@ -312,7 +312,7 @@ function addBudgetAggregateFactControl(frm, controls) {
 		frm.bg_aggregate_fact = true;
 	}
 	const $wrap = $(`
-		<label class="pl-aggregate-fact-toggle mb-0">
+		<label class="pl-toolbar-check-toggle mb-0">
 			<input type="checkbox" id="bg-aggregate_fact" />
 			<span>${__("Агрегация факта")}</span>
 		</label>
@@ -322,6 +322,25 @@ function addBudgetAggregateFactControl(frm, controls) {
 	$input.prop("checked", !!frm.bg_aggregate_fact);
 	$input.on("change", function () {
 		frm.bg_aggregate_fact = !!this.checked;
+		get_project_budget_api()?.onPeriodOrAggregateChange(frm);
+	});
+}
+
+function addBudgetTaskHierarchyControl(frm, controls) {
+	if (frm.bg_show_task_hierarchy === undefined) {
+		frm.bg_show_task_hierarchy = true;
+	}
+	const $wrap = $(`
+		<label class="pl-toolbar-check-toggle mb-0">
+			<input type="checkbox" id="bg-task_hierarchy" />
+			<span>${__("Иерархия задач")}</span>
+		</label>
+	`);
+	controls.append($wrap);
+	const $input = $wrap.find("input");
+	$input.prop("checked", !!frm.bg_show_task_hierarchy);
+	$input.on("change", function () {
+		frm.bg_show_task_hierarchy = !!this.checked;
 		get_project_budget_api()?.onPeriodOrAggregateChange(frm);
 	});
 }
@@ -478,6 +497,9 @@ function mount_budget_toolbar_controls(frm, host) {
 	if (frm.bg_aggregate_fact === undefined) {
 		frm.bg_aggregate_fact = true;
 	}
+	if (frm.bg_show_task_hierarchy === undefined) {
+		frm.bg_show_task_hierarchy = true;
+	}
 	if (!frm._pl_period_type) {
 		frm._pl_period_type = "month";
 	}
@@ -490,6 +512,7 @@ function mount_budget_toolbar_controls(frm, host) {
 	addBudgetPeriodTypeControl(frm, host);
 	addBudgetViewOptionsControl(frm, host);
 	addBudgetAggregateFactControl(frm, host);
+	addBudgetTaskHierarchyControl(frm, host);
 	add_pl_forecast_dropdown(frm, host);
 	bindBudgetDropdownPortal(host.find(".pl-forecast-dropdown-wrapper"));
 
