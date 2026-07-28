@@ -27,7 +27,7 @@ export async function loadGridData(frm) {
 		return applyGridResponse(frm, message);
 	} catch (err) {
 		console.error("[Project P&L] grid load failed", err);
-		frappe.msgprint(__("Ошибка загрузки данных P&L"));
+		frappe.msgprint(__("Error loading P&L data"));
 		throw err;
 	}
 }

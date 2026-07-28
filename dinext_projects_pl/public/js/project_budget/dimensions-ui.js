@@ -42,10 +42,10 @@ async function addDimension(frm, row, dimDoc, dimDocname, mode) {
 	});
 	const msg =
 		mode === "existing"
-			? __("Измерение добавлено в запись")
+			? __("Dimension added to the entry")
 			: res?.created
-				? __("Создана строка бюджета с измерением")
-				: __("Строка бюджета с измерением уже существует");
+				? __("Budget row with dimension created")
+				: __("Budget row with this dimension already exists");
 	frappe.show_alert({ message: msg, indicator: "green" }, 3);
 	frm.bg_show_dimensions = true;
 	await window.ProjectBudget?.refresh?.(frm);
@@ -54,27 +54,27 @@ async function addDimension(frm, row, dimDoc, dimDocname, mode) {
 function pickValueThenAdd(frm, row, dimType, mode) {
 	const options = dimType.options || [];
 	if (!options.length) {
-		frappe.msgprint(__("Нет доступных значений для {0}", [dimType.label || dimType.document_type]));
+		frappe.msgprint(__("No values available for {0}", [dimType.label || dimType.document_type]));
 		return;
 	}
 
 	const d = new frappe.ui.Dialog({
-		title: __("Добавить измерение: {0}", [dimType.label || dimType.document_type]),
+		title: __("Add Dimension: {0}", [dimType.label || dimType.document_type]),
 		fields: [
 			{
 				fieldtype: "Select",
 				fieldname: "docname",
-				label: __("Значение"),
+				label: __("Value"),
 				options: options.map((o) => o.value).join("\n"),
 				reqd: 1,
 			},
 		],
-		primary_action_label: __("Добавить"),
+		primary_action_label: __("Add"),
 		primary_action: (values) => {
 			d.hide();
 			addDimension(frm, row, dimType.document_type, values.docname, mode).catch((err) => {
 				console.error(err);
-				frappe.msgprint(__("Ошибка при добавлении измерения"));
+				frappe.msgprint(__("Error adding dimension"));
 			});
 		},
 	});
@@ -85,7 +85,7 @@ function openAddDimMenu(frm, row, anchorEl, payload) {
 	closeAddDimMenu();
 	const dimensions = (payload?.dimensions || []).filter((d) => (d.options || []).length);
 	if (!dimensions.length) {
-		frappe.msgprint(__("Для этого счёта нет доступных измерений (Accounting Dimension Filter)"));
+		frappe.msgprint(__("No available dimensions for this account (Accounting Dimension Filter)"));
 		return;
 	}
 
@@ -116,10 +116,10 @@ function openAddDimMenu(frm, row, anchorEl, payload) {
 		}
 	};
 
-	addSection(__("Новая строка по счёту"), "new");
+	addSection(__("New Account Row"), "new");
 	if (row.pb_docname) {
 		menu.appendChild(document.createElement("div")).className = "dropdown-divider";
-		addSection(__("В текущую запись"), "existing");
+		addSection(__("To Current Entry"), "existing");
 	}
 
 	document.body.appendChild(menu);
@@ -144,8 +144,8 @@ function buildAddDimControl(frm, row) {
 	const btn = document.createElement("button");
 	btn.type = "button";
 	btn.className = "btn btn-default btn-xs pl-dim-add";
-	btn.title = __("Добавить измерение");
-	btn.setAttribute("aria-label", __("Добавить измерение"));
+	btn.title = __("Add Dimension");
+	btn.setAttribute("aria-label", __("Add Dimension"));
 	btn.textContent = "+";
 
 	btn.addEventListener("mousedown", stopGridEvent);
@@ -159,7 +159,7 @@ function buildAddDimControl(frm, row) {
 			.then((payload) => openAddDimMenu(frm, row, btn, payload))
 			.catch((err) => {
 				console.error(err);
-				frappe.msgprint(__("Не удалось загрузить список измерений"));
+				frappe.msgprint(__("Failed to load dimensions list"));
 			});
 	});
 

@@ -90,7 +90,7 @@ def build_project_budget_summary_rows(
 	profit: ProjectBudgetRow = {
 		"id": PL_V2_SUMMARY_PROFIT_ID,
 		"account": PL_V2_SUMMARY_PROFIT_ID,
-		"account_label": frappe._("Валовая прибыль"),
+		"account_label": frappe._("Gross Profit"),
 		"parent_account": None,
 		"dimensions": [],
 		"has_children": False,
@@ -101,7 +101,7 @@ def build_project_budget_summary_rows(
 	profitability: ProjectBudgetRow = {
 		"id": PL_V2_SUMMARY_PROFITABILITY_ID,
 		"account": PL_V2_SUMMARY_PROFITABILITY_ID,
-		"account_label": frappe._("Рентабельность"),
+		"account_label": frappe._("Profitability"),
 		"parent_account": None,
 		"dimensions": [],
 		"has_children": False,

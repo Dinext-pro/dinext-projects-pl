@@ -68,7 +68,7 @@ function showTabOverlay(frm, fieldname) {
 	$pane.addClass("pwa-tab-loading-host");
 	let $el = $pane.children(".pwa-tab-loading");
 	if (!$el.length) {
-		const label = frappe.utils.escape_html(__("Загрузка…"));
+		const label = frappe.utils.escape_html(__("Loading…"));
 		$el = $(
 			`<div class="pwa-tab-loading" aria-live="polite"><p class="text-muted">${label}</p></div>`
 		);

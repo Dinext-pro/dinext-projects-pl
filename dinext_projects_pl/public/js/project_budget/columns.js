@@ -164,7 +164,7 @@ function buildPeriodColumns(frm, periods) {
 
 	return (periods || []).map((period) => {
 		const key = period.key;
-		const actualLabel = period.is_past ? __("Факт") : __("Прогноз");
+		const actualLabel = period.is_past ? __("Actual") : __("Forecast");
 		const headerName =
 			period.label ||
 			(period.quarter
@@ -182,7 +182,7 @@ function buildPeriodColumns(frm, periods) {
 				buildPeriodLeaf({
 					field: `plan_${key}`,
 					colId: `plan_${key}`,
-					headerName: __("План"),
+					headerName: __("Plan"),
 					width: leafWidth,
 					hide: hidePlan,
 					valueFormatter: formatAmount,
@@ -214,11 +214,11 @@ function buildTotalColumn(frm, periods) {
 	const hideDelta = !!frm.bg_hide_delta;
 	const leafWidth = periodLeafWidth(hidePlan, hideDelta);
 	const last = periods?.[periods.length - 1];
-	const actualLabel = last?.is_past ? __("Факт") : __("Прогноз");
+	const actualLabel = last?.is_past ? __("Actual") : __("Forecast");
 
 	return {
 		colId: "total",
-		headerName: __("Итого"),
+		headerName: __("Total"),
 		headerClass: HEADER_CENTER,
 		marryChildren: true,
 		pinned: "right",
@@ -226,7 +226,7 @@ function buildTotalColumn(frm, periods) {
 			buildPeriodLeaf({
 				field: "plan_total",
 				colId: "plan_total",
-				headerName: __("План"),
+				headerName: __("Plan"),
 				width: leafWidth,
 				hide: hidePlan,
 				pinned: "right",
@@ -282,7 +282,7 @@ export function getColumns(frm, periods) {
 		}),
 		{
 			field: "account_label",
-			headerName: __("Статья"),
+			headerName: __("Account"),
 			headerClass: HEADER_CENTER,
 			width: showDimensions ? 260 : 300,
 			minWidth: 200,
@@ -298,7 +298,7 @@ export function getColumns(frm, periods) {
 		baseColumns.push({
 			field: "dimension_label",
 			colId: "dimension_label",
-			headerName: __("Измерение"),
+			headerName: __("Dimension"),
 			headerClass: HEADER_CENTER,
 			width: 220,
 			minWidth: 160,

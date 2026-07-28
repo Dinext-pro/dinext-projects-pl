@@ -42,7 +42,7 @@ function add_buttons( frm ) {
     frappe.ui.form.make_control({
         parent: frm.$open_pl_statements,
         df: {
-            label: __("Свод P&L"),
+            label: __("P&L Summary"),
             fieldname: "open_pl_statements",
             fieldtype: "Button",
             btn_size: 'sm',
