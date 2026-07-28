@@ -405,6 +405,7 @@ def _build_tree_rows(
 	*,
 	show_dimensions: bool = False,
 	aggregate_fact: bool = True,
+	show_task_hierarchy: bool = True,
 ) -> list[ProjectBudgetRow]:
 	by_parent: dict[str | None, list[dict]] = {}
 	for acc in accounts:
@@ -443,7 +444,11 @@ def _build_tree_rows(
 		rows: list[ProjectBudgetRow] = []
 		for task in tasks:
 			task_parent = task.get("parent_task") or None
-			if (task_parent or None) != parent_task:
+			if show_task_hierarchy:
+				if (task_parent or None) != parent_task:
+					continue
+			elif parent_task is not None:
+				# Flat mode: only emit once from account root call.
 				continue
 			task_name = task["value"]
 			buckets = list(account_task_buckets.get(task_name) or [])
@@ -456,12 +461,16 @@ def _build_tree_rows(
 
 			base_id = f"{account_name}{task_name}"
 			label = task.get("subject") or task_name
-			nested_tasks = walk_tasks(
-				account_name,
-				root_type,
-				task_name,
-				indent + 1,
-				account_task_buckets,
+			nested_tasks = (
+				walk_tasks(
+					account_name,
+					root_type,
+					task_name,
+					indent + 1,
+					account_task_buckets,
+				)
+				if show_task_hierarchy
+				else []
 			)
 			risk_rows = _build_risk_rows(
 				parent_id=base_id,
@@ -651,6 +660,12 @@ def run_get_project_budget_grid(form_input: ProjectBudgetGridFormInput) -> Proje
 		if form_input.get("aggregate_fact") is None
 		else _as_bool(form_input.get("aggregate_fact"))
 	)
+	# Default on — Task WBS under account; off = flat list under account.
+	show_task_hierarchy = (
+		True
+		if form_input.get("show_task_hierarchy") is None
+		else _as_bool(form_input.get("show_task_hierarchy"))
+	)
 	periods = get_display_periods(project, period_type, view_mode)
 	accounts = _load_pl_accounts(company)
 	root_types = {a["name"]: a.get("root_type") or "" for a in accounts}
@@ -676,6 +691,7 @@ def run_get_project_budget_grid(form_input: ProjectBudgetGridFormInput) -> Proje
 		risk_titles,
 		show_dimensions=show_dimensions,
 		aggregate_fact=aggregate_fact,
+		show_task_hierarchy=show_task_hierarchy,
 	)
 	summary_rows = build_project_budget_summary_rows(rows, periods)
 
@@ -685,6 +701,7 @@ def run_get_project_budget_grid(form_input: ProjectBudgetGridFormInput) -> Proje
 		"view_mode": view_mode,
 		"show_dimensions": show_dimensions,
 		"aggregate_fact": aggregate_fact,
+		"show_task_hierarchy": show_task_hierarchy,
 		"periods": periods,
 		"rows": rows,
 		"summary_rows": summary_rows,

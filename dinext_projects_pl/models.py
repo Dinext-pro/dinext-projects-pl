@@ -17,6 +17,7 @@ class ProjectBudgetGridFormInput(TypedDict, total=False):
 	view_options: str
 	show_dimensions: bool | int | str
 	aggregate_fact: bool | int | str
+	show_task_hierarchy: bool | int | str
 
 
 class ProjectBudgetSaveForecastChange(TypedDict, total=False):
@@ -82,6 +83,7 @@ class ProjectBudgetGridResponse(TypedDict, total=False):
 	view_mode: ViewMode
 	show_dimensions: bool
 	aggregate_fact: bool
+	show_task_hierarchy: bool
 	periods: list[ProjectBudgetDisplayPeriod]
 	rows: list[ProjectBudgetRow]
 	summary_rows: list[ProjectBudgetRow]
