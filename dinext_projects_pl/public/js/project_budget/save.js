@@ -18,16 +18,14 @@ function validateForecastChange(frm, change) {
 
 	const childrenSum = childForecastSum(row, periodKey);
 	if (childrenSum > 0 && value < childrenSum) {
-		return __(
-			"Значение не может быть меньше суммы по дочерним позициям ({0})",
+		return __("Value cannot be less than the sum of child items ({0})",
 			[Math.round(childrenSum).toLocaleString("ru-RU")]
 		);
 	}
 
 	const parentLimit = parentForecastLimit(rows, row, periodKey);
 	if (parentLimit !== null && value > parentLimit.maxAllowed) {
-		return __(
-			"Значение не может превышать {0} (ограничение родительской статьи '{1}')",
+		return __("Value cannot exceed {0} (parent account '{1}' limit)",
 			[
 				Math.round(parentLimit.maxAllowed).toLocaleString("ru-RU"),
 				parentLimit.parentLabel,
@@ -94,7 +92,7 @@ export async function onSaveCells(frm, { changes }) {
 		throw new Error(res.exc);
 	}
 
-	frappe.show_alert(__("Данные успешно обновлены"), 5);
+	frappe.show_alert(__("Data updated successfully"), 5);
 	patchLocalForecast(frm, changes);
 
 	// Refresh DinextTable + chart after forecast save.

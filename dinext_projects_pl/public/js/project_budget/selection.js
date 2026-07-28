@@ -59,8 +59,8 @@ async function executeSavePlan(frm, data) {
 	const mode = res?.mode || "approval";
 	const successMessage =
 		mode === "direct"
-			? __("План сохранен")
-			: __("Бюджеты отправлены на согласование");
+			? __("Plan saved")
+			: __("Budgets submitted for approval");
 
 	frappe.show_alert(successMessage, 5);
 
@@ -78,7 +78,7 @@ async function executeSavePlan(frm, data) {
 export function saveForecastAsPlan(frm) {
 	if ((frm._pl_period_type || "month") !== "month") {
 		frappe.msgprint(
-			__("Сохранение плана доступно только в помесячном режиме отображения.")
+			__("Saving plan is available only in monthly display mode.")
 		);
 		return;
 	}
@@ -87,27 +87,26 @@ export function saveForecastAsPlan(frm) {
 
 	if (!v2Selected.length) {
 		frappe.msgprint(
-			__("Выберите строки, для которых необходимо сохранить плановые данные.")
+			__("Select the rows for which plan data should be saved.")
 		);
 		return;
 	}
 
 	const data = buildSavePlanPayload(frm);
 	if (!data.length) {
-		frappe.msgprint(__("Нет данных для сохранения."));
+		frappe.msgprint(__("No data to save."));
 		return;
 	}
 
 	frappe.confirm(
-		__(
-			"Вы уверены, что хотите сохранить текущие прогнозные / фактические данные как плановые?"
+		__("Are you sure you want to save the current forecast / actual data as plan?"
 		),
 		() => {
 			executeSavePlan(frm, data).catch((err) => {
-				frappe.msgprint(__("Ошибка при сохранении плана"));
+				frappe.msgprint(__("Error saving plan"));
 				console.error(err);
 			});
 		},
-		() => frappe.show_alert(__("Операция отменена"), 3)
+		() => frappe.show_alert(__("Operation cancelled"), 3)
 	);
 }

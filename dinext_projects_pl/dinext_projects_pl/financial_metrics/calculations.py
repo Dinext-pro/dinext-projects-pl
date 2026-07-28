@@ -121,7 +121,7 @@ def build_track_metrics(
 	vac = bac - eac if eac is not None else None
 	tcpi = safe_division(bac - ev, bac - ac) if bac != ac else None
 
-	track_label = _("Доходы") if track_type == "Income" else _("Расходы")
+	track_label = _("Income") if track_type == "Income" else _("Expenses")
 	values = {
 		"BAC": bac,
 		"PV": pv,
@@ -154,8 +154,8 @@ def build_financial_metrics_payload(
 	if not project_doc.expected_start_date or not project_doc.expected_end_date:
 		return {
 			"ready": False,
-			"emptyMessage": _("Финансовые метрики будут доступны после загрузки данных P&L."),
-			"note": _("Метрики рассчитываются на выбранную отчетную дату."),
+			"emptyMessage": _("Financial metrics will be available after P&L data is loaded."),
+			"note": _("Metrics are calculated as of the selected report date."),
 			"warning": None,
 			"tracks": [],
 		}
@@ -165,10 +165,9 @@ def build_financial_metrics_payload(
 	warnings = []
 
 	if progress_percent <= 0:
-		progress_label = frappe.get_meta("Project").get_label("percent_complete") or _("Процент выполнения")
+		progress_label = frappe.get_meta("Project").get_label("percent_complete") or _("Completion Percentage")
 		warnings.append(
-			_(
-				"Поле «{0}» не заполнено или равно 0. EV и производные метрики будут показаны как нулевые или недоступные."
+			_("Field \"{0}\" is empty or equal to 0. EV and derived metrics will be shown as zero or unavailable."
 			).format(progress_label)
 		)
 
@@ -185,8 +184,7 @@ def build_financial_metrics_payload(
 
 	return {
 		"ready": True,
-		"note": _(
-			"Метрики рассчитываются на отчетную дату {0}. План и факт текущего месяца учитываются пропорционально дням месяца."
+		"note": _("Metrics are calculated as of report date {0}. Plan and actuals for the current month are prorated by days of the month."
 		).format(reporting_date_value),
 		"warning": " ".join(warnings) if warnings else None,
 		"reportingDate": reporting_date_value,

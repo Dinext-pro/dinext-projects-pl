@@ -177,7 +177,7 @@ frappe.ui.form.on("Project", {
  * Другие приложения могут добавлять пункты так:
  *   frappe.provide("dinext_projects.project_budget_forecast_menu");
  *   dinext_projects.project_budget_forecast_menu = dinext_projects.project_budget_forecast_menu || [];
- *   dinext_projects.project_budget_forecast_menu.push({ label: __("Мой прогноз"), action: function(frm) { ... } });
+ *   dinext_projects.project_budget_forecast_menu.push({ label: __("My Forecast"), action: function(frm) { ... } });
  * Кнопка меню отображается только если добавлен хотя бы один подпункт.
  * Если меню изменено или дополнено после первичной отрисовки кнопки, вызвать
  * dinext_projects.refresh_project_budget_forecast_dropdown(frm) для обновления выпадающего списка.
@@ -207,7 +207,7 @@ function add_pl_forecast_dropdown(frm, controls) {
     const $wrapper = $('<div class="pl-forecast-dropdown-wrapper dropdown"></div>');
     const $btn = $(`
         <button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-            ᛣ ${__("Добавить прогноз")}
+            ᛣ ${__("Add Forecast")}
         </button>
     `);
     const $menu = $('<ul class="dropdown-menu dropdown-menu-right" role="menu"></ul>');
@@ -275,14 +275,14 @@ function addBudgetViewOptionsControl(frm, controls) {
 function addBudgetPeriodTypeControl(frm, controls) {
 	frm._pl_period_type = frm._pl_period_type || "month";
 	const labelByValue = {
-		month: __("Месяц"),
-		quarter: __("Квартал"),
-		year: __("Год"),
+		month: __("Month"),
+		quarter: __("Quarter"),
+		year: __("Year"),
 	};
 	const valueByLabel = {
-		[__("Месяц")]: "month",
-		[__("Квартал")]: "quarter",
-		[__("Год")]: "year",
+		[__("Month")]: "month",
+		[__("Quarter")]: "quarter",
+		[__("Year")]: "year",
 		Month: "month",
 		Quarter: "quarter",
 		Year: "year",
@@ -292,7 +292,7 @@ function addBudgetPeriodTypeControl(frm, controls) {
 		df: {
 			fieldtype: "Select",
 			fieldname: "period-type",
-			options: [__("Месяц"), __("Квартал"), __("Год")],
+			options: [__("Month"), __("Quarter"), __("Year")],
 			get_status: () => "Write",
 			change: function () {
 				if (this.value === this.last_value) return;
@@ -301,7 +301,7 @@ function addBudgetPeriodTypeControl(frm, controls) {
 				get_project_budget_api()?.onPeriodOrAggregateChange(frm);
 			},
 		},
-		value: labelByValue[frm._pl_period_type] || __("Месяц"),
+		value: labelByValue[frm._pl_period_type] || __("Month"),
 		only_input: true,
 		render_input: true,
 	});
@@ -314,7 +314,7 @@ function addBudgetAggregateFactControl(frm, controls) {
 	const $wrap = $(`
 		<label class="pl-toolbar-check-toggle mb-0">
 			<input type="checkbox" id="bg-aggregate_fact" />
-			<span>${__("Агрегация факта")}</span>
+			<span>${__("Actual Aggregation")}</span>
 		</label>
 	`);
 	controls.append($wrap);
@@ -333,7 +333,7 @@ function addBudgetTaskHierarchyControl(frm, controls) {
 	const $wrap = $(`
 		<label class="pl-toolbar-check-toggle mb-0">
 			<input type="checkbox" id="bg-task_hierarchy" />
-			<span>${__("Иерархия задач")}</span>
+			<span>${__("Task Hierarchy")}</span>
 		</label>
 	`);
 	controls.append($wrap);
@@ -477,11 +477,11 @@ function mount_budget_toolbar_controls(frm, host) {
 	host.addClass("budget-controls");
 
 	host.append(`
-		<button class="btn btn-default" id="bg-save_plan" type="button">${__("Сохранить план")}</button>
-		<button class="btn btn-default" id="bg-toggle_plan" type="button">${__("Показать план")}</button>
-		<button class="btn btn-default" id="bg-toggle_delta" type="button">${__("Показать Δ")}</button>
-		<button class="btn btn-default" id="bg-toggle_dimensions" type="button">${__("Показать измерения")}</button>
-		<button class="btn btn-default" id="bg-open_budgets" type="button">${__("Бюджеты")}</button>
+		<button class="btn btn-default" id="bg-save_plan" type="button">${__("Save Plan")}</button>
+		<button class="btn btn-default" id="bg-toggle_plan" type="button">${__("Show Plan")}</button>
+		<button class="btn btn-default" id="bg-toggle_delta" type="button">${__("Show Δ")}</button>
+		<button class="btn btn-default" id="bg-toggle_dimensions" type="button">${__("Show Dimensions")}</button>
+		<button class="btn btn-default" id="bg-open_budgets" type="button">${__("Budgets")}</button>
 		<button class="btn btn-default" id="bg-open_variance" type="button">${__("Budget Variance")}</button>
 	`);
 
@@ -503,11 +503,11 @@ function mount_budget_toolbar_controls(frm, host) {
 	if (!frm._pl_period_type) {
 		frm._pl_period_type = "month";
 	}
-	host.find("#bg-toggle_plan").text(frm.bg_hide_plan ? __("Показать план") : __("Скрыть план"));
-	host.find("#bg-toggle_delta").text(frm.bg_hide_delta ? __("Показать Δ") : __("Скрыть Δ"));
+	host.find("#bg-toggle_plan").text(frm.bg_hide_plan ? __("Show Plan") : __("Hide Plan"));
+	host.find("#bg-toggle_delta").text(frm.bg_hide_delta ? __("Show Δ") : __("Hide Δ"));
 	host
 		.find("#bg-toggle_dimensions")
-		.text(frm.bg_show_dimensions ? __("Скрыть измерения") : __("Показать измерения"));
+		.text(frm.bg_show_dimensions ? __("Hide Dimensions") : __("Show Dimensions"));
 
 	addBudgetPeriodTypeControl(frm, host);
 	addBudgetViewOptionsControl(frm, host);
@@ -522,26 +522,26 @@ function mount_budget_toolbar_controls(frm, host) {
 			preview.saveForecastAsPlan(frm);
 			return;
 		}
-		frappe.msgprint(__("Project Budget не загружен"));
+		frappe.msgprint(__("Project Budget is not loaded"));
 	});
 
 	host.find("#bg-toggle_plan").on("click", function () {
 		frm.bg_hide_plan = !frm.bg_hide_plan;
-		$(this).text(frm.bg_hide_plan ? __("Показать план") : __("Скрыть план"));
+		$(this).text(frm.bg_hide_plan ? __("Show Plan") : __("Hide Plan"));
 		get_project_budget_api()?.onTogglePlanOrDelta(frm);
 		render_pl_chart(frm);
 	});
 
 	host.find("#bg-toggle_delta").on("click", function () {
 		frm.bg_hide_delta = !frm.bg_hide_delta;
-		$(this).text(frm.bg_hide_delta ? __("Показать Δ") : __("Скрыть Δ"));
+		$(this).text(frm.bg_hide_delta ? __("Show Δ") : __("Hide Δ"));
 		get_project_budget_api()?.onTogglePlanOrDelta(frm);
 	});
 
 	host.find("#bg-toggle_dimensions").on("click", function () {
 		frm.bg_show_dimensions = !frm.bg_show_dimensions;
 		$(this).text(
-			frm.bg_show_dimensions ? __("Скрыть измерения") : __("Показать измерения")
+			frm.bg_show_dimensions ? __("Hide Dimensions") : __("Show Dimensions")
 		);
 		get_project_budget_api()?.onToggleDimensions(frm);
 	});
