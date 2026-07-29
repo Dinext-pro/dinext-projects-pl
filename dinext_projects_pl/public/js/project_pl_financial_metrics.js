@@ -82,8 +82,8 @@ function fetch_financial_metrics(frm) {
     if (!frm || frm.is_new?.() || !frm.doc?.name) {
         return Promise.resolve({
             ready: false,
-            emptyMessage: __("Финансовые метрики будут доступны после загрузки данных P&L."),
-            note: __("Метрики рассчитываются на выбранную отчетную дату."),
+            emptyMessage: __("Financial metrics will be available after P&L data is loaded."),
+            note: __("Metrics are calculated as of the selected report date."),
             warning: null,
             tracks: [],
         });
@@ -107,8 +107,8 @@ function fetch_financial_metrics(frm) {
 
             return response.message || {
                 ready: false,
-                emptyMessage: __("Нет данных для расчета финансовых метрик."),
-                note: __("Метрики рассчитываются на выбранную отчетную дату."),
+                emptyMessage: __("No data to calculate financial metrics."),
+                note: __("Metrics are calculated as of the selected report date."),
                 warning: null,
                 tracks: [],
             };
@@ -120,8 +120,8 @@ function fetch_financial_metrics(frm) {
 
             return {
                 ready: false,
-                emptyMessage: __("Не удалось загрузить финансовые метрики."),
-                note: __("Метрики рассчитываются на выбранную отчетную дату."),
+                emptyMessage: __("Failed to load financial metrics."),
+                note: __("Metrics are calculated as of the selected report date."),
                 warning: null,
                 tracks: [],
             };
@@ -142,7 +142,7 @@ function render_financial_metrics_content(frm, metricsData) {
     const $header = $(`
         <div class="evm-metrics-header">
             <div>
-                <h3 class="evm-metrics-title">${__("Финансовые метрики")}</h3>
+                <h3 class="evm-metrics-title">${__("Financial Metrics")}</h3>
                 <div class="evm-metrics-note">${frappe.utils.escape_html(metricsData.note || "")}</div>
             </div>
             <div class="evm-metrics-reporting-date"></div>
@@ -155,7 +155,7 @@ function render_financial_metrics_content(frm, metricsData) {
         df: {
             fieldtype: "Date",
             fieldname: "financial_metrics_reporting_date",
-            label: __("Отчетная дата метрик"),
+            label: __("Metrics Report Date"),
             change() {
                 const nextValue = this.get_value() || frappe.datetime.get_today();
                 if (nextValue === frm._financial_metrics_reporting_date) {
@@ -177,7 +177,7 @@ function render_financial_metrics_content(frm, metricsData) {
 
     if (!metricsData.ready) {
         $section.append(
-            `<div class="evm-metrics-empty">${frappe.utils.escape_html(metricsData.emptyMessage || __("Нет данных для расчета финансовых метрик."))}</div>`
+            `<div class="evm-metrics-empty">${frappe.utils.escape_html(metricsData.emptyMessage || __("No data to calculate financial metrics."))}</div>`
         );
         $wrapper.append($section);
         return;
@@ -245,7 +245,7 @@ function render_financial_metrics(frm) {
     $wrapper.empty();
     $wrapper.addClass("project-financial-metrics");
     $wrapper.html(
-        `<div class="evm-metrics-empty">${frappe.utils.escape_html(__("Загрузка финансовых метрик..."))}</div>`
+        `<div class="evm-metrics-empty">${frappe.utils.escape_html(__("Loading financial metrics..."))}</div>`
     );
 
     fetch_financial_metrics(frm).then((metricsData) => {
