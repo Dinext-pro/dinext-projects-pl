@@ -20,7 +20,7 @@ function add_buttons( frm ) {
     frappe.ui.form.make_control({
         parent: frm.$open_pl_statements,
         df: {
-            label: __("Свод P&L"),
+            label: __("P&L Summary"),
             fieldname: "open_pl_statements",
             fieldtype: "Button",
             btn_size: 'sm',
@@ -282,32 +282,32 @@ function get_pl_chart_data(frm) {
     let d = build_pl_chart_data(frm);
 
     let datasets = [];
-    let view =  __("факт/прогноз");
-    if ( frm.budget_view_options == __("Только прогноз") ) {
-        view = __("прогноз");
-    } else if ( frm.budget_view_options == __("Только факт") ) {
-        view = __("факт");
+    let view =  __("actual/forecast");
+    if ( frm.budget_view_options == __("Forecast only") ) {
+        view = __("forecast");
+    } else if ( frm.budget_view_options == __("Actual only") ) {
+        view = __("actual");
     }
 
     // Формируем датасеты в порядке: бары (инком/экспенс), точки (profit), линии (cumulative)
     if ( !frm.bg_hide_plan ) {
-        datasets.push( { name: __("Доходы - план"), values: d.plan_income, chartType: 'bar' } );
+        datasets.push( { name: __("Income - plan"), values: d.plan_income, chartType: 'bar' } );
     }
-    datasets.push( { name: __("Доходы") + " - " + view, values: d.actual_income, chartType: 'bar' } );
+    datasets.push( { name: __("Income") + " - " + view, values: d.actual_income, chartType: 'bar' } );
     if ( !frm.bg_hide_plan ) {
-        datasets.push( { name: __("Расходы - план"), values: d.plan_expenses, chartType: 'bar' } );
+        datasets.push( { name: __("Expenses - plan"), values: d.plan_expenses, chartType: 'bar' } );
     }
-    datasets.push( { name: __("Расходы") + " - " + view, values: d.actual_expenses, chartType: 'bar' } );
+    datasets.push( { name: __("Expenses") + " - " + view, values: d.actual_expenses, chartType: 'bar' } );
 
     if ( !frm.bg_hide_plan ) {
-        datasets.push( { name: __("Прибыль - план"), values: d.profit_plan, chartType: 'line'} );
+        datasets.push( { name: __("Profit - plan"), values: d.profit_plan, chartType: 'line'} );
     }
-    datasets.push( { name: __("Прибыль") + " - " + view, values: d.profit_actual, chartType: 'line' } );
+    datasets.push( { name: __("Profit") + " - " + view, values: d.profit_actual, chartType: 'line' } );
 
     if ( !frm.bg_hide_plan ) {
-        datasets.push( { name: __("Прибыль накопл. - план"), values: d.cumulative_profit_plan, chartType: 'line' } );
+        datasets.push( { name: __("Cumulative profit - plan"), values: d.cumulative_profit_plan, chartType: 'line' } );
     }
-    datasets.push( { name: __("Прибыль накопл.") + " - " + view, values: d.cumulative_profit_actual, chartType: 'line' } );
+    datasets.push( { name: __("Cumulative profit") + " - " + view, values: d.cumulative_profit_actual, chartType: 'line' } );
 
     let yMarkers = null;
 
@@ -315,7 +315,7 @@ function get_pl_chart_data(frm) {
         let profit_plan = d.cumulative_profit_plan[ d.cumulative_profit_plan.length - 1 ];
 
         if ( profit_plan ) {
-            yMarkers = [ { label: __("Плановая прибыль: ") + profit_plan, value: profit_plan, options: { labelPos: "left" } } ];
+            yMarkers = [ { label: __("Planned profit: ") + profit_plan, value: profit_plan, options: { labelPos: "left" } } ];
         }
     }
 
@@ -329,7 +329,7 @@ function get_pl_chart_data(frm) {
 
 function get_pl_chart_options(frm, chartData) {
     return {
-            //title: __("P&L — План / Факт / Прогноз"),
+            //title: __("P&L — Plan / Actual / Forecast"),
             data: chartData,
             colors: frm.bg_hide_plan ?
                 ['#007a33','#cc3333', '#ff9933','#00509e'] :  //https://piktochart.com/tips/finance-color-palette
@@ -422,7 +422,7 @@ function _render_pl_chart(frm, init=true) {
             frm._pl_chart_instance = new frappe.Chart($chartContainer[0], chart_options);
         } catch (err) {
             console.error("P&L Chart creation failed:", err);
-            $chartContainer.html(`<div style="padding:24px;color:#900;">${__("Ошибка при построении P&L графика")}</div>`);
+            $chartContainer.html(`<div style="padding:24px;color:#900;">${__("Error building P&L chart")}</div>`);
             console.timeEnd("render_pl_chart");
             return;
         }

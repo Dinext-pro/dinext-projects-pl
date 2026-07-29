@@ -12,7 +12,7 @@ frappe.ui.form.on("Project", {
  * Другие приложения могут добавлять пункты так:
  *   frappe.provide("dinext_projects.project_pl_forecast_menu");
  *   dinext_projects.project_pl_forecast_menu = dinext_projects.project_pl_forecast_menu || [];
- *   dinext_projects.project_pl_forecast_menu.push({ label: __("Мой прогноз"), action: function(frm) { ... } });
+ *   dinext_projects.project_pl_forecast_menu.push({ label: __("My Forecast"), action: function(frm) { ... } });
  * Кнопка меню отображается только если добавлен хотя бы один подпункт.
  * Если меню изменено или дополнено после первичной отрисовки кнопки, вызвать
  * dinext_projects.refresh_pl_forecast_dropdown(frm) для обновления выпадающего списка.
@@ -33,7 +33,7 @@ function add_pl_forecast_dropdown(frm, controls) {
     const $wrapper = $('<div class="pl-forecast-dropdown-wrapper dropdown"></div>');
     const $btn = $(`
         <button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-            ᛣ ${__("Добавить прогноз")}
+            ᛣ ${__("Add Forecast")}
         </button>
     `);
     const $menu = $('<ul class="dropdown-menu dropdown-menu-right" role="menu"></ul>');
@@ -69,16 +69,16 @@ frappe.provide("dinext_projects");
 dinext_projects.refresh_pl_forecast_dropdown = refresh_pl_forecast_dropdown;
 
 function addBudgetViewOptionsControl(frm, controls) {
-    frm.budget_view_options = frm.budget_view_options || __("Прогноз и факт");
+    frm.budget_view_options = frm.budget_view_options || __("Forecast and actual");
     const control = frappe.ui.form.make_control({
 		parent: controls,
 		df: {
 			fieldtype: 'Select',
 			fieldname: "view-options",
 			options: [
-                __("Прогноз и факт"),
-                __("Только прогноз"),
-                __("Только факт"),
+                __("Forecast and actual"),
+                __("Forecast only"),
+                __("Actual only"),
             ],
 			get_status: function(i) {
                 return "Write";
@@ -115,10 +115,10 @@ function render_budget_table(frm) {
             <option value="quarter">Квартал</option>
             <option value="year">Год</option>
         </select>-->
-        <button class="btn btn-default" id="bg-save_plan">${__('Сохранить план')}</button>
-        <button class="btn btn-default" id="bg-toggle_plan">${__("Показать план")}</button>
-        <button class="btn btn-default" id="bg-toggle_delta">${__("Показать Δ")}</button>
-        <!--<button class="btn btn-default" id="bg-toggle_empty">${__("Показать пустые строки")}</button>-->
+        <button class="btn btn-default" id="bg-save_plan">${__('Save Plan')}</button>
+        <button class="btn btn-default" id="bg-toggle_plan">${__("Show Plan")}</button>
+        <button class="btn btn-default" id="bg-toggle_delta">${__("Show Δ")}</button>
+        <!--<button class="btn btn-default" id="bg-toggle_empty">${__("Show empty rows")}</button>-->
     `);
 
     let selectedPeriodType = "month";
@@ -132,12 +132,12 @@ function render_budget_table(frm) {
 
     controls.find('#bg-save_plan').on('click', function() {
         frappe.confirm(
-            __("Вы уверены, что хотите сохранить текущие прогнозные / фактические данные как плановые?"),
+            __("Are you sure you want to save the current forecast / actual data as plan?"),
             () => {
                 save_bg_forecast_as_plan(frm);
             },
             () => {
-                frappe.show_alert(__("Операция отменена"), 3);
+                frappe.show_alert(__("Operation cancelled"), 3);
             }
         );
     });
@@ -146,18 +146,18 @@ function render_budget_table(frm) {
     controls.find('#bg-toggle_plan').on('click', function() {
         frm.bg_hide_plan = !frm.bg_hide_plan;
         // Обновляем текст кнопки
-        $(this).text(frm.bg_hide_plan ? __("Показать план") : __("Скрыть план"));
+        $(this).text(frm.bg_hide_plan ? __("Show Plan") : __("Hide Plan"));
         updateBudgetTable(frm, selectedPeriodType);
         render_pl_chart(frm);
     });
     controls.find('#bg-toggle_delta').on('click', function() {
         frm.bg_hide_delta = !frm.bg_hide_delta;
-        $(this).text(frm.bg_hide_delta ? __("Показать Δ") : __("Скрыть Δ"));
+        $(this).text(frm.bg_hide_delta ? __("Show Δ") : __("Hide Δ"));
         updateBudgetTable(frm, selectedPeriodType);
     });
     controls.find('#bg-toggle_empty').on('click', function() {
         frm.bg_hide_empty = !frm.bg_hide_empty;
-        $(this).text(frm.bg_hide_empty ? __("Показать пустые строки") : __("Скрыть пустые строки"));
+        $(this).text(frm.bg_hide_empty ? __("Show empty rows") : __("Hide empty rows"));
         updateBudgetTable(frm, selectedPeriodType);
     });
 
@@ -181,14 +181,14 @@ function render_budget_table(frm) {
             showTotalRow: true,
             cellHeight: 30, //Для динамической высоты строк
             treeView: true,
-            freezeMessage: __("Идет загрузка данных.."),
+            freezeMessage: __("Loading data.."),
             hooks: {
                 //Определение значений для итоговой строки
                 columnTotal(columnValues, cell) {
                     // В первой колонке пишем "Баланс" / "Рентабельность"
                     if ( cell.colIndex == 2 ) {
                         this.periods = get_budget_display_periods(frm, selectedPeriodType);
-                        return "<span class='profit'>" + __("Валовая прибыль") + "</span><span class='profitability'>" +  __("Рентабельность") + "</span>";
+                        return "<span class='profit'>" + __("Gross Profit") + "</span><span class='profitability'>" +  __("Profitability") + "</span>";
                     }
                     // В последней колонке (total) считаем итог
                     if (cell.column.id === "total") {
@@ -284,9 +284,9 @@ function get_budget_display_periods(frm, periodType) {
             
             // Определяем, является ли период прошлым
             let is_past;
-            if (frm.budget_view_options == __("Только факт")) {
+            if (frm.budget_view_options == __("Actual only")) {
                 is_past = true;
-            } else if (frm.budget_view_options == __("Только прогноз")) {
+            } else if (frm.budget_view_options == __("Forecast only")) {
                 is_past = false;
             } else { // "Прогноз и факт"
                 let current_date_str = frappe.datetime.obj_to_str(current);
@@ -325,9 +325,9 @@ function get_budget_display_periods(frm, periodType) {
                 let quarterEndDateStr = frappe.datetime.obj_to_str(quarterEndDate);
                 
                 let is_past;
-                if (frm.budget_view_options == __("Только факт")) {
+                if (frm.budget_view_options == __("Actual only")) {
                     is_past = true;
-                } else if (frm.budget_view_options == __("Только прогноз")) {
+                } else if (frm.budget_view_options == __("Forecast only")) {
                     is_past = false;
                 } else {
                     is_past = quarterEndDateStr < month_start;
@@ -366,9 +366,9 @@ function get_budget_display_periods(frm, periodType) {
                 let yearEndDateStr = frappe.datetime.obj_to_str(yearEndDate);
                 
                 let is_past;
-                if (frm.budget_view_options == __("Только факт")) {
+                if (frm.budget_view_options == __("Actual only")) {
                     is_past = true;
-                } else if (frm.budget_view_options == __("Только прогноз")) {
+                } else if (frm.budget_view_options == __("Forecast only")) {
                     is_past = false;
                 } else {
                     is_past = yearEndDateStr < month_start;
@@ -635,7 +635,7 @@ function load_budget_data(frm, periodType, updateRows) {
                         }
                     },
                     error: function(err) {
-                        frappe.msgprint(__("Ошибка при загрузке данных GL Entry"));
+                        frappe.msgprint(__("Error loading GL Entry data"));
                         console.error(err);
                     }
                 }).then(() => {
@@ -644,11 +644,11 @@ function load_budget_data(frm, periodType, updateRows) {
                     render_revenue_percentage_chart(frm);
                 });
             }).catch(err => {
-                frappe.msgprint(__("Ошибка при загрузке данных Project Budget"));
+                frappe.msgprint(__("Error loading Project Budget data"));
                 console.error(err);
             });
         }).catch(err => {
-            frappe.msgprint(__("Ошибка при загрузке данных Accounting Dimension Filter"));
+            frappe.msgprint(__("Error loading Accounting Dimension Filter data"));
             console.error(err);
         })/**/
     });
@@ -761,7 +761,7 @@ function get_budget_columns_definition(frm, periodType, unit) {
 
     // Колонка "Статья" с иерархической структурой.
     columns.push({
-        name: __("Статья"),
+        name: __("Account"),
         id: "account",
         width: 300,
         sortable: false,
@@ -783,7 +783,7 @@ function get_budget_columns_definition(frm, periodType, unit) {
                         `<button data-pb-name="${frappe.utils.escape_html(pb_docname)}" ` +
                         `data-row-key="${frappe.utils.escape_html( getBudgetRowKey( data ) )}" ` +
                         `class="btn delete-risk-reserve-btn btn-default btn-sm filter-x-button" ` +
-                        `title="${__("Удалить резервы на риск")}" type="button">` +
+                        `title="${__("Delete risk reserves")}" type="button">` +
                         `<span class="filter-icon">` +
                         `<svg class="es-icon es-line icon-sm" aria-hidden="true">` +
                         `<use href="#es-small-close"></use></svg></span></button>`;
@@ -832,12 +832,12 @@ function get_budget_columns_definition(frm, periodType, unit) {
     let subcolumn_label;
     periods.forEach(function(period) {
         // Вычисляем: если период в прошлом – отображаем "факт", иначе "прогноз"
-        subcolumn_label = period.is_past ? __("Факт") : __("Прогноз");
+        subcolumn_label = period.is_past ? __("Actual") : __("Forecast");
         columns.push({
             name: `<div style="text-align:center;">
                     ${period.year} ${period.month}<br/>
                     <div class="budget-group-header">` +
-                        (cur_frm.bg_hide_plan ? "" : `<span>${__("План")}</span>`) +
+                        (cur_frm.bg_hide_plan ? "" : `<span>${__("Plan")}</span>`) +
                         `<span>${subcolumn_label}</span>` +
                         (cur_frm.bg_hide_delta ? "" : `<span>Δ</span>`) +
                     `</div>
@@ -857,9 +857,9 @@ function get_budget_columns_definition(frm, periodType, unit) {
     // Добавляем колонку "Итого" – суммарные значения по всем периодам
     columns.push({
         name: `<div style="text-align:center;">
-                    ${__("Итого")}<br/>
+                    ${__("Total")}<br/>
                     <div class="budget-group-header">` +
-                        (cur_frm.bg_hide_plan ? "" : `<span>${__("План")}</span>`) +
+                        (cur_frm.bg_hide_plan ? "" : `<span>${__("Plan")}</span>`) +
                         `<span>${ subcolumn_label }</span>` +
                         (cur_frm.bg_hide_delta ? "" : `<span>Δ</span>`) +
                     `</div>
@@ -1100,7 +1100,7 @@ $(document).on('click', '.delete-risk-reserve-btn', function(e) {
     let pb_name = $(e.currentTarget).data('pb-name');
     if (!pb_name) return;
     frappe.confirm(
-        __("Удалить резервы на риск?"),
+        __("Delete risk reserves?"),
         () => {
             frappe.call({
                 method: "frappe.client.delete",
@@ -1109,19 +1109,19 @@ $(document).on('click', '.delete-risk-reserve-btn', function(e) {
                 callback: function(r) {
                     if (!r.exc && cur_frm) {
                         frappe.show_alert({
-                            message: __('Данные удалены'),
+                            message: __('Data deleted'),
                             indicator: 'green'
                         }, 5);
                         load_budget_data( cur_frm, "month");                        
                     }
                     if (r.exc) {
-                        frappe.msgprint(__("Ошибка при удалении резерва на риск"));
+                        frappe.msgprint(__("Error deleting risk reserve"));
                     }
                 }
             });
         },
         () => {
-            frappe.show_alert(__("Операция отменена"), 3);
+            frappe.show_alert(__("Operation cancelled"), 3);
         }
     );
 });
@@ -1274,13 +1274,13 @@ function updateBudgetValue(project, account, dim, year, month, new_value) {
         render_pl_chart(cur_frm, false);
         
         frappe.show_alert({
-            message: __('Данные сохранены'),
+            message: __('Data saved'),
             indicator: 'green'
         }, 5);
         
     }).catch(err => {
         console.error("Ошибка в updateBudgetValue:", err);
-        frappe.msgprint(__("Ошибка при обновлении прогноза"));
+        frappe.msgprint(__("Error updating forecast"));
     });
 }
 
@@ -1399,7 +1399,7 @@ function save_bg_forecast_as_plan(frm) {
     }
     
     if (data.length === 0) {
-        frappe.msgprint(__("Нет данных для сохранения."));
+        frappe.msgprint(__("No data to save."));
         return;
     }
     
@@ -1410,10 +1410,10 @@ function save_bg_forecast_as_plan(frm) {
             data: data
         },
         freeze: true,
-        freeze_message: __("Отправка бюджетов на согласование..."),
+        freeze_message: __("Submitting budgets for approval..."),
         callback: function(r) {
             if (!r.exc) {
-                frappe.show_alert(__("Бюджеты отправлены на согласование"), 5);
+                frappe.show_alert(__("Budgets submitted for approval"), 5);
                 load_budget_data(frm, "month", true);
                 load_and_render_project_dashboard(frm);
             }
@@ -1509,13 +1509,13 @@ function open_approved_budget_for_group($group) {
             dimensions: dimensions,
         },
         freeze: true,
-        freeze_message: __("Поиск согласованного бюджета..."),
+        freeze_message: __("Searching for approved budget..."),
         callback: function(r) {
             if (r.exc) {
                 return;
             }
             if (!r.message) {
-                frappe.msgprint(__("Для выбранной ячейки не найден согласованный Budget."));
+                frappe.msgprint(__("No approved Budget found for the selected cell."));
                 return;
             }
             frappe.set_route("Form", "Budget", r.message);
