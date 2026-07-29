@@ -174,17 +174,36 @@ frappe.ui.form.on("Project", {
 
 /**
  * Реестр подпунктов меню "Рассчитать прогноз" над таблицей P&L.
- * Другие приложения могут добавлять пункты так:
+ * Канон: project_budget_forecast_menu / refresh_project_budget_forecast_dropdown.
+ * Alias (старый risk / cutover): project_pl_forecast_menu / refresh_pl_forecast_dropdown.
  *   frappe.provide("dinext_projects.project_budget_forecast_menu");
  *   dinext_projects.project_budget_forecast_menu = dinext_projects.project_budget_forecast_menu || [];
  *   dinext_projects.project_budget_forecast_menu.push({ label: __("Мой прогноз"), action: function(frm) { ... } });
  * Кнопка меню отображается только если добавлен хотя бы один подпункт.
- * Если меню изменено или дополнено после первичной отрисовки кнопки, вызвать
- * dinext_projects.refresh_project_budget_forecast_dropdown(frm) для обновления выпадающего списка.
+ * Если меню изменено после первичной отрисовки — вызвать refresh_*_forecast_dropdown(frm).
  */
+frappe.provide("dinext_projects");
 frappe.provide("dinext_projects.project_budget_forecast_menu");
+frappe.provide("dinext_projects.project_pl_forecast_menu");
 if (!Array.isArray(dinext_projects.project_budget_forecast_menu)) {
-    dinext_projects.project_budget_forecast_menu = [];
+    dinext_projects.project_budget_forecast_menu = Array.isArray(
+        dinext_projects.project_pl_forecast_menu
+    )
+        ? dinext_projects.project_pl_forecast_menu
+        : [];
+}
+if (
+    !Array.isArray(dinext_projects.project_pl_forecast_menu) ||
+    dinext_projects.project_pl_forecast_menu !== dinext_projects.project_budget_forecast_menu
+) {
+    if (
+        Array.isArray(dinext_projects.project_pl_forecast_menu) &&
+        dinext_projects.project_pl_forecast_menu.length &&
+        !dinext_projects.project_budget_forecast_menu.length
+    ) {
+        dinext_projects.project_budget_forecast_menu = dinext_projects.project_pl_forecast_menu;
+    }
+    dinext_projects.project_pl_forecast_menu = dinext_projects.project_budget_forecast_menu;
 }
 
 function render_pl_chart(frm, init = true) {
@@ -241,6 +260,7 @@ function refresh_project_budget_forecast_dropdown(frm) {
 
 frappe.provide("dinext_projects");
 dinext_projects.refresh_project_budget_forecast_dropdown = refresh_project_budget_forecast_dropdown;
+dinext_projects.refresh_pl_forecast_dropdown = refresh_project_budget_forecast_dropdown;
 
 function addBudgetViewOptionsControl(frm, controls) {
     frm.budget_view_options = frm.budget_view_options || __("Forecast and actual");
