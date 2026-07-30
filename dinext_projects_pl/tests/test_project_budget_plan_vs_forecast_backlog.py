@@ -295,8 +295,8 @@ class TestProjectBudgetPlanVsForecastBacklog(FrappeTestCase):
 		actual = self._cell(filters, self.expense_account, "actual", "2026_05")
 		self.assertEqual(actual, 300)
 
-	def test_p3_permissions_user_without_write_on_prj_b(self):
-		"""Phase 3: permissions narrow multi-project filter to writable only."""
+	def test_p3_permissions_user_without_read_on_prj_b(self):
+		"""Phase 3: permissions narrow multi-project filter to readable only."""
 		user = f"bvf_perm_{frappe.generate_hash(length=6)}@example.com"
 		if not frappe.db.exists("User", user):
 			frappe.get_doc(
@@ -308,8 +308,7 @@ class TestProjectBudgetPlanVsForecastBacklog(FrappeTestCase):
 				}
 			).insert(ignore_permissions=True)
 
-		frappe.share.add("Project", self.project, user, write=1)
-		frappe.share.add("Project", self.project_b, user, write=0, read=1)
+		frappe.share.add("Project", self.project, user, read=1, write=1)
 
 		try:
 			frappe.set_user(user)
@@ -322,7 +321,6 @@ class TestProjectBudgetPlanVsForecastBacklog(FrappeTestCase):
 		finally:
 			frappe.set_user("Administrator")
 			frappe.share.remove("Project", self.project, user)
-			frappe.share.remove("Project", self.project_b, user)
 
 	def _ensure_finance_books(self):
 		suffix = frappe.generate_hash(length=6)

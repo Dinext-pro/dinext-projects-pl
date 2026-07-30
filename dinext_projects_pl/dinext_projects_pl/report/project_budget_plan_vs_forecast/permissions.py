@@ -10,12 +10,10 @@ from .filter_utils import get_company_names, normalize_list_filter
 
 
 def user_can_access_report_project(project: str) -> bool:
-	"""Report data is limited to projects the user can read and write."""
+	"""Report data is limited to projects the user can read."""
 	if not project:
 		return False
-	if not frappe.has_permission("Project", "read", project):
-		return False
-	return bool(frappe.has_permission("Project", "write", project))
+	return bool(frappe.has_permission("Project", "read", project))
 
 
 def filter_writable_report_projects(projects: list[str]) -> list[str]:
@@ -50,7 +48,7 @@ def get_writable_report_projects(filters) -> list[str]:
 			project_filter[0] if len(project_filter) == 1 else ["in", project_filter]
 		)
 
-	# get_list applies read permission_query_conditions; write is checked per project.
+	# get_list applies read permission_query_conditions.
 	candidates = frappe.get_list(
 		"Project",
 		filters=project_query_filters,
@@ -84,13 +82,13 @@ def restrict_to_writable_projects(projects: list[str], filters) -> list[str]:
 
 
 def get_writable_report_project_names(company: str | None = None) -> list[str]:
-	"""Return project names the current user can read and write for the report."""
+	"""Return project names the current user can read for the report."""
 	company = company or frappe.defaults.get_user_default("Company")
 	return get_writable_report_projects({"company": company})
 
 
 def get_report_project_options(txt: str = "", company: str | None = None) -> list[dict]:
-	"""MultiSelectList options: search_link format, limited to read + write projects."""
+	"""MultiSelectList options: search_link format, limited to readable projects."""
 	from frappe.desk.search import search_link
 
 	company = company or frappe.defaults.get_user_default("Company")
