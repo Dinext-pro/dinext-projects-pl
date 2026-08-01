@@ -6,3 +6,5 @@ alwaysApply: true
 В этом репозитории — Dinext consumer-приложение: общие инструкции и skills живут в sibling-репозитории `dinext-docs`, а не только локально.
 
 **Перед любой реализацией, отладкой или ревью:** прочитай корневой navigation stub этого приложения, затем обязательно открой `../dinext-docs/agents/ide/runtime-access.md`, `../dinext-docs/agents/registry/index.yaml` и `../dinext-docs/agents/ide/agents/dinext-frappe-developer-guide.md` (путь к `dinext-docs` подставь по факту clone, если layout не `apps/<app>/`). Не трактуй `dinext-docs` как опциональную справку до выполнения этого шага. Встроенные generic/platform skills — после central Dinext слоя, если нет явного конфликта; при конфликте приоритет у central guidance из `dinext-docs`. Локальные `.cursor/skills/` и `.cursor/rules/` — только дополнение к central слою.
+
+**OpenSpec:** планы читать и создавать только в Store `dinext-docs`; локально только `openspec/config.yaml` с `store: dinext-docs`. См. `../dinext-docs/process/development-management/openspec-store.md`.
