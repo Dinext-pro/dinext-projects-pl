@@ -31,9 +31,33 @@ fixtures = [
             ["module", "in", ["Dinext Projects Pl"]],
             ["disabled", "=", 0]
         ]
+    },
+    {
+        "doctype": "Role",
+        "filters": [
+            ["name", "in", ["Dinext_Budget_Approver"]],
+            ["disabled", "=", 0],
+        ]
+    },
+    {
+        "doctype": "Workflow",
+        "filters": [
+            ["name", "in", ["Dinext Budget Approval"]],
+        ]
+    },
+    {
+        "doctype": "Workflow State",
+        "filters": [
+            ["workflow_state_name", "in", ["Draft", "Pending Approval", "Approved", "Cancelled Draft", "Cancelled Approved"]],
+        ]
+    },
+    {
+        "doctype": "Workflow Action Master",
+        "filters": [
+            ["workflow_action_name", "in", ["Submit for Approval", "Approve", "Cancel"]],
+        ]
     }
 ]
-''''''
 
 # Apps
 # ------------------
@@ -121,7 +145,6 @@ doctype_js = {"Project":
 # ------------
 
 # before_install = "dinext_projects_pl.install.before_install"
-# after_install = "dinext_projects_pl.install.after_install"
 
 # Uninstallation
 # ------------
@@ -167,21 +190,20 @@ doctype_js = {"Project":
 # ---------------
 # Override standard doctype classes
 
-# override_doctype_class = {
-# 	"ToDo": "custom_app.overrides.CustomToDo"
-# }
+override_doctype_class = {
+    "Budget": "dinext_projects_pl.dinext_projects_pl.overrides.budget.Budget"
+}
 
 # Document Events
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+    "Budget": {
+        "on_submit": "dinext_projects_pl.dinext_projects_pl.budget_approval.service.on_budget_submit",
+        "on_cancel": "dinext_projects_pl.dinext_projects_pl.budget_approval.service.on_budget_cancel",
+    }
+}
 
 # Scheduled Tasks
 # ---------------
@@ -206,8 +228,6 @@ doctype_js = {"Project":
 
 # Testing
 # -------
-
-# before_tests = "dinext_projects_pl.install.before_tests"
 
 # Overriding Methods
 # ------------------------------

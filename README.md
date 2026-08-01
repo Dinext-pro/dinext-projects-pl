@@ -1,31 +1,35 @@
 # Dinext Projects P&L
 
-## Overview
+## 📖 Обзор
 
-**Dinext Projects P&L** is a Frappe/ERPNext app that extends the standard **Project** DocType with Profit & Loss (P&L) functionality. It adds planning and tracking of project budgets by period (plan, forecast, and actual), a dedicated P&L tab with a labour/cost table, integration with the standard Profit and Loss Statement and General Ledger reports, and charts. Plan and forecast data are stored in custom DocTypes and can be saved from the current forecast or actuals.
+**Dinext Projects P&L** — это приложение для Frappe/ERPNext, которое расширяет стандартный DocType `Project` функциями проектного P&L, планирования, прогноза, отчетности и согласования бюджета.
 
-The app is intended for use in a Frappe or ERPNext bench; it relies on Accounting Dimensions (Task, Project Role, Business Area, Project Portfolio) and standard financial reports for full functionality.
+Приложение объединяет кастомный P&L-интерфейс в карточке проекта с Dinext-логикой бюджетирования. Текущие плановые и прогнозные данные отображаются и редактируются в UI проекта, запросы на согласование создаются как стандартные ERPNext-документы `Budget` и `Monthly Distribution`, а согласованный план синхронизируется обратно в кастомный read model `Project Budget`. Точные утвержденные помесячные суммы хранятся отдельно от процентного `Monthly Distribution`, поэтому persisted-значения плана не дрейфуют из-за round-trip округления.
 
-## Features
+## ✨ Возможности
 
-- **Project form extension** — Custom tab "P&L" on the Project form with sections for financial result, summary, report buttons, chart periodicity, plan/forecast/actual toggle, and P&L chart.
-- **Labour/cost planning table** — "Трудозатраты" (Labour) table with monthly columns for plan, forecast, and actual; view options "Прогноз и факт" / "Только прогноз" / "Только факт"; buttons "Сохранить план" (Save plan), "Показать план" (Show plan), "Показать Δ" (Show delta); extensible dropdown "Добавить прогноз" (Add forecast) via global registry `dinext_projects.project_pl_forecast_menu`.
-- **Report integration** — Buttons to open **Profit and Loss Statement** ("Свод P&L") and **General Ledger** for Income and Expenses with filters set by project and date range.
-- **P&L chart** — Period-based chart (income, expenses, profit, cumulative profit) driven by aggregated budget data on the form.
-- **Custom DocTypes** — **Project Budget**, **Project Budget Amount**, **Project Budget Dimension** store plan and forecast data by account and accounting dimensions.
-- **Save plan API** — Server Script `save_budget_as_plan` saves current forecast/actual data as plan into Project Budget (create/update documents and child tables).
-- **Fixtures** — Custom Field (Project), Client Script, Server Script, and Accounting Dimension (Task, Project Role, Business Area, Project Portfolio) are shipped as fixtures and applied on install.
-- **Accounting dimensions** — Budget aggregation and display support dimensions; dimension data is used in indexes and sums for the budget table and chart.
+- **Кастомная вкладка P&L в `Project`** с таблицей трудозатрат/затрат, итоговыми блоками, кнопками отчетов и графиком.
+- **Режимы просмотра план / прогноз / факт** с переключателями видимости плана и дельт.
+- **Flow согласования бюджета**, в котором сохранение плана из P&L создает ERPNext `Budget`, а не пишет напрямую в `Project Budget`.
+- **Гранулярность бюджета по ключу**: один `Budget` на сочетание `account + project/task + fiscal year`.
+- **Workflow согласования Dinext** со специальными ролями:
+  - `Dinext_Project_Manager` отправляет на согласование;
+  - `Dinext_Budget_Approver` согласует и отменяет.
+- **Семантика замещения**:
+  - новый запрос отменяет существующий pending budget для того же канонического ключа;
+  - согласование новой версии отменяет ранее согласованный budget для того же ключа.
+- **Точное хранение approved monthly amounts** в скрытом поле `Budget.dinext_budget_monthly_amounts`, при этом `Monthly Distribution` остается производным ERPNext-артефактом.
+- **Синхронизация `Project Budget`** на submit/cancel через app-owned Python hooks.
+- **Навигация из P&L-таблицы**:
+  - двойной клик по строке статьи/задачи открывает список `Budget`;
+  - двойной клик по ячейке плановой суммы открывает соответствующий approved `Budget`;
+  - двойной клик по ячейке факта открывает `General Ledger`.
+- **Script Report** `Project Budget Plan vs Forecast` для сравнения плана с прогнозом и фактом.
+- **Fixture-driven доставка метаданных** для workflow, workflow states, actions, roles, accounting dimensions, custom fields, client scripts и связанной metadata.
 
-## Requirements
+## 🚀 Установка
 
-- **Frappe** (bench environment). The app is designed to run inside a bench with Frappe and, for report integration, typically ERPNext.
-- **Python** >= 3.10 (see [pyproject.toml](pyproject.toml)).
-- Application dependencies are managed by bench; no extra runtime dependencies are declared in the app package.
-
-## Installation
-
-Install the app with the [bench](https://github.com/frappe/bench) CLI:
+Установите приложение в существующий bench:
 
 ```bash
 cd $PATH_TO_YOUR_BENCH
@@ -33,114 +37,214 @@ bench get-app $URL_OF_THIS_REPO --branch develop
 bench install-app dinext_projects_pl
 ```
 
-After installation, fixtures (Custom Field, Client Script, Server Script, Accounting Dimension) are applied automatically, extending the Project form and registering the Server Script API.
+Затем примените изменения схемы и метаданных:
 
-## Usage
-
-- **P&L tab** — Open a **Project** document and go to the **P&L** tab. Use the labour/cost table to view or edit plan/forecast/actual by period, change view options, show or hide plan and delta columns, and use "Сохранить план" to write current data as plan via the `save_budget_as_plan` API. Use the report buttons to open the P&L Statement or General Ledger with project and date filters.
-- **Extending the forecast menu** — To add items to the "Добавить прогноз" dropdown, push entries to `dinext_projects.project_pl_forecast_menu` (each with `label` and `action(frm)`). If the menu is changed after the button is rendered, call `dinext_projects.refresh_pl_forecast_dropdown(frm)` to refresh the dropdown. See comments in [dinext_projects_pl/public/js/project_pl.js](dinext_projects_pl/public/js/project_pl.js).
-- **Saving plan data** — "Сохранить план" confirms and then sends the current table data to the Server Script API `save_budget_as_plan`, which creates or updates **Project Budget** (and child **Project Budget Amount** / **Project Budget Dimension**) records.
-
-## Technologies
-
-- **Backend:** Python (Frappe), Server Script (Python in [dinext_projects_pl/fixtures/server_script.json](dinext_projects_pl/fixtures/server_script.json)).
-- **Frontend:** JavaScript (form client scripts for Project), loaded via [dinext_projects_pl/hooks.py](dinext_projects_pl/hooks.py) `doctype_js`: `project_pl_style.js`, `project_pl.js`, `project_pl_calc.js`, `project_pl_dashboard.js`.
-- **Stack:** Frappe/ERPNext, jQuery (form UI), Frappe Chart, standard Query Reports (Profit and Loss Statement, General Ledger).
-
-## Configuration
-
-The app does not introduce its own environment variables or config files. Accounting dimensions are defined in the standard **Accounting Dimension** DocType and are included in fixtures ([dinext_projects_pl/fixtures/accounting_dimension.json](dinext_projects_pl/fixtures/accounting_dimension.json)).
-
-## Repository structure
-
-```
-dinext_projects_pl/                    # App package root
-├── hooks.py                           # App hooks: fixtures, doctype_js for Project
-├── modules.txt                        # Module list
-├── patches.txt                        # DB migration patches
-├── __init__.py
-├── fixtures/                          # Fixtures applied on install
-│   ├── custom_field.json              # Project custom fields (P&L tab, sections, buttons, chart)
-│   ├── client_script.json             # Client scripts (module)
-│   ├── server_script.json             # save_budget_as_plan API
-│   └── accounting_dimension.json      # Task, Project Role, Business Area, Project Portfolio
-├── public/
-│   └── js/                            # Client JS for Project form
-│       ├── project_pl_style.js         # Styles for budget table and controls
-│       ├── project_pl.js               # P&L tab UI, budget table, forecast menu, save plan
-│       ├── project_pl_calc.js         # Budget aggregation, indexes, sums (plan/forecast/fact)
-│       └── project_pl_dashboard.js    # P&L chart, report buttons (P&L Statement, GL)
-└── dinext_projects_pl/                # Python package
-    └── doctype/
-        ├── project_budget/            # Project Budget DocType
-        ├── project_budget_amount/      # Child: amounts by period (year, month, plan, etc.)
-        └── project_budget_dimension/  # Child: dimension links (doc, docname)
-
-README.md
-license.txt
-pyproject.toml                         # Project metadata, ruff config
-.pre-commit-config.yaml                # Pre-commit hooks (ruff, eslint, prettier, etc.)
-.eslintrc
-.editorconfig
+```bash
+bench --site $SITE migrate
 ```
 
-## Flow chart
+Приложение опирается на fixture-based доставку метаданных. При установке и миграции применяются custom fields, client/server scripts, accounting dimensions, workflow `Dinext Budget Approval`, workflow states/actions и роль `Dinext_Budget_Approver`.
 
-High-level flow: Project form (P&L tab) uses client JS to build the budget table and chart; "Сохранить план" calls the Server Script API, which updates Project Budget; report buttons open standard Query Reports with project filters.
+## 🛠️ Использование
 
-```mermaid
-flowchart LR
-  subgraph form [Project Form]
-    PLTab["P&L Tab"]
-    BudgetTable[Budget Table]
-    Chart[P&L Chart]
-    Buttons[Report Buttons]
-  end
-  subgraph js [Client JS]
-    project_pl[project_pl.js]
-    project_pl_calc[project_pl_calc.js]
-    project_pl_dashboard[project_pl_dashboard.js]
-  end
-  subgraph backend [Backend]
-    ServerScript[save_budget_as_plan]
-    QueryReport["P&amp;L / GL Reports"]
-  end
-  PLTab --> project_pl
-  project_pl --> project_pl_calc
-  project_pl --> project_pl_dashboard
-  project_pl --> ServerScript
-  Buttons --> QueryReport
-  project_pl_dashboard --> Chart
+### Основной P&L-сценарий
+
+1. Откройте документ `Project`.
+2. Перейдите в кастомный раздел P&L.
+3. Проверьте план, прогноз и факт по месяцам.
+4. Нажмите `Сохранить план`.
+5. Клиентский код вызывает app-owned Python service `save_budget_plan_for_approval`, который:
+   - группирует строки по `account + target + fiscal year`;
+   - создает `Budget` и `Monthly Distribution`;
+   - сохраняет точные исходные помесячные суммы в metadata `Budget`;
+   - переводит бюджет в Dinext workflow согласования.
+
+### Согласование бюджета
+
+- Pending budgets находятся в состоянии `Pending Approval`.
+- При `Approve` бюджет submit'ится и синхронизируется в `Project Budget`.
+- При согласовании replacement-версии ранее approved budget для того же канонического ключа отменяется, а новая версия становится источником истины.
+- При отмене ранее approved budget read model либо восстанавливается из другого approved replacement, либо очищается по затронутым месяцам.
+
+### UI-помощники
+
+- Двойной клик по строке статьи/задачи в P&L открывает подходящие документы `Budget`.
+- Двойной клик по ячейке плановой суммы открывает approved `Budget` для этого периода.
+- Кнопки отчетов открывают ERPNext financial reports с фильтрами по проекту.
+
+### Расширение меню прогноза
+
+Другие приложения могут расширять выпадающее меню `Добавить прогноз` через глобальный реестр:
+
+```javascript
+frappe.provide("dinext_projects.project_pl_forecast_menu");
+dinext_projects.project_pl_forecast_menu = dinext_projects.project_pl_forecast_menu || [];
+dinext_projects.project_pl_forecast_menu.push({
+  label: __("Мой прогноз"),
+  action(frm) {
+    // кастомная логика
+  },
+});
 ```
 
-## Contributing
+Если пункты добавлены после первичной отрисовки, вызовите `dinext_projects.refresh_pl_forecast_dropdown(frm)`.
 
-This app uses **pre-commit** for formatting and linting. Install [pre-commit](https://pre-commit.com/#installation) and enable it in the app directory:
+## 📦 Технологии
+
+- **Python 3.10+**
+- **Frappe Framework**
+- **ERPNext** (`Budget`, `Monthly Distribution`, финансовые отчеты)
+- **JavaScript client scripts** для `Project`
+- **Fixture-driven metadata** через `hooks.py`
+- **Ruff**, **ESLint**, **Prettier** и **pre-commit** для локальной разработки
+
+## 🔧 Конфигурация
+
+Приложение не вводит собственные environment variables. Основная конфигурация выполняется через метаданные Frappe и стандартные ERPNext-сущности:
+
+- fixtures для `Accounting Dimension`;
+- custom fields в `Budget`:
+  - `dinext_budget_account`;
+  - `dinext_budget_monthly_amounts`;
+  - `workflow_state`;
+- workflow metadata для `Dinext Budget Approval`;
+- custom fields и client scripts для UI проекта.
+
+Важные эксплуатационные детали:
+
+- `Monthly Distribution` — производный артефакт для monthly checks в ERPNext, а не источник истины для sync approved plan.
+- Точные approved monthly amounts сохраняются прямо в `Budget`, чтобы исключить drift из-за round-trip округления.
+- `Project Budget.pba_expected` остается независимым прогнозом и не перезаписывается автоматически при approve-sync.
+- В репозитории по-прежнему присутствует fixture `server_script.json`, но основной путь согласования плана реализован в app-owned Python service, а не в site-only server script.
+
+## ✅ Требования
+
+- Рабочий **bench** с **Frappe**.
+- Установленный **ERPNext** на целевом сайте для стандартных budget/report doctypes и их логики.
+- **Python >= 3.10** согласно [pyproject.toml](pyproject.toml).
+- Доступ к стандартным финансовым doctypes и отчетам, которые использует приложение.
+
+## 🤝 Как вносить изменения
+
+Подключите локальные проверки через `pre-commit`:
 
 ```bash
 cd apps/dinext_projects_pl
 pre-commit install
 ```
 
-Pre-commit runs:
+Основной инструментарий разработки:
 
-- **ruff** — import sort, lint, format (Python)
-- **eslint** — JavaScript lint
-- **prettier** — JavaScript/Vue/SCSS formatting
-- **pyupgrade** — Python syntax upgrades
+- `ruff` для lint/format/import ordering Python-кода;
+- `eslint` для JavaScript;
+- `prettier` для форматирования фронтенда;
+- `pyupgrade` для обновления синтаксиса Python.
 
-Config: [.pre-commit-config.yaml](.pre-commit-config.yaml), [pyproject.toml](pyproject.toml) (ruff), [.eslintrc](.eslintrc).
+Если нужно изменить metadata:
 
-## License
+1. Вносите изменения через систему Frappe/ERPNext.
+2. Затем выполняйте:
 
-MIT. See [license.txt](license.txt).
+```bash
+bench --site $SITE export-fixtures --app dinext_projects_pl
+```
 
-## Changelog
+Не редактируйте generated fixture JSON-файлы вручную.
 
-Recent changes (see git history for full log):
+## 📄 Документация
 
-- Add refresh for project planning dropdown; improve task bucket handling in budget calculations.
-- Fix dimension in parent budget limit return; update parent budget limit handling and error messages.
-- Add delete for risk reserves in budget management; simplify budget calculation and risk handling.
-- Fix risk display in budget columns; improve project budget controls and dropdown button.
-- Add Project Budget DocType and related features; app initialization.
+- [README.md](README.md) — обзор репозитория и текущей архитектуры.
+- [dinext_projects_pl/hooks.py](dinext_projects_pl/hooks.py) — wiring приложения, fixture filters и hooks.
+- [dinext_projects_pl/dinext_projects_pl/budget_approval/service.py](dinext_projects_pl/dinext_projects_pl/budget_approval/service.py) — сервисы согласования бюджета и sync-логика.
+- [dinext_projects_pl/dinext_projects_pl/budget_approval/bootstrap.py](dinext_projects_pl/dinext_projects_pl/budget_approval/bootstrap.py) — константы workflow, ролей и полей.
+- [dinext_projects_pl/dinext_projects_pl/overrides/budget.py](dinext_projects_pl/dinext_projects_pl/overrides/budget.py) — override duplicate-validation для `Budget`.
+- [dinext_projects_pl/dinext_projects_pl/doctype/project_budget/test_project_budget.py](dinext_projects_pl/dinext_projects_pl/doctype/project_budget/test_project_budget.py) — regression-тесты budget approval flow.
+
+## ❤️ Благодарности
+
+Приложение построено на Frappe и ERPNext budgeting/reporting primitives и адаптировано под Dinext-процессы проектных финансов.
+
+## 🗂️ Структура репозитория
+
+```text
+.
+├── README.md
+├── license.txt
+├── pyproject.toml
+├── .pre-commit-config.yaml
+├── .eslintrc
+├── .editorconfig
+└── dinext_projects_pl/
+    ├── __init__.py
+    ├── hooks.py
+    ├── modules.txt
+    ├── patches.txt
+    ├── fixtures/
+    │   ├── accounting_dimension.json
+    │   ├── client_script.json
+    │   ├── custom_field.json
+    │   ├── role.json
+    │   ├── server_script.json
+    │   ├── workflow.json
+    │   ├── workflow_action_master.json
+    │   └── workflow_state.json
+    ├── public/
+    │   └── js/
+    │       ├── project_pl.js
+    │       ├── project_pl_calc.js
+    │       ├── project_pl_dashboard.js
+    │       └── project_pl_style.js
+    └── dinext_projects_pl/
+        ├── budget_approval/
+        │   ├── __init__.py
+        │   ├── bootstrap.py
+        │   └── service.py
+        ├── overrides/
+        │   ├── __init__.py
+        │   └── budget.py
+        ├── doctype/
+        │   ├── project_budget/
+        │   ├── project_budget_amount/
+        │   └── project_budget_dimension/
+        ├── report/
+        │   └── project_budget_plan_vs_forecast/
+        └── tests/
+            └── test_app_bootstrap.py
+```
+
+- `dinext_projects_pl/hooks.py` подключает client assets, fixtures, override для `Budget` и submit/cancel hooks.
+- `dinext_projects_pl/fixtures/` содержит system-generated metadata, экспортированную из сайта.
+- `dinext_projects_pl/public/js/` содержит UI проекта, агрегацию данных, рендеринг графика и интерактивные обработчики навигации.
+- `dinext_projects_pl/dinext_projects_pl/budget_approval/` содержит app-owned flow согласования бюджета и sync с `Project Budget`.
+- `dinext_projects_pl/dinext_projects_pl/overrides/` адаптирует duplicate-checks ERPNext `Budget` под Dinext replacement semantics.
+- `dinext_projects_pl/dinext_projects_pl/doctype/` определяет кастомный read model `Project Budget`.
+- `dinext_projects_pl/dinext_projects_pl/report/` содержит script report для сравнения плана и прогноза.
+- `dinext_projects_pl/dinext_projects_pl/tests/` содержит тесты wiring и bootstrap-контрактов.
+
+## 🔗 Схема потока
+
+```mermaid
+flowchart LR
+  ProjectForm[Карточка проекта и P&L UI] --> ClientJS[project_pl.js и связанные helpers]
+  ClientJS --> ApprovalAPI[save_budget_plan_for_approval]
+  ApprovalAPI --> BudgetDoc[ERPNext Budget]
+  ApprovalAPI --> MonthlyDistribution[Monthly Distribution]
+  ApprovalAPI --> ExactMonthly[dinext_budget_monthly_amounts]
+  BudgetDoc --> Workflow[Workflow Dinext Budget Approval]
+  Workflow -->|Approve| SubmitHook[on_budget_submit]
+  Workflow -->|Cancel approved| CancelHook[on_budget_cancel]
+  SubmitHook --> ProjectBudget[Read model Project Budget]
+  CancelHook --> ProjectBudget
+  ClientJS -->|Двойной клик по plan cell| FindApproved[find_approved_budget_for_period]
+  FindApproved --> BudgetDoc
+  ClientJS --> Reports[ERPNext P&L и GL reports]
+```
+
+## 📝 История изменений
+
+Последние значимые изменения на уровне репозитория:
+
+- основной flow сохранения плана переведен с прямой записи в `Project Budget` на app-owned budget approval services;
+- добавлены Dinext workflow fixtures для согласования `Budget`, включая отдельную роль согласующего и набор workflow states/actions;
+- добавлено точное хранение approved monthly amounts в `Budget`, чтобы исключить round-trip drift при approve-sync;
+- добавлено regression-покрытие для multi-month approval sync и replacement semantics.
