@@ -81,9 +81,9 @@ frappe.query_reports["Project Budget Plan vs Forecast"] = {
             label: __("View Type"),
             fieldtype: "Select",
             options: [
-                {value: "forecast_actual", label: __("Прогноз и факт")},
-                {value: "forecast_only", label: __("Только прогноз")},
-                {value: "actual_only", label: __("Только факт")}
+                {value: "forecast_actual", label: __("Forecast and actual")},
+                {value: "forecast_only", label: __("Forecast only")},
+                {value: "actual_only", label: __("Actual only")}
             ],
             default: "forecast_actual"
         },

@@ -1,0 +1,1 @@
+"""Overrides for standard doctypes."""
