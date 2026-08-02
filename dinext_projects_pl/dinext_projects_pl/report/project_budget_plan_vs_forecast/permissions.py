@@ -59,7 +59,7 @@ def get_writable_report_projects(filters) -> list[str]:
 
 
 def apply_report_project_permissions(filters) -> None:
-	"""Resolve and cache writable projects; narrow explicit project filter."""
+	"""Resolve and cache readable report projects; narrow explicit project filter."""
 	writable = get_writable_report_projects(filters)
 	filters["_report_writable_projects"] = writable
 
