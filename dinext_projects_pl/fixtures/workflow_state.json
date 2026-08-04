@@ -3,6 +3,42 @@
   "docstatus": 0,
   "doctype": "Workflow State",
   "icon": "",
+  "modified": "2025-01-18 17:48:27.392665",
+  "name": "Черновик",
+  "style": "",
+  "workflow_state_name": "Черновик"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2024-12-22 23:57:55.085131",
+  "name": "Отклонено",
+  "style": "Warning",
+  "workflow_state_name": "Отклонено"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2024-12-22 23:58:14.112112",
+  "name": "Согласовано",
+  "style": "Success",
+  "workflow_state_name": "Согласовано"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2024-12-22 23:59:36.662934",
+  "name": "На согласовании",
+  "style": "Info",
+  "workflow_state_name": "На согласовании"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
   "modified": "2026-05-28 02:44:20.977201",
   "name": "Pending Approval",
   "style": "Warning",
