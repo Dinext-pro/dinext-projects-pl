@@ -82,7 +82,7 @@ def _period_subcolumns(period, show_plan, view_type):
 def get_columns(filters, data):
 	columns = [
 		{
-			"label": _("Account"),
+			"label": _("Account", context="coa"),
 			"fieldname": "account",
 			"fieldtype": "Link",
 			"options": "Account",

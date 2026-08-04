@@ -153,7 +153,7 @@ dinext_projects_pl.budget_plan_vs_forecast.filters = [
 	},
 	{
 		fieldname: "show_plan",
-		label: br.__("Show Plan"),
+		label: __("Show Plan", null, "project-budget"),
 		fieldtype: "Check",
 		default: 0,
 	},

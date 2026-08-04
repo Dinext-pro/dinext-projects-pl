@@ -186,7 +186,7 @@ br.renderBudgetDetails = function (details, dialog) {
 		html += '<table class="budget-detail-table">';
 		html += "<thead><tr>";
 		html += '<th class="budget-detail-table__text-left">' + __("Project") + "</th>";
-		html += '<th class="budget-detail-table__text-left">' + __("Account") + "</th>";
+		html += '<th class="budget-detail-table__text-left">' + __("Account", null, "coa") + "</th>";
 		if (has_period_label) {
 			html += "<th>" + __("Period") + "</th>";
 		} else {
@@ -378,7 +378,7 @@ br.renderTotalBudgetDetails = function (details, dialog, type) {
 		html += '<table class="budget-detail-table">';
 		html += "<thead><tr>";
 		html += '<th class="budget-detail-table__text-left">' + __("Project") + "</th>";
-		html += '<th class="budget-detail-table__text-left">' + __("Account") + "</th>";
+		html += '<th class="budget-detail-table__text-left">' + __("Account", null, "coa") + "</th>";
 		html += "<th>" + __("Year") + "</th>";
 		html += '<th style="width: 60px;">' + __("Month") + "</th>";
 		html += '<th class="budget-detail-table__amount-head">' + __(amountType) + "</th>";

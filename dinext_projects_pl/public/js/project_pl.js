@@ -292,7 +292,7 @@ function render_budget_table(frm) {
             <option value="year">Год</option>
         </select>-->
         <button class="btn btn-default" id="bg-save_plan">${__('Save Plan')}</button>
-        <button class="btn btn-default" id="bg-toggle_plan">${__("Show Plan")}</button>
+        <button class="btn btn-default" id="bg-toggle_plan">${__("Show Plan", null, "project-budget")}</button>
         <button class="btn btn-default" id="bg-toggle_delta">${__("Show Δ")}</button>
         <!--<button class="btn btn-default" id="bg-toggle_empty">${__("Show empty rows")}</button>-->
     `);
@@ -322,7 +322,7 @@ function render_budget_table(frm) {
     controls.find('#bg-toggle_plan').on('click', function() {
         frm.bg_hide_plan = !frm.bg_hide_plan;
         // Обновляем текст кнопки
-        $(this).text(frm.bg_hide_plan ? __("Show Plan") : __("Hide Plan"));
+        $(this).text(frm.bg_hide_plan ? __("Show Plan", null, "project-budget") : __("Hide Plan", null, "project-budget"));
         updateBudgetTable(frm, selectedPeriodType);
         render_pl_chart(frm);
     });
@@ -941,7 +941,7 @@ function get_budget_columns_definition(frm, periodType, unit) {
 
     // Колонка "Статья" с иерархической структурой.
     columns.push({
-        name: __("Account"),
+        name: __("Account", null, "coa"),
         id: "account",
         width: 300,
         sortable: false,
