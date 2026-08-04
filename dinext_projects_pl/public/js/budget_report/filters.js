@@ -59,12 +59,9 @@ br.ru_fallback_translations = {
 	"Year": "Год",
 };
 
+// Use Frappe i18n only (ru.csv). Do not force RU when __(source)===source (EN locale).
 br.__ = function (text) {
-	var translated = __(text);
-	if (translated !== text) {
-		return translated;
-	}
-	return br.ru_fallback_translations[text] || text;
+	return __(text);
 };
 
 function budget_report_link_options(doctype, txt, extra_filters) {

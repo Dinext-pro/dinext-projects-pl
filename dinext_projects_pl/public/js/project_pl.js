@@ -1349,7 +1349,7 @@ $(document).on('blur', '.bg-edit-input', function(e) {
                 // В родительской статье: новое значение не должно быть меньше суммы прогнозов у дочерних задач
                 let childrenSum = get_child_budget_sum(account, taskId, dimension, period, aggregatedBudget);
                 if (new_value < childrenSum) {
-                    frappe.msgprint(__(`Значение не может быть меньше суммы по дочерним позициям ( ${numberformat( childrenSum )} )`));
+                    frappe.msgprint(__("Value cannot be less than the sum of child items ({0})", [numberformat(childrenSum)]));
                     $input.addClass("error");
                     return;
                 }
@@ -1359,7 +1359,7 @@ $(document).on('blur', '.bg-edit-input', function(e) {
         // В дочерней: максимальное значение ограничено так, чтобы у родительской статьи (или ближайшей с заданным прогнозом) сумма всех дочерних не превышала прогноз родителя
         let parentLimit = get_parent_budget_limit(account, taskId, dimension, period, aggregatedBudget, riskDim);
         if (parentLimit !== null && (new_value > parentLimit.maxAllowed) ) {
-            frappe.msgprint(__(`Значение не может превышать ${ numberformat( parentLimit.maxAllowed ) } (ограничение родительской статьи '${ parentLimit.parent.account }')` ) );
+            frappe.msgprint(__("Value cannot exceed {0} (parent account '{1}' limit)", [numberformat(parentLimit.maxAllowed), parentLimit.parent.account]));
             $input.addClass("error");
             return;
         }
