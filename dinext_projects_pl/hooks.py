@@ -42,21 +42,56 @@ fixtures = [
     {
         "doctype": "Workflow",
         "filters": [
-            ["name", "in", ["Dinext Budget Approval"]],
+            ["document_type", "in", [
+                "Budget",
+                "Expense Claim",
+                "Purchase Invoice",
+                "Sales Invoice",
+            ]],
+            ["is_active", "=", 1],
         ]
     },
     {
         "doctype": "Workflow State",
         "filters": [
-            ["workflow_state_name", "in", ["Draft", "Pending Approval", "Approved", "Cancelled Draft", "Cancelled Approved"]],
+            ["workflow_state_name", "in", [
+                "Draft",
+                "Pending Approval",
+                "Approved",
+                "Cancelled Draft",
+                "Cancelled Approved",
+                "Черновик",
+                "На согласовании",
+                "Согласовано",
+                "Отклонено",
+            ]],
         ]
     },
     {
         "doctype": "Workflow Action Master",
         "filters": [
-            ["workflow_action_name", "in", ["Submit for Approval", "Approve", "Cancel"]],
+            ["workflow_action_name", "in", [
+                "Submit for Approval",
+                "Approve",
+                "Cancel",
+                "Передать на согласование",
+                "Согласовано",
+                "Не согласовано",
+                "Согласовать",
+            ]],
         ]
-    }
+    },
+    {
+        "doctype": "DocType Permission",
+        "filters": [
+            ["ref_doctype", "in", [
+                "Sales Invoice",
+                "Purchase Invoice",
+                "GL Entry",
+            ]],
+            ["docstatus", "!=", 2],
+        ]
+    },
 ]
 
 # Apps
