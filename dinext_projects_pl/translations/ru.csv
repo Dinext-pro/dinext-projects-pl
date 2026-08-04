@@ -1,166 +1,170 @@
- - plan, - план
-Account,Счёт,coa
-Accumulated Values,Накопленные значения
-Actions,Действия
-actual,факт
-Actual,Факт
-Actual Cost,Фактическая стоимость
-Actual only,Только факт
-actual/forecast,факт/прогноз
-Add Forecast,Добавить прогноз
-Apply Cost Center Allocation,Применять распределение МВЗ
-Are you sure you want to save the current forecast / actual data as plan?,"Вы уверены, что хотите сохранить текущие прогнозные / фактические данные как плановые?"
-Baseline,Базовые
-Budget at Completion,Бюджет по завершению
-Budget Details: {0} - {1},Детали бюджета: {0} - {1}
-Budget Details: {0} - {1}/{2},Детали бюджета: {0} - {1}/{2}
-Budgets submitted for approval,Бюджеты отправлены на согласование
-Business Area,Бизнес-сфера
-Company,Компания
-Completion Percentage,Процент выполнения
-Controls,Управление
-Cost Center,МВЗ
-Cost Center Table,Таблица МВЗ
-Cost Performance Index,Индекс выполнения стоимости
-Cost Variance,Отклонение по стоимости
-Cumulative profit,Прибыль накопл.
-Cumulative profit - plan,Прибыль накопл. - план
-Data deleted,Данные удалены
-Data saved,Данные сохранены
-Delete risk reserves,Удалить резервы на риск
-Delete risk reserves?,Удалить резервы на риск?
-Delta,Отклонение
-Details,Детали
-Deviation,Отклонение
-Disabled,отключена
-Drill Down {0},Детализация {0}
-Earned Value,Освоенный объем
-Enable Drill Down,Включить детализацию
-Enabled,включена
-Error,Ошибка
-Error building P&L chart,Ошибка при построении P&L графика
-Error deleting risk reserve,Ошибка при удалении резерва на риск
-Error loading Accounting Dimension Filter data,Ошибка при загрузке данных Accounting Dimension Filter
-Error loading budget details: {0},Ошибка загрузки деталей бюджета: {0}
-Error loading GL Entry data,Ошибка при загрузке данных GL Entry
-Error loading Project Budget data,Ошибка при загрузке данных Project Budget
-Error updating forecast,Ошибка при обновлении прогноза
-Estimate at Completion,Прогноз по завершении
-Exp and Fact,Прогноз и факт
-Exp Only,Только прогноз
-Expenses,Расходы
-Expenses - plan,Расходы - план
-Export error: {0},Ошибка экспорта: {0}
-Export failed: Could not find table data,Ошибка экспорта: данные таблицы не найдены
-Export to Excel,Экспорт в Excel
-Exported successfully. Open in Excel.,Экспорт выполнен. Откройте файл в Excel.
-Fact,Факт
-Fact Only,Только факт
-Failed to load financial metrics.,Не удалось загрузить финансовые метрики.
-"Field ""{0}"" is empty or equal to 0. EV and derived metrics will be shown as zero or unavailable.",Поле «{0}» не заполнено или равно 0. EV и производные метрики будут показаны как нулевые или недоступные.
-Financial Metrics,Финансовые метрики
-Financial metrics will be available after P&L data is loaded.,Финансовые метрики будут доступны после загрузки данных P&L.
-Forecast,Прогноз
-forecast,прогноз
-Forecast and actual,Прогноз и факт
-Forecast and Fact,Прогноз и факт
-Forecast only,Только прогноз
-Forecast Only,Только прогноз
-From Period,Период с
-Gross Profit,Валовая прибыль
-Hide empty rows,Скрыть пустые строки
-Hide Plan,Скрыть план
-Hide Δ,Скрыть Δ
-"If the value is less than zero, a cost overrun is expected at completion. If greater than zero, there is remaining budget.","Если значение меньше нуля, к завершению ожидается перерасход. Если больше нуля, в бюджете остается запас."
-"If the value is less than zero, more money was spent than the value of the result. If greater than zero, there is a saving.","Если значение меньше нуля, денег потрачено больше, чем стоит полученный результат. Если больше нуля, есть экономия."
-"If the value is less than zero, the project is behind schedule. If greater than zero, the project is ahead of schedule.","Если значение меньше нуля, проект отстает от плана. Если больше нуля, проект идет с опережением."
-Income,Доходы
-Income - plan,Доходы - план
-Indices,Индексы
-Loading data for period {0}-{1} to {2}-{3}...,Загрузка данных за период {0}-{1} - {2}-{3}...
-Loading data..,Идет загрузка данных..
-Loading financial metrics...,Загрузка финансовых метрик...
-Loading...,Загрузка...
-Metrics are calculated as of report date {0}. Plan and actuals for the current month are prorated by days of the month.,Метрики рассчитываются на отчетную дату {0}. План и факт текущего месяца учитываются пропорционально дням месяца.
-Metrics are calculated as of the selected report date.,Метрики рассчитываются на выбранную отчетную дату.
-Metrics Report Date,Отчетная дата метрик
-Month,Месяц
-My Forecast,Мой прогноз
-No approved Budget found for the selected cell.,Для выбранной ячейки не найден согласованный Budget.
-No budget data found for this account and period,Данные бюджета для этого счета и периода не найдены
-No budget records found for this account and period,Записи бюджета для этого счета и периода не найдены
-No data found for this period,Данные за этот период не найдены
-No data to calculate financial metrics.,Нет данных для расчета финансовых метрик.
-No data to save.,Нет данных для сохранения.
-No plan rows selected for approval,Не выбраны строки плана для согласования
-Operation cancelled,Операция отменена
-P&L Summary,Свод P&L
-Period,Период
-Period Granularity,Детализация периода
-Plan,План
-Plan saved,План сохранен
-Planned profit: ,Плановая прибыль: 
-Planned Value,Плановый объем
-Please select From Period,Укажите период с
-Please select To Period,Укажите период по
-pp,п.п.
-Profit,Прибыль
-Profit - plan,Прибыль - план
-Profitability,Рентабельность
-Profitability (%),Рентабельность (%)
-Project,Проект
-Project Budget Plan vs Forecast,План-Факт-Прогноз Бюджета
-Project Portfolio,Портфель проекта
-Quarter,Квартал
-RUB,₽
-Save as Image,Сохранить как изображение
-Save Plan,Сохранить план
-Saving plan...,Сохранение плана...
-Schedule Performance Index,Индекс выполнения сроков
-Schedule Variance,Отклонение по срокам
-Searching for approved budget...,Поиск согласованного бюджета...
-Show empty rows,Показать пустые строки
-Show Future Fact,Показывать будущий факт
-Show Plan,Показывать план
-Show Zero Columns,Показывать нулевые колонки
-Show Zero Rows,Показывать нулевые строки
-Show Δ,Показать Δ
-Shows how efficiently you need to work going forward to stay within the total budget. A value less than or equal to one is considered achievable.,"Показывает, насколько эффективно нужно работать дальше, чтобы уложиться в общий бюджет. Значение меньше или равно единице считается достижимым."
-Shows how much money has already been spent or recorded as actuals by this date.,"Показывает, сколько денег уже реально потрачено или отражено по факту к этой дате."
-Shows how much more money is needed to complete under the current forecast.,"Показывает, сколько еще денег потребуется до завершения при текущем прогнозе."
-Shows how much should have been completed and earned by the selected date according to the plan.,"Показывает, сколько по плану должно быть выполнено и освоено к выбранной дате."
-Shows how much this project stream will cost at completion if the current trend continues.,"Показывает, во сколько обойдется это направление проекта к завершению, если текущая динамика не изменится."
-Shows how much value the project gets for each monetary unit spent. A value greater than one is considered good.,"Показывает, сколько результата проект получает на каждую потраченную денежную единицу. Значение больше единицы считается хорошим."
-Shows how well actual progress matches the plan. A value greater than one is considered good.,"Показывает, насколько фактический прогресс соответствует плану. Значение больше единицы считается хорошим."
-Shows the value of the result the project should already have delivered by this date.,"Показывает стоимость того результата, который проект уже реально должен был дать на эту дату."
-This is the entire approved project budget for the selected stream through completion.,Это весь утвержденный бюджет проекта по выбранному направлению до самого завершения.
-To Complete,До завершения
-To Period,Период по
-"To view GL entries, select Fact Only and disable Show Plan.",Для просмотра проводок выберите режим «Только факт» и отключите «Показывать план».
-To-Complete Performance Index,Требуемая эффективность
-Toggle Drill Down,Переключить детализацию
-Toggle Plan,Переключить план
-Total,Итого
-Total Fact,Итого факт
-Total Forecast,Итого прогноз
-Total Forecast/Fact,Итого прогноз/факт
-Total Plan,Итого план
-Total Records,Всего записей
-Total {0} Details: {1},Итоговые детали {0}: {1}
-Type,Тип
-Variance at Completion,Отклонение по завершении
-Variances,Отклонения
-View Type,Режим отображения
-We compare the remaining budgeted work with how much can still be spent without exceeding the total budget.,"Сравниваем оставшийся объем работы по бюджету с тем, сколько еще можно потратить без выхода за общий бюджет."
-We divide the value of completed work by actual costs.,Делим стоимость уже выполненного результата на фактические затраты.
-We divide the value of completed work by what should have been done by this date according to the plan.,"Делим стоимость уже выполненного результата на то, что по плану должно было быть сделано к этой дате."
-We subtract actual costs from the value of completed work.,Из стоимости уже выполненного результата вычитаем фактические затраты на него.
-We subtract the forecast final amount from the total approved budget.,Из общего утвержденного бюджета вычитаем прогноз итоговой суммы.
-We subtract what has already been accumulated as actuals from the estimate at completion.,"Из прогноза на завершение вычитаем то, что уже накоплено по факту."
-We subtract what should have been done by this date according to the plan from the value of completed work.,"Из стоимости уже выполненного результата вычитаем то, что по плану должно было быть сделано к этой дате."
-"We sum all actual amounts as of the report date: past months in full, the current month — for days already elapsed.","Складываем все фактические суммы на дату отчета: прошлые месяцы полностью, текущий месяц - по уже прошедшим дням."
-We sum all approved plan amounts for this stream over the entire project duration.,Складываем все утвержденные плановые суммы по этому направлению за весь срок проекта.
-We take the accumulated actuals and add the remaining budget adjusted for current cost and schedule performance.,Берем уже накопленный факт и добавляем оставшуюся часть бюджета с поправкой на текущую эффективность по деньгам и срокам.
-"We take the plan as of the report date: past months are counted in full, the current month — only for days already elapsed.","Берем план на дату отчета: прошлые месяцы учитываем полностью, текущий месяц - только по уже прошедшим дням."
-We take the total budget and multiply it by the current project completion percentage.,Берем общий бюджет и умножаем его на текущий процент готовности проекта.
-Year,Год
+" - plan"," - план",""
+"Account","Счёт","coa"
+"Accumulated Values","Накопленные значения",""
+"Actions","Действия",""
+"actual","факт",""
+"Actual","Факт",""
+"Actual Cost","Фактическая стоимость",""
+"Actual only","Только факт",""
+"actual/forecast","факт/прогноз",""
+"Add Forecast","Добавить прогноз",""
+"Apply Cost Center Allocation","Применять распределение МВЗ",""
+"Are you sure you want to save the current forecast / actual data as plan?","Вы уверены, что хотите сохранить текущие прогнозные / фактические данные как плановые?",""
+"Attention!","Внимание!",""
+"Baseline","Базовые",""
+"Budget at Completion","Бюджет по завершению",""
+"Budget Details: {0} - {1}","Детали бюджета: {0} - {1}",""
+"Budget Details: {0} - {1}/{2}","Детали бюджета: {0} - {1}/{2}",""
+"Budgets submitted for approval","Бюджеты отправлены на согласование",""
+"Business Area","Бизнес-сфера",""
+"Company","Компания",""
+"Completion Percentage","Процент выполнения",""
+"Confirm","Подтвердить",""
+"Controls","Управление",""
+"Cost Center","МВЗ",""
+"Cost Center Table","Таблица МВЗ",""
+"Cost Performance Index","Индекс выполнения стоимости",""
+"Cost Variance","Отклонение по стоимости",""
+"Cumulative profit","Прибыль накопл.",""
+"Cumulative profit - plan","Прибыль накопл. - план",""
+"Data deleted","Данные удалены",""
+"Data saved","Данные сохранены",""
+"Delete risk reserves","Удалить резервы на риск",""
+"Delete risk reserves?","Удалить резервы на риск?",""
+"Delta","Отклонение",""
+"Details","Детали",""
+"Deviation","Отклонение",""
+"Disabled","отключена",""
+"Drill Down {0}","Детализация {0}",""
+"Earned Value","Освоенный объем",""
+"Enable Drill Down","Включить детализацию",""
+"Enabled","включена",""
+"End date cannot be earlier than start date!","Дата окончания не может быть раньше даты начала!",""
+"Error","Ошибка",""
+"Error building P&L chart","Ошибка при построении P&L графика",""
+"Error deleting risk reserve","Ошибка при удалении резерва на риск",""
+"Error loading Accounting Dimension Filter data","Ошибка при загрузке данных Accounting Dimension Filter",""
+"Error loading budget details: {0}","Ошибка загрузки деталей бюджета: {0}",""
+"Error loading GL Entry data","Ошибка при загрузке данных GL Entry",""
+"Error loading Project Budget data","Ошибка при загрузке данных Project Budget",""
+"Error updating forecast","Ошибка при обновлении прогноза",""
+"Estimate at Completion","Прогноз по завершении",""
+"Exp and Fact","Прогноз и факт",""
+"Exp Only","Только прогноз",""
+"Expenses","Расходы",""
+"Expenses - plan","Расходы - план",""
+"Export error: {0}","Ошибка экспорта: {0}",""
+"Export failed: Could not find table data","Ошибка экспорта: данные таблицы не найдены",""
+"Export to Excel","Экспорт в Excel",""
+"Exported successfully. Open in Excel.","Экспорт выполнен. Откройте файл в Excel.",""
+"Fact","Факт",""
+"Fact Only","Только факт",""
+"Failed to load financial metrics.","Не удалось загрузить финансовые метрики.",""
+"Field ""{0}"" is empty or equal to 0. EV and derived metrics will be shown as zero or unavailable.","Поле «{0}» не заполнено или равно 0. EV и производные метрики будут показаны как нулевые или недоступные.",""
+"Financial Metrics","Финансовые метрики",""
+"Financial metrics will be available after P&L data is loaded.","Финансовые метрики будут доступны после загрузки данных P&L.",""
+"Forecast","Прогноз",""
+"forecast","прогноз",""
+"Forecast and actual","Прогноз и факт",""
+"Forecast and Fact","Прогноз и факт",""
+"Forecast only","Только прогноз",""
+"Forecast Only","Только прогноз",""
+"From Period","Период с",""
+"Gross Profit","Валовая прибыль",""
+"Hide empty rows","Скрыть пустые строки",""
+"Hide Plan","Скрыть план",""
+"Hide Δ","Скрыть Δ",""
+"If the value is less than zero, a cost overrun is expected at completion. If greater than zero, there is remaining budget.","Если значение меньше нуля, к завершению ожидается перерасход. Если больше нуля, в бюджете остается запас.",""
+"If the value is less than zero, more money was spent than the value of the result. If greater than zero, there is a saving.","Если значение меньше нуля, денег потрачено больше, чем стоит полученный результат. Если больше нуля, есть экономия.",""
+"If the value is less than zero, the project is behind schedule. If greater than zero, the project is ahead of schedule.","Если значение меньше нуля, проект отстает от плана. Если больше нуля, проект идет с опережением.",""
+"Income","Доходы",""
+"Income - plan","Доходы - план",""
+"Indices","Индексы",""
+"Loading data for period {0}-{1} to {2}-{3}...","Загрузка данных за период {0}-{1} - {2}-{3}...",""
+"Loading data..","Идет загрузка данных..",""
+"Loading financial metrics...","Загрузка финансовых метрик...",""
+"Loading...","Загрузка...",""
+"Member was found neither as Employee nor as Supplier","Участник не найден ни как Сотрудник, ни как Поставщик",""
+"Metrics are calculated as of report date {0}. Plan and actuals for the current month are prorated by days of the month.","Метрики рассчитываются на отчетную дату {0}. План и факт текущего месяца учитываются пропорционально дням месяца.",""
+"Metrics are calculated as of the selected report date.","Метрики рассчитываются на выбранную отчетную дату.",""
+"Metrics Report Date","Отчетная дата метрик",""
+"Month","Месяц",""
+"My Forecast","Мой прогноз",""
+"No approved Budget found for the selected cell.","Для выбранной ячейки не найден согласованный Budget.",""
+"No budget data found for this account and period","Данные бюджета для этого счета и периода не найдены",""
+"No budget records found for this account and period","Записи бюджета для этого счета и периода не найдены",""
+"No data found for this period","Данные за этот период не найдены",""
+"No data to calculate financial metrics.","Нет данных для расчета финансовых метрик.",""
+"No data to save.","Нет данных для сохранения.",""
+"No plan rows selected for approval","Не выбраны строки плана для согласования",""
+"Operation cancelled","Операция отменена",""
+"P&L Summary","Свод P&L",""
+"Period","Период",""
+"Period Granularity","Детализация периода",""
+"Plan","План",""
+"Plan saved","План сохранен",""
+"Planned profit: ","Плановая прибыль: ",""
+"Planned Value","Плановый объем",""
+"Please select From Period","Укажите период с",""
+"Please select To Period","Укажите период по",""
+"pp","п.п.",""
+"Profit","Прибыль",""
+"Profit - plan","Прибыль - план",""
+"Profitability","Рентабельность",""
+"Profitability (%)","Рентабельность (%)",""
+"Project","Проект",""
+"Project Budget Plan vs Forecast","План-Факт-Прогноз Бюджета",""
+"Project Portfolio","Портфель проекта",""
+"Quarter","Квартал",""
+"RUB","₽",""
+"Save as Image","Сохранить как изображение",""
+"Save Plan","Сохранить план",""
+"Saving plan...","Сохранение плана...",""
+"Schedule Performance Index","Индекс выполнения сроков",""
+"Schedule Variance","Отклонение по срокам",""
+"Searching for approved budget...","Поиск согласованного бюджета...",""
+"Show empty rows","Показать пустые строки",""
+"Show Future Fact","Показывать будущий факт",""
+"Show Plan","Показывать план",""
+"Show Zero Columns","Показывать нулевые колонки",""
+"Show Zero Rows","Показывать нулевые строки",""
+"Show Δ","Показать Δ",""
+"Shows how efficiently you need to work going forward to stay within the total budget. A value less than or equal to one is considered achievable.","Показывает, насколько эффективно нужно работать дальше, чтобы уложиться в общий бюджет. Значение меньше или равно единице считается достижимым.",""
+"Shows how much money has already been spent or recorded as actuals by this date.","Показывает, сколько денег уже реально потрачено или отражено по факту к этой дате.",""
+"Shows how much more money is needed to complete under the current forecast.","Показывает, сколько еще денег потребуется до завершения при текущем прогнозе.",""
+"Shows how much should have been completed and earned by the selected date according to the plan.","Показывает, сколько по плану должно быть выполнено и освоено к выбранной дате.",""
+"Shows how much this project stream will cost at completion if the current trend continues.","Показывает, во сколько обойдется это направление проекта к завершению, если текущая динамика не изменится.",""
+"Shows how much value the project gets for each monetary unit spent. A value greater than one is considered good.","Показывает, сколько результата проект получает на каждую потраченную денежную единицу. Значение больше единицы считается хорошим.",""
+"Shows how well actual progress matches the plan. A value greater than one is considered good.","Показывает, насколько фактический прогресс соответствует плану. Значение больше единицы считается хорошим.",""
+"Shows the value of the result the project should already have delivered by this date.","Показывает стоимость того результата, который проект уже реально должен был дать на эту дату.",""
+"This is the entire approved project budget for the selected stream through completion.","Это весь утвержденный бюджет проекта по выбранному направлению до самого завершения.",""
+"To Complete","До завершения",""
+"To Period","Период по",""
+"To view GL entries, select Fact Only and disable Show Plan.","Для просмотра проводок выберите режим «Только факт» и отключите «Показывать план».",""
+"To-Complete Performance Index","Требуемая эффективность",""
+"Toggle Drill Down","Переключить детализацию",""
+"Toggle Plan","Переключить план",""
+"Total","Итого",""
+"Total Fact","Итого факт",""
+"Total Forecast","Итого прогноз",""
+"Total Forecast/Fact","Итого прогноз/факт",""
+"Total Plan","Итого план",""
+"Total Records","Всего записей",""
+"Total {0} Details: {1}","Итоговые детали {0}: {1}",""
+"Type","Тип",""
+"Variance at Completion","Отклонение по завершении",""
+"Variances","Отклонения",""
+"View Type","Режим отображения",""
+"We compare the remaining budgeted work with how much can still be spent without exceeding the total budget.","Сравниваем оставшийся объем работы по бюджету с тем, сколько еще можно потратить без выхода за общий бюджет.",""
+"We divide the value of completed work by actual costs.","Делим стоимость уже выполненного результата на фактические затраты.",""
+"We divide the value of completed work by what should have been done by this date according to the plan.","Делим стоимость уже выполненного результата на то, что по плану должно было быть сделано к этой дате.",""
+"We subtract actual costs from the value of completed work.","Из стоимости уже выполненного результата вычитаем фактические затраты на него.",""
+"We subtract the forecast final amount from the total approved budget.","Из общего утвержденного бюджета вычитаем прогноз итоговой суммы.",""
+"We subtract what has already been accumulated as actuals from the estimate at completion.","Из прогноза на завершение вычитаем то, что уже накоплено по факту.",""
+"We subtract what should have been done by this date according to the plan from the value of completed work.","Из стоимости уже выполненного результата вычитаем то, что по плану должно было быть сделано к этой дате.",""
+"We sum all actual amounts as of the report date: past months in full, the current month — for days already elapsed.","Складываем все фактические суммы на дату отчета: прошлые месяцы полностью, текущий месяц - по уже прошедшим дням.",""
+"We sum all approved plan amounts for this stream over the entire project duration.","Складываем все утвержденные плановые суммы по этому направлению за весь срок проекта.",""
+"We take the accumulated actuals and add the remaining budget adjusted for current cost and schedule performance.","Берем уже накопленный факт и добавляем оставшуюся часть бюджета с поправкой на текущую эффективность по деньгам и срокам.",""
+"We take the plan as of the report date: past months are counted in full, the current month — only for days already elapsed.","Берем план на дату отчета: прошлые месяцы учитываем полностью, текущий месяц - только по уже прошедшим дням.",""
+"We take the total budget and multiply it by the current project completion percentage.","Берем общий бюджет и умножаем его на текущий процент готовности проекта.",""
+"Year","Год",""
