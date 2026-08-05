@@ -1,0 +1,169 @@
+[
+ {
+  "amended_from": null,
+  "conditions": [
+   {
+    "parent": "PI_Permissions",
+    "parentfield": "conditions",
+    "parenttype": "DocType Permission",
+    "perm_level": "Full Access",
+    "role": "System Manager",
+    "script": "conditions = \"true\""
+   },
+   {
+    "parent": "PI_Permissions",
+    "parentfield": "conditions",
+    "parenttype": "DocType Permission",
+    "perm_level": "Full Access",
+    "role": "Dinext_Projects_Director",
+    "script": "conditions = \"true\""
+   },
+   {
+    "parent": "PI_Permissions",
+    "parentfield": "conditions",
+    "parenttype": "DocType Permission",
+    "perm_level": "Custom Query",
+    "role": "Dinext_Project_Manager",
+    "script": "current_user = frappe.session.user\r\n\r\nconditions = f\"\"\"\r\n    `tabPurchase Invoice`.project IN (\r\n        SELECT `tabProject Team Details`.parent \r\n        FROM `tabProject Team Details`\r\n        WHERE `tabProject Team Details`.pt_participant = '{current_user}'\r\n    )\r\n\"\"\""
+   },
+   {
+    "parent": "PI_Permissions",
+    "parentfield": "conditions",
+    "parenttype": "DocType Permission",
+    "perm_level": "Custom Query",
+    "role": "Dinext_Financier",
+    "script": "conditions = \"`tabPurchase Invoice`.docstatus = 1\""
+   },
+   {
+    "parent": "PI_Permissions",
+    "parentfield": "conditions",
+    "parenttype": "DocType Permission",
+    "perm_level": "Full Access",
+    "role": "Dinext_Projects_Admin",
+    "script": "conditions = \"true\""
+   },
+   {
+    "parent": "PI_Permissions",
+    "parentfield": "conditions",
+    "parenttype": "DocType Permission",
+    "perm_level": "Full Access",
+    "role": "Dinext_Management",
+    "script": "conditions = \"true\""
+   }
+  ],
+  "description": "1) Администратор и Z_Dinord_Projects_Director видят все;\n2) РП и Сейлы видят только те, в Проектную команду которых включены;\n3) Финансисты видят все согласованные",
+  "docstatus": 0,
+  "doctype": "DocType Permission",
+  "modified": "2026-02-12 11:39:14.692406",
+  "name": "PI_Permissions",
+  "ref_doctype": "Purchase Invoice",
+  "testing": 1,
+  "title": "PI_Permissions"
+ },
+ {
+  "amended_from": null,
+  "conditions": [
+   {
+    "parent": "SI_Permissions",
+    "parentfield": "conditions",
+    "parenttype": "DocType Permission",
+    "perm_level": "Full Access",
+    "role": "System Manager",
+    "script": "conditions = \"true\""
+   },
+   {
+    "parent": "SI_Permissions",
+    "parentfield": "conditions",
+    "parenttype": "DocType Permission",
+    "perm_level": "Full Access",
+    "role": "Dinext_Projects_Admin",
+    "script": "conditions = \"true\""
+   },
+   {
+    "parent": "SI_Permissions",
+    "parentfield": "conditions",
+    "parenttype": "DocType Permission",
+    "perm_level": "Custom Query",
+    "role": "Dinext_Project_Manager",
+    "script": "current_user = frappe.session.user\r\n\r\nconditions = f\"\"\"\r\n    `tabSales Invoice`.project IN (\r\n        SELECT `tabProject Team Details`.parent \r\n        FROM `tabProject Team Details`\r\n        WHERE `tabProject Team Details`.pt_participant = '{current_user}'\r\n    )\r\n\"\"\""
+   },
+   {
+    "parent": "SI_Permissions",
+    "parentfield": "conditions",
+    "parenttype": "DocType Permission",
+    "perm_level": "Custom Query",
+    "role": "Dinext_Financier",
+    "script": "conditions = \"`tabSales Invoice`.docstatus = 1\""
+   },
+   {
+    "parent": "SI_Permissions",
+    "parentfield": "conditions",
+    "parenttype": "DocType Permission",
+    "perm_level": "Full Access",
+    "role": "Dinext_Management",
+    "script": "conditions = \"true\""
+   }
+  ],
+  "description": "1) Администратор и Z_Dinord_Projects_Admin видят все;\n2) РП и Сейлы видят только те, в Проектную команду которых включены;\n3) Финансисты видят все согласованные",
+  "docstatus": 0,
+  "doctype": "DocType Permission",
+  "modified": "2026-02-12 11:39:37.633564",
+  "name": "SI_Permissions",
+  "ref_doctype": "Sales Invoice",
+  "testing": 1,
+  "title": "SI_Permissions"
+ },
+ {
+  "amended_from": null,
+  "conditions": [
+   {
+    "parent": "GL Entry Permissions",
+    "parentfield": "conditions",
+    "parenttype": "DocType Permission",
+    "perm_level": "Full Access",
+    "role": "System Manager",
+    "script": "conditions = \"true\""
+   },
+   {
+    "parent": "GL Entry Permissions",
+    "parentfield": "conditions",
+    "parenttype": "DocType Permission",
+    "perm_level": "Full Access",
+    "role": "Dinext_Projects_Admin",
+    "script": "conditions = \"true\""
+   },
+   {
+    "parent": "GL Entry Permissions",
+    "parentfield": "conditions",
+    "parenttype": "DocType Permission",
+    "perm_level": "Custom Query",
+    "role": "Dinext_Project_Manager",
+    "script": "current_user = frappe.session.user\r\n\r\nconditions = f\"\"\"\r\n    `tabGL Entry`.project IN (\r\n        SELECT `tabProject Team Details`.parent \r\n        FROM `tabProject Team Details`\r\n        WHERE `tabProject Team Details`.pt_participant = '{current_user}'\r\n    )\r\n\"\"\""
+   },
+   {
+    "parent": "GL Entry Permissions",
+    "parentfield": "conditions",
+    "parenttype": "DocType Permission",
+    "perm_level": "Full Access",
+    "role": "Dinext_Financier",
+    "script": "conditions = \"true\""
+   },
+   {
+    "parent": "GL Entry Permissions",
+    "parentfield": "conditions",
+    "parenttype": "DocType Permission",
+    "perm_level": "Full Access",
+    "role": "Dinext_Management",
+    "script": "conditions = \"true\""
+   }
+  ],
+  "description": "1) Администратор, Финансисты и Z_Dinord_Projects_Admin видят все;\n2) РП видят только те, в Проектную команду которых включены;",
+  "docstatus": 0,
+  "doctype": "DocType Permission",
+  "modified": "2025-08-07 15:45:38.343488",
+  "name": "GL Entry Permissions",
+  "ref_doctype": "GL Entry",
+  "testing": 1,
+  "title": "GL Entry Permissions"
+ }
+]

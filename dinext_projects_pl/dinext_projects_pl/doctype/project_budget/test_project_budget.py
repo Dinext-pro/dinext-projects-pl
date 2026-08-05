@@ -23,6 +23,8 @@ from dinext_projects_pl.dinext_projects_pl.budget_approval.service import (
 
 
 class TestProjectBudget(FrappeTestCase):
+    PLAN_APPROVAL_SITE_CONFIG_KEY = "dinext_projects_pl_enable_plan_approval"
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -34,10 +36,17 @@ class TestProjectBudget(FrappeTestCase):
     def setUp(self):
         self.project = self._make_project()
         self.task = self._make_task(self.project.name)
+        self._old_plan_approval_config = getattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY, None)
+        self._had_plan_approval_config = hasattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY)
+        setattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY, 1)
 
     def tearDown(self):
         frappe.set_user("Administrator")
         self._cleanup_project_data(self.project.name)
+        if self._had_plan_approval_config:
+            setattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY, self._old_plan_approval_config)
+        elif hasattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY):
+            delattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY)
 
     def test_save_plan_creates_pending_budget_and_monthly_distribution(self):
         period_a = self._current_period()
@@ -57,6 +66,7 @@ class TestProjectBudget(FrappeTestCase):
             ],
         )
 
+        self.assertEqual(response["mode"], "approval")
         self.assertEqual(response["created_count"], 1)
         self.assertEqual(response["cancelled_pending_count"], 0)
 
@@ -224,6 +234,86 @@ class TestProjectBudget(FrappeTestCase):
         }
 
         self.assertEqual(actual_plan_amounts, source_plan_amounts)
+        self.assertEqual(actual_forecast_amounts, forecast_amounts)
+
+    def test_save_plan_directly_updates_project_budget_when_approval_disabled(self):
+        period = self._current_period()
+        next_period = self._next_period(period)
+        dimensions = [{"doc": "Task", "docname": self.task.name}]
+        forecast_amounts = {
+            (period.year, period.month): 1200,
+            (next_period.year, next_period.month): 1800,
+        }
+        self._seed_project_budget_forecast(dimensions, forecast_amounts)
+
+        old_config_value = getattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY, None)
+        had_config_value = hasattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY)
+        setattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY, 0)
+
+        try:
+            first_response = save_budget_plan_for_approval(
+                self.project.name,
+                [
+                    {
+                        "account": self.expense_account,
+                        "dimensions": dimensions,
+                        "amounts": [
+                            {"year": period.year, "month": period.month, "plan_value": 300},
+                            {"year": next_period.year, "month": next_period.month, "plan_value": 450},
+                        ],
+                    }
+                ],
+            )
+
+            second_response = save_budget_plan_for_approval(
+                self.project.name,
+                [
+                    {
+                        "account": self.expense_account,
+                        "dimensions": dimensions,
+                        "amounts": [
+                            {"year": period.year, "month": period.month, "plan_value": 700},
+                        ],
+                    }
+                ],
+            )
+        finally:
+            if had_config_value:
+                setattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY, old_config_value)
+            else:
+                delattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY)
+
+        self.assertEqual(first_response["mode"], "direct")
+        self.assertEqual(first_response["created_count"], 1)
+        self.assertEqual(first_response["cancelled_pending_count"], 0)
+        self.assertEqual(second_response["mode"], "direct")
+        self.assertEqual(second_response["created_count"], 1)
+        self.assertEqual(second_response["cancelled_pending_count"], 0)
+
+        self.assertEqual(
+            frappe.get_all("Budget", filters={"project": self.project.name}, pluck="name"),
+            [],
+        )
+
+        project_budget = self._get_project_budget(dimensions)
+        actual_plan_amounts = {
+            (row.pba_year, row.pba_month): row.pba_plan
+            for row in project_budget.project_budget_amount
+            if (row.pba_year, row.pba_month) in forecast_amounts
+        }
+        actual_forecast_amounts = {
+            (row.pba_year, row.pba_month): row.pba_expected
+            for row in project_budget.project_budget_amount
+            if (row.pba_year, row.pba_month) in forecast_amounts
+        }
+
+        self.assertEqual(
+            actual_plan_amounts,
+            {
+                (period.year, period.month): 700,
+                (next_period.year, next_period.month): 450,
+            },
+        )
         self.assertEqual(actual_forecast_amounts, forecast_amounts)
 
     @classmethod

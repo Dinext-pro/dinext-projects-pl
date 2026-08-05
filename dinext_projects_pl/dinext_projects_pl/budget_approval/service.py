@@ -22,6 +22,7 @@ from dinext_projects_pl.dinext_projects_pl.budget_approval.bootstrap import (
     BUDGET_ACCOUNT_FIELD,
     BUDGET_MONTHLY_AMOUNTS_FIELD,
     BUDGET_WORKFLOW_STATE_FIELD,
+    is_plan_approval_enabled,
     STATE_APPROVED,
     STATE_CANCELLED_APPROVED,
     STATE_CANCELLED_DRAFT,
@@ -36,7 +37,7 @@ AMOUNT_QUANTIZE = Decimal("0.01")
 
 @frappe.whitelist()
 def save_budget_plan_for_approval(project: str, data) -> dict:
-    """Create approval Budgets for selected P&L plan rows."""
+    """Save selected P&L plan rows via approval Budgets or direct Project Budget sync."""
     rows = _parse_json_if_needed(data)
     if not project:
         frappe.throw(_("Project is required"))
@@ -44,13 +45,26 @@ def save_budget_plan_for_approval(project: str, data) -> dict:
         frappe.throw(_("No plan rows selected for approval"))
 
     project_doc = frappe.get_doc("Project", project)
+    grouped = _prepare_grouped_entries(project_doc, rows)
+
+    if is_plan_approval_enabled():
+        return _save_budget_plan_with_approval(project_doc, grouped)
+    return _save_budget_plan_directly(grouped)
+
+
+def _prepare_grouped_entries(project_doc, rows: list[dict]) -> dict:
     grouped = _group_plan_rows(project_doc.company, rows)
+    for entry in grouped.values():
+        entry["project"] = project_doc.name
+        entry["company"] = project_doc.company
+    return grouped
+
+
+def _save_budget_plan_with_approval(project_doc, grouped: dict) -> dict:
     created = []
     cancelled_pending = 0
 
     for entry in grouped.values():
-        entry["project"] = project_doc.name
-        entry["company"] = project_doc.company
         cancelled_pending += _cancel_pending_budgets(entry)
     if cancelled_pending:
         frappe.db.commit()
@@ -73,9 +87,30 @@ def save_budget_plan_for_approval(project: str, data) -> dict:
 
     frappe.db.commit()
     return {
+        "mode": "approval",
         "budgets": created,
         "created_count": len(created),
         "cancelled_pending_count": cancelled_pending,
+    }
+
+
+def _save_budget_plan_directly(grouped: dict) -> dict:
+    updated = 0
+    for entry in grouped.values():
+        _write_plan_amounts_to_project_budget(
+            entry["project"],
+            entry["account"],
+            entry["dimensions"],
+            entry["period_amounts"],
+        )
+        updated += 1
+
+    frappe.db.commit()
+    return {
+        "mode": "direct",
+        "budgets": [],
+        "created_count": updated,
+        "cancelled_pending_count": 0,
     }
 
 
@@ -428,28 +463,13 @@ def _cancel_previous_approved_budgets(doc):
 def _sync_budget_to_project_budget(doc):
     identity = _budget_identity(doc)
     dimensions = _budget_dimensions(doc)
-    project_budget = _get_or_create_project_budget(identity["project"], identity["account"], dimensions)
-    amounts_map = {
-        (row.pba_year, row.pba_month): row
-        for row in (project_budget.get("project_budget_amount") or [])
-        if row.pba_year and row.pba_month
-    }
-
     monthly_values = _get_budget_source_monthly_amounts(doc)
-    for (year, month), plan_value in monthly_values.items():
-        amount_row = amounts_map.get((year, month))
-        if not amount_row:
-            amount_row = project_budget.append(
-                "project_budget_amount",
-                {
-                    "pba_year": year,
-                    "pba_month": month,
-                },
-            )
-            amounts_map[(year, month)] = amount_row
-        amount_row.pba_plan = plan_value
-
-    project_budget.save(ignore_permissions=True)
+    _write_plan_amounts_to_project_budget(
+        identity["project"],
+        identity["account"],
+        dimensions,
+        monthly_values,
+    )
 
 
 def _clear_budget_from_project_budget(doc):
@@ -463,6 +483,35 @@ def _clear_budget_from_project_budget(doc):
     for row in project_budget.get("project_budget_amount") or []:
         if (row.pba_year, row.pba_month) in monthly_values:
             row.pba_plan = 0
+    project_budget.save(ignore_permissions=True)
+
+
+def _write_plan_amounts_to_project_budget(
+    project: str,
+    account: str,
+    dimensions: list[dict],
+    monthly_values: dict[tuple[int, int], float],
+):
+    project_budget = _get_or_create_project_budget(project, account, dimensions)
+    amounts_map = {
+        (row.pba_year, row.pba_month): row
+        for row in (project_budget.get("project_budget_amount") or [])
+        if row.pba_year and row.pba_month
+    }
+
+    for (year, month), plan_value in monthly_values.items():
+        amount_row = amounts_map.get((year, month))
+        if not amount_row:
+            amount_row = project_budget.append(
+                "project_budget_amount",
+                {
+                    "pba_year": year,
+                    "pba_month": month,
+                },
+            )
+            amounts_map[(year, month)] = amount_row
+        amount_row.pba_plan = float(_to_decimal_amount(plan_value))
+
     project_budget.save(ignore_permissions=True)
 
 

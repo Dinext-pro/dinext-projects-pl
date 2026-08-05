@@ -42,21 +42,56 @@ fixtures = [
     {
         "doctype": "Workflow",
         "filters": [
-            ["name", "in", ["Dinext Budget Approval"]],
+            ["document_type", "in", [
+                "Budget",
+                "Expense Claim",
+                "Purchase Invoice",
+                "Sales Invoice",
+            ]],
+            ["is_active", "=", 1],
         ]
     },
     {
         "doctype": "Workflow State",
         "filters": [
-            ["workflow_state_name", "in", ["Draft", "Pending Approval", "Approved", "Cancelled Draft", "Cancelled Approved"]],
+            ["workflow_state_name", "in", [
+                "Draft",
+                "Pending Approval",
+                "Approved",
+                "Cancelled Draft",
+                "Cancelled Approved",
+                "Черновик",
+                "На согласовании",
+                "Согласовано",
+                "Отклонено",
+            ]],
         ]
     },
     {
         "doctype": "Workflow Action Master",
         "filters": [
-            ["workflow_action_name", "in", ["Submit for Approval", "Approve", "Cancel"]],
+            ["workflow_action_name", "in", [
+                "Submit for Approval",
+                "Approve",
+                "Cancel",
+                "Передать на согласование",
+                "Согласовано",
+                "Не согласовано",
+                "Согласовать",
+            ]],
         ]
-    }
+    },
+    {
+        "doctype": "DocType Permission",
+        "filters": [
+            ["ref_doctype", "in", [
+                "Sales Invoice",
+                "Purchase Invoice",
+                "GL Entry",
+            ]],
+            ["docstatus", "!=", 2],
+        ]
+    },
 ]
 
 # Apps
@@ -80,7 +115,8 @@ fixtures = [
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/dinext_projects_pl/css/dinext_projects_pl.css"
-# app_include_js = "/assets/dinext_projects_pl/js/dinext_projects_pl.js"
+# app_include_js: budget_report JS files are loaded lazily in the report JS
+# via frappe.require() — only when the user opens the report, not on every page.
 
 # include js, css files in header of web template
 # web_include_css = "/assets/dinext_projects_pl/css/dinext_projects_pl.css"
@@ -99,10 +135,13 @@ fixtures = [
 # include js in doctype views
 doctype_js = {"Project": 
     [
+        "public/js/project_pl_navigation.js",
         "public/js/project_pl_style.js",
         "public/js/project_pl.js",
         "public/js/project_pl_calc.js",
-        "public/js/project_pl_dashboard.js"
+        "public/js/project_pl_echarts.js",
+        "public/js/project_pl_financial_metrics.js",
+        "public/js/project_pl_dashboard.js",
     ]
 }
 # doctype_js = {"doctype" : "public/js/doctype.js"}
