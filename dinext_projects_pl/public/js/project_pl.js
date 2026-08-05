@@ -1,9 +1,176 @@
 // Клиентский скрипт для Doctype "Project"
+frappe.provide("dinext_projects_pl");
+
+const PROJECT_PL_TAB_FIELDNAME = "custom_pl";
+const PROJECT_PL_TABLE_SELECTOR = ".budget-container .budget-table";
+
+function get_project_pl_open_tab_storage_key() {
+	return dinext_projects_pl.PROJECT_PL_OPEN_TAB_STORAGE_KEY || "dinext_projects_pl_open_tab";
+}
+
+function should_open_project_pl_tab(frm) {
+	if (!frm || frm.doctype !== "Project" || !frm.docname) {
+		return false;
+	}
+	if (frappe.route_options && cint(frappe.route_options.open_pl_tab)) {
+		return true;
+	}
+	try {
+		return sessionStorage.getItem(get_project_pl_open_tab_storage_key()) === frm.docname;
+	} catch (e) {
+		return false;
+	}
+}
+
+function clear_project_pl_open_tab_request(project) {
+	if (frappe.route_options && cint(frappe.route_options.open_pl_tab)) {
+		delete frappe.route_options.open_pl_tab;
+	}
+	try {
+		if (sessionStorage.getItem(get_project_pl_open_tab_storage_key()) === project) {
+			sessionStorage.removeItem(get_project_pl_open_tab_storage_key());
+		}
+	} catch (e) {
+		// ignore
+	}
+}
+
+function activate_project_pl_tab(frm) {
+	if (frm.layout && typeof frm.layout.select_tab === "function") {
+		frm.layout.select_tab(PROJECT_PL_TAB_FIELDNAME);
+		return;
+	}
+
+	const $wrapper = frm.$wrapper || $(frm.wrapper);
+	const tab_selector = '[data-fieldname="' + PROJECT_PL_TAB_FIELDNAME + '"]';
+
+	if (frm.layout && frm.layout.tabs) {
+		const tab = frm.layout.tabs.find(function (item) {
+			return item.df && item.df.fieldname === PROJECT_PL_TAB_FIELDNAME;
+		});
+		if (tab) {
+			tab.set_active();
+			return;
+		}
+	}
+
+	if ($wrapper.find(tab_selector).length) {
+		$wrapper.find(tab_selector).tab("show");
+	}
+}
+
+function open_project_pl_tab_and_scroll(frm) {
+	activate_project_pl_tab(frm);
+	scroll_to_project_pl_table(frm);
+}
+
+function schedule_open_project_pl_tab(frm) {
+	if (!should_open_project_pl_tab(frm)) {
+		return;
+	}
+	clear_project_pl_open_tab_request(frm.docname);
+
+	const $wrapper = frm.$wrapper || $(frm.wrapper);
+	const tab_selector = '[data-fieldname="' + PROJECT_PL_TAB_FIELDNAME + '"]';
+
+	const apply = function () {
+		open_project_pl_tab_and_scroll(frm);
+	};
+
+	$wrapper
+		.off("shown.bs.tab.project_pl_open", tab_selector)
+		.one("shown.bs.tab.project_pl_open", tab_selector, function () {
+			scroll_to_project_pl_table(frm);
+		});
+
+	apply();
+	frappe.after_ajax(apply);
+	setTimeout(apply, 150);
+	setTimeout(apply, 500);
+	setTimeout(apply, 1200);
+
+	if ($wrapper) {
+		$wrapper.off("render_complete.project_pl_open").one("render_complete.project_pl_open", apply);
+	}
+}
+
+dinext_projects_pl.open_project_pl_tab = schedule_open_project_pl_tab;
+
+if (!dinext_projects_pl._project_pl_route_hook_installed) {
+	dinext_projects_pl._project_pl_route_hook_installed = true;
+	frappe.router.on("change", function () {
+		var route = frappe.get_route();
+		if (
+			route[0] !== "Form" ||
+			route[1] !== "Project" ||
+			!route[2] ||
+			!cur_frm ||
+			cur_frm.doctype !== "Project" ||
+			cur_frm.docname !== route[2]
+		) {
+			return;
+		}
+		schedule_open_project_pl_tab(cur_frm);
+	});
+}
+
+function scroll_to_project_pl_table(frm) {
+	const max_attempts = 40;
+	let attempts = 0;
+	const $wrapper = frm.$wrapper || $(frm.wrapper);
+	const $tabPane = $wrapper.find("#project-custom_pl");
+
+	function find_target() {
+		let $target = $wrapper.find(PROJECT_PL_TABLE_SELECTOR).first();
+		if ($target.length) {
+			return $target;
+		}
+
+		const field = frm.get_field && frm.get_field("custom_planning");
+		if (field && field.$wrapper && field.$wrapper.length) {
+			$target = field.$wrapper.find(".budget-table").first();
+			if ($target.length) {
+				return $target;
+			}
+			return field.$wrapper;
+		}
+
+		if ($tabPane.length) {
+			return $tabPane;
+		}
+
+		return $();
+	}
+
+	function try_scroll() {
+		attempts += 1;
+		if ($tabPane.length && !$tabPane.hasClass("active")) {
+			activate_project_pl_tab(frm);
+		}
+
+		const $target = find_target();
+		const tab_is_active = !$tabPane.length || $tabPane.hasClass("active");
+		if ($target.length && tab_is_active) {
+			frappe.utils.scroll_to($target, true, 15);
+			return;
+		}
+		if (attempts < max_attempts) {
+			setTimeout(try_scroll, 150);
+		}
+	}
+
+	setTimeout(try_scroll, 50);
+}
+
 frappe.ui.form.on("Project", {
     refresh: function(frm) {
         console.log("refresh");
         // При первом открытии добавляем кастомную вкладку "Трудозатраты", если ещё не создана
         render_budget_table(frm);
+        schedule_open_project_pl_tab(frm);
+    },
+    onload_post_render: function(frm) {
+        schedule_open_project_pl_tab(frm);
     }
 });
 
@@ -20,6 +187,15 @@ frappe.ui.form.on("Project", {
 frappe.provide("dinext_projects.project_pl_forecast_menu");
 if (!Array.isArray(dinext_projects.project_pl_forecast_menu)) {
     dinext_projects.project_pl_forecast_menu = [];
+}
+
+function render_pl_chart(frm, init = true) {
+    const renderChart = globalThis.render_pl_chart_impl;
+    if (typeof renderChart !== "function") {
+        return;
+    }
+
+    return renderChart(frm, init);
 }
 
 function add_pl_forecast_dropdown(frm, controls) {
@@ -217,7 +393,7 @@ function budget_total( frm, cell, periods ) {
     let actual_income_sum = 0;
     let actual_expenses_sum = 0;
     let is_past = false;
-    let roots = Object.values( frm.aggregatedBudget ).filter( b => !b.parent_account && !b.task );
+    let roots = getFinancialRootRows(frm.aggregatedBudget);
     
     periods.forEach(function(period) {
         let r = calc_column_total( frm, period, roots, !frm.bg_hide_plan );
@@ -234,7 +410,7 @@ function budget_total( frm, cell, periods ) {
 function budget_column_total( frm, cell, periods, current ) {
     let period = periods.find(p => p.year == current.year && p.month == current.month );
     
-    let roots = Object.values( frm.aggregatedBudget ).filter( b => !b.parent_account && !b.task );
+    let roots = getFinancialRootRows(frm.aggregatedBudget);
     let r = calc_column_total( frm, period, roots, !frm.bg_hide_plan );
     
     return budget_total_cell( period, r.plan_income, r.plan_expenses, r.actual_income, r.actual_expenses );
@@ -288,7 +464,7 @@ function get_budget_display_periods(frm, periodType) {
                 is_past = true;
             } else if (frm.budget_view_options == __("Forecast only")) {
                 is_past = false;
-            } else { // "Прогноз и факт"
+            } else { // "Forecast and actual"
                 let current_date_str = frappe.datetime.obj_to_str(current);
                 is_past = current_date_str < month_start;
             }
@@ -625,7 +801,11 @@ function load_budget_data(frm, periodType, updateRows) {
                                 let dt = new Date(e.posting_date);
                                 let y = dt.getFullYear(), m = dt.getMonth() + 1;
                                 let key = `fact_${y}_${m}`;
-                                bucket[key] = (bucket[key] || 0) + Math.abs(e.credit - e.debit);
+                                bucket[key] = (bucket[key] || 0) + signedGlPlActualAmount(
+                                    aggregated[acct].type,
+                                    e.debit,
+                                    e.credit
+                                );
                             });
 
                             console.timeLog("load_budget_data");
@@ -1270,6 +1450,9 @@ function updateBudgetValue(project, account, dim, year, month, new_value) {
         // Обновляем UI
         let task = dim?.find(d => d.doc == "Task")?.docname;
         updateBudgetDimensionEntry(cur_frm, account, task, dim, year, month, "forecast", new_value);
+        if (is_pl_expense_account(cur_frm, account)) {
+            sync_estimated_costing_from_forecast(cur_frm);
+        }
         updateBudgetTable(cur_frm, "month");
         render_pl_chart(cur_frm, false);
         
@@ -1410,10 +1593,15 @@ function save_bg_forecast_as_plan(frm) {
             data: data
         },
         freeze: true,
-        freeze_message: __("Submitting budgets for approval..."),
+        freeze_message: __("Saving plan..."),
         callback: function(r) {
             if (!r.exc) {
-                frappe.show_alert(__("Budgets submitted for approval"), 5);
+                const mode = r.message?.mode || "approval";
+                const successMessage = mode === "direct"
+                    ? __("Plan saved")
+                    : __("Budgets submitted for approval");
+
+                frappe.show_alert(successMessage, 5);
                 load_budget_data(frm, "month", true);
                 load_and_render_project_dashboard(frm);
             }
@@ -1442,13 +1630,14 @@ $(document).on('dblclick', '.budget-row-link', function(e) {
     frappe.set_route('List', 'Budget');
 });
 
-$(document).on('dblclick', '.bg-group-plan:not(.zero)', function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const $group = $(e.currentTarget).closest('.budget-group');
-    open_approved_budget_for_group($group);
-});
+// TODO: вернуть после включения approval flow (dinext_projects_pl_enable_plan_approval = 1)
+// $(document).on('dblclick', '.bg-group-plan:not(.zero)', function(e) {
+//     e.preventDefault();
+//     e.stopPropagation();
+//
+//     const $group = $(e.currentTarget).closest('.budget-group');
+//     open_approved_budget_for_group($group);
+// });
 
 // При двойном клике по значению "факт"
 // https://erp.dinord.ru/app/issue/ISS-2025-01237
