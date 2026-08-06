@@ -33,9 +33,35 @@ fixtures = [
         ]
     },
     {
+        "doctype": "Report",
+        "filters": [
+            ["module", "in", ["Dinext Projects Pl"]],
+            ["name", "in", [
+                "Контроль ставок по проектам",
+                "Контроль ставок по T&M проектам_V2",
+            ]],
+        ]
+    },
+    {
+        "doctype": "Number Card",
+        "filters": [
+            ["module", "in", ["Dinext Projects Pl"]]
+        ]
+    },
+    {
+        "doctype": "Dashboard Chart",
+        "filters": [
+            ["module", "in", ["Dinext Projects Pl"]]
+        ]
+    },
+    {
         "doctype": "Role",
         "filters": [
-            ["name", "in", ["Dinext_Budget_Approver"]],
+            ["name", "in", [
+                "Dinext_Budget_Approver",
+                "Dinext_Financier",
+                "Dinext_Fin_Dir",
+            ]],
             ["disabled", "=", 0],
         ]
     },
@@ -97,7 +123,7 @@ fixtures = [
 # Apps
 # ------------------
 
-# required_apps = []
+required_apps = ["dinext_common", "doctype_permission", "dinext_projects"]
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [

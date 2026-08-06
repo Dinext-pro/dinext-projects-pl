@@ -1,0 +1,52 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2024-04-19 12:21:42.832832",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "rt_valid_from",
+  "rt_rate",
+  "rt_currency"
+ ],
+ "fields": [
+  {
+   "fieldname": "rt_valid_from",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Valid from",
+   "reqd": 1
+  },
+  {
+   "fieldname": "rt_rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Rate",
+   "reqd": 1
+  },
+  {
+   "fieldname": "rt_currency",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Currency",
+   "options": "Currency",
+   "reqd": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-06 02:45:02.356672",
+ "modified_by": "Administrator",
+ "module": "Dinext Projects Pl",
+ "name": "Rate Table",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

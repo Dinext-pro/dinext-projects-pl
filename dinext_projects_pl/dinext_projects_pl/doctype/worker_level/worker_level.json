@@ -1,0 +1,42 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2024-12-14 13:09:38.483242",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "wl_valid_from",
+  "wl_cosl_level"
+ ],
+ "fields": [
+  {
+   "fieldname": "wl_valid_from",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Valid from"
+  },
+  {
+   "fieldname": "wl_cosl_level",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Cost Level",
+   "options": "Cost Level"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-06 02:38:43.304509",
+ "modified_by": "Administrator",
+ "module": "Dinext Projects Pl",
+ "name": "Worker Level",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
