@@ -167,3 +167,7 @@ We take the accumulated actuals and add the remaining budget adjusted for curren
 "We take the plan as of the report date: past months are counted in full, the current month — only for days already elapsed.","Берем план на дату отчета: прошлые месяцы учитываем полностью, текущий месяц - только по уже прошедшим дням.",
 We take the total budget and multiply it by the current project completion percentage.,Берем общий бюджет и умножаем его на текущий процент готовности проекта.,
 Year,Год,
+Account Table,Таблица счетов,
+Cost Level,Ставка,
+Payment Scheme,Схема оплаты,
+Rate Category,Тариф,
