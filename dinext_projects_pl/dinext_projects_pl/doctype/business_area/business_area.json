@@ -1,0 +1,108 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "prompt",
+ "creation": "2025-08-28 11:04:04.001539",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_sqzg",
+  "lft",
+  "rgt",
+  "is_group",
+  "old_parent",
+  "parent_business_area",
+  "enabled",
+  "description",
+  "responsible"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_sqzg",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "lft",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Left",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "rgt",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Right",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_group",
+   "fieldtype": "Check",
+   "label": "Is Group"
+  },
+  {
+   "fieldname": "old_parent",
+   "fieldtype": "Link",
+   "label": "Old Parent",
+   "options": "Business Area"
+  },
+  {
+   "fieldname": "parent_business_area",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Parent Business Area",
+   "options": "Business Area"
+  },
+  {
+   "default": "0",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "\u0410\u043a\u0442\u0438\u0432\u043d\u043e"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Text",
+   "label": "\u041e\u043f\u0438\u0441\u0430\u043d\u0438\u0435"
+  },
+  {
+   "fieldname": "responsible",
+   "fieldtype": "Link",
+   "label": "\u041e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0439",
+   "options": "User"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_tree": 1,
+ "links": [],
+ "modified": "2026-08-06 02:45:02.650327",
+ "modified_by": "Administrator",
+ "module": "Dinext Projects Pl",
+ "name": "Business Area",
+ "naming_rule": "Set by user",
+ "nsm_parent_field": "parent_business_area",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
