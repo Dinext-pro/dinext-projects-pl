@@ -190,6 +190,8 @@ def get_ordered_display_fieldnames(columns, filters=None):
 		fieldname = column.get("fieldname")
 		if not fieldname or not column.get("period_group"):
 			continue
+		if column.get("period_group") == "total":
+			continue
 		if column.get("period_role") == "display":
 			fieldnames.append(fieldname)
 			continue

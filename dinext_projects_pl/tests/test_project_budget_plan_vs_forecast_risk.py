@@ -217,6 +217,10 @@ class TestProjectBudgetPlanVsForecastRisk(FrappeTestCase):
 				"pba_expected": forecast,
 			},
 		)
+		if any(dimension.get("doc") == "Project Risk" for dimension in dimensions):
+			# The report recognizes this semantic tag; its optional DocType is not
+			# installed on the isolated PL CI site.
+			doc.flags.ignore_links = True
 		doc.save(ignore_permissions=True)
 		self.budget_names.append(doc.name)
 
