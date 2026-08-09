@@ -1,0 +1,126 @@
+[
+ {
+  "add_total_row": 0,
+  "add_translate_data": 0,
+  "columns": [],
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Report",
+  "filters": [],
+  "is_standard": "Yes",
+  "javascript": null,
+  "json": null,
+  "letter_head": null,
+  "modified": "2026-08-06 02:57:46.190952",
+  "module": "Dinext Projects Pl",
+  "name": "Контроль ставок по проектам",
+  "prepared_report": 0,
+  "query": "SELECT\r\n    u.full_name AS 'Пользователь',\r\n    COALESCE(w.wuser_group, 'Not Worker') AS 'Функциональная группа',\r\n    p.project_name AS 'Проект',\r\n    CASE \r\n        WHEN ptd.pt_cost_level IS NULL OR TRIM(ptd.pt_cost_level) = '' THEN\r\n            (SELECT wl.wl_cosl_level\r\n             FROM `tabWorker Level` wl\r\n             JOIN `tabWorker` ww ON ww.name = wl.parent\r\n             WHERE ww.wuser = ptd.pt_participant\r\n               AND wl.wl_valid_from <= CURDATE()\r\n             ORDER BY wl.wl_valid_from DESC\r\n             LIMIT 1)\r\n        ELSE ptd.pt_cost_level\r\n    END AS 'Грейд',\r\n    (SELECT rt.rt_rate\r\n     FROM `tabRate Table` rt\r\n     JOIN `tabCost Level` rc ON rc.name = rt.parent\r\n     WHERE rt.parenttype = 'Cost Level'\r\n       AND rc.name = CASE \r\n                        WHEN ptd.pt_cost_level IS NULL OR TRIM(ptd.pt_cost_level) = '' THEN\r\n                            (SELECT wl.wl_cosl_level\r\n                             FROM `tabWorker Level` wl\r\n                             JOIN `tabWorker` ww ON ww.name = wl.parent\r\n                             WHERE ww.wuser = ptd.pt_participant\r\n                               AND wl.wl_valid_from <= CURDATE()\r\n                             ORDER BY wl.wl_valid_from DESC\r\n                             LIMIT 1)\r\n                        ELSE ptd.pt_cost_level\r\n                     END\r\n       AND rt.rt_valid_from <= CURDATE()\r\n     ORDER BY rt.rt_valid_from DESC\r\n     LIMIT 1) AS 'Ставка себестоимости'\r\nFROM \r\n    `tabProject Team Details` ptd\r\nJOIN \r\n    `tabProject` p ON p.name = ptd.parent\r\nJOIN \r\n    `tabUser` u ON u.name = ptd.pt_participant\r\nLEFT JOIN \r\n    `tabWorker` w ON w.wuser = ptd.pt_participant\r\nWHERE \r\n    p.project_type = 'Коммерческий' \r\n    AND p.status = 'Open'\r\n    AND p.custom_payment_scheme != 'Время и затраты (T&M)'\r\n    AND (CURDATE() BETWEEN ptd.pt_valid_from AND ptd.pt_valid_for OR ptd.pt_valid_from > CURDATE())",
+  "ref_doctype": "Project",
+  "reference_report": null,
+  "report_name": "Контроль ставок по проектам",
+  "report_script": null,
+  "report_type": "Query Report",
+  "roles": [
+   {
+    "parent": "Контроль ставок по проектам",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Dinext_Team_Lead"
+   },
+   {
+    "parent": "Контроль ставок по проектам",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Dinext_Project_Manager"
+   },
+   {
+    "parent": "Контроль ставок по проектам",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Dinext_Project_Manager"
+   },
+   {
+    "parent": "Контроль ставок по проектам",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Projects Manager"
+   },
+   {
+    "parent": "Контроль ставок по проектам",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Dinext_Management"
+   },
+   {
+    "parent": "Контроль ставок по проектам",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Employee Self Service"
+   },
+   {
+    "parent": "Контроль ставок по проектам",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Dinext_Fin_Dir"
+   },
+   {
+    "parent": "Контроль ставок по проектам",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Dinext_Projects_Admin"
+   },
+   {
+    "parent": "Контроль ставок по проектам",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Dinext_Financier"
+   }
+  ],
+  "timeout": 0
+ },
+ {
+  "add_total_row": 0,
+  "add_translate_data": 0,
+  "columns": [],
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Report",
+  "filters": [],
+  "is_standard": "Yes",
+  "javascript": null,
+  "json": null,
+  "letter_head": null,
+  "modified": "2026-08-06 02:57:46.088290",
+  "module": "Dinext Projects Pl",
+  "name": "Контроль ставок по T&M проектам_V2",
+  "prepared_report": 0,
+  "query": "SELECT\r\n    u.full_name AS 'Пользователь',\r\n    COALESCE(w.wuser_group, 'Not Worker') AS 'Функциональная группа',\r\n    p.project_name AS 'Проект',\r\n    CASE \r\n        WHEN ptd.pt_cost_level IS NULL OR TRIM(ptd.pt_cost_level) = '' THEN\r\n            (SELECT wl.wl_cosl_level\r\n             FROM `tabWorker Level` wl\r\n             JOIN `tabWorker` ww ON ww.name = wl.parent\r\n             WHERE ww.wuser = ptd.pt_participant\r\n               AND wl.wl_valid_from <= CURDATE()\r\n             ORDER BY wl.wl_valid_from DESC\r\n             LIMIT 1)\r\n        ELSE ptd.pt_cost_level\r\n    END AS 'Грейд',\r\n    (SELECT rt.rt_rate\r\n     FROM `tabRate Table` rt\r\n     JOIN `tabCost Level` rc ON rc.name = rt.parent\r\n     WHERE rt.parenttype = 'Cost Level'\r\n       AND rc.name = CASE \r\n                        WHEN ptd.pt_cost_level IS NULL OR TRIM(ptd.pt_cost_level) = '' THEN\r\n                            (SELECT wl.wl_cosl_level\r\n                             FROM `tabWorker Level` wl\r\n                             JOIN `tabWorker` ww ON ww.name = wl.parent\r\n                             WHERE ww.wuser = ptd.pt_participant\r\n                               AND wl.wl_valid_from <= CURDATE()\r\n                             ORDER BY wl.wl_valid_from DESC\r\n                             LIMIT 1)\r\n                        ELSE ptd.pt_cost_level\r\n                     END\r\n       AND rt.rt_valid_from <= CURDATE()\r\n     ORDER BY rt.rt_valid_from DESC\r\n     LIMIT 1) AS 'Ставка себестоимости',\r\n    ptd.pt_category AS 'Категория',\r\n    (SELECT rt.rt_rate\r\n     FROM `tabRate Table` rt\r\n     JOIN `tabRate Category` rc ON rc.name = rt.parent\r\n     WHERE rt.parenttype = 'Rate Category'\r\n       AND rc.name = ptd.pt_category\r\n       AND rt.rt_valid_from <= CURDATE()\r\n     ORDER BY rt.rt_valid_from DESC\r\n     LIMIT 1) AS 'Ставка реализации',\r\n    CASE \r\n        WHEN (SELECT rt.rt_rate FROM `tabRate Table` rt JOIN `tabCost Level` rc ON rc.name = rt.parent\r\n              WHERE rt.parenttype = 'Cost Level' AND rc.name = CASE \r\n                  WHEN ptd.pt_cost_level IS NULL OR TRIM(ptd.pt_cost_level) = '' THEN\r\n                      (SELECT wl.wl_cosl_level FROM `tabWorker Level` wl JOIN `tabWorker` ww ON ww.name = wl.parent\r\n                       WHERE ww.wuser = ptd.pt_participant AND wl.wl_valid_from <= CURDATE()\r\n                       ORDER BY wl.wl_valid_from DESC LIMIT 1)\r\n                  ELSE ptd.pt_cost_level\r\n              END AND rt.rt_valid_from <= CURDATE()\r\n              ORDER BY rt.rt_valid_from DESC LIMIT 1) > 0\r\n        THEN ROUND(\r\n            (((SELECT rt.rt_rate FROM `tabRate Table` rt JOIN `tabRate Category` rc ON rc.name = rt.parent\r\n               WHERE rt.parenttype = 'Rate Category' AND rc.name = ptd.pt_category AND rt.rt_valid_from <= CURDATE()\r\n               ORDER BY rt.rt_valid_from DESC LIMIT 1) - \r\n             (SELECT rt.rt_rate FROM `tabRate Table` rt JOIN `tabCost Level` rc ON rc.name = rt.parent\r\n              WHERE rt.parenttype = 'Cost Level' AND rc.name = CASE \r\n                  WHEN ptd.pt_cost_level IS NULL OR TRIM(ptd.pt_cost_level) = '' THEN\r\n                      (SELECT wl.wl_cosl_level FROM `tabWorker Level` wl JOIN `tabWorker` ww ON ww.name = wl.parent\r\n                       WHERE ww.wuser = ptd.pt_participant AND wl.wl_valid_from <= CURDATE()\r\n                       ORDER BY wl.wl_valid_from DESC LIMIT 1)\r\n                  ELSE ptd.pt_cost_level\r\n              END AND rt.rt_valid_from <= CURDATE()\r\n              ORDER BY rt.rt_valid_from DESC LIMIT 1)) / \r\n             (SELECT rt.rt_rate FROM `tabRate Table` rt JOIN `tabCost Level` rc ON rc.name = rt.parent\r\n              WHERE rt.parenttype = 'Cost Level' AND rc.name = CASE \r\n                  WHEN ptd.pt_cost_level IS NULL OR TRIM(ptd.pt_cost_level) = '' THEN\r\n                      (SELECT wl.wl_cosl_level FROM `tabWorker Level` wl JOIN `tabWorker` ww ON ww.name = wl.parent\r\n                       WHERE ww.wuser = ptd.pt_participant AND wl.wl_valid_from <= CURDATE()\r\n                       ORDER BY wl.wl_valid_from DESC LIMIT 1)\r\n                  ELSE ptd.pt_cost_level\r\n              END AND rt.rt_valid_from <= CURDATE()\r\n              ORDER BY rt.rt_valid_from DESC LIMIT 1)) * 100, 2)\r\n        ELSE 0\r\n    END AS 'Рентабельность'\r\nFROM \r\n    `tabProject Team Details` ptd\r\nJOIN \r\n    `tabProject` p ON p.name = ptd.parent\r\nJOIN \r\n    `tabUser` u ON u.name = ptd.pt_participant\r\nLEFT JOIN \r\n    `tabWorker` w ON w.wuser = ptd.pt_participant\r\nWHERE \r\n    p.project_type = 'Коммерческий' \r\n    AND p.status = 'Open' \r\n    AND p.custom_payment_scheme = 'Время и затраты (T&M)'\r\n    AND (CURDATE() BETWEEN ptd.pt_valid_from AND ptd.pt_valid_for OR ptd.pt_valid_from > CURDATE())\r\n    ",
+  "ref_doctype": "Project",
+  "reference_report": null,
+  "report_name": "Контроль ставок по T&M проектам_V2",
+  "report_script": null,
+  "report_type": "Query Report",
+  "roles": [
+   {
+    "parent": "Контроль ставок по T&M проектам_V2",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "System Manager"
+   },
+   {
+    "parent": "Контроль ставок по T&M проектам_V2",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Dinext_Financier"
+   },
+   {
+    "parent": "Контроль ставок по T&M проектам_V2",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Dinext_Projects_Admin"
+   }
+  ],
+  "timeout": 0
+ }
+]
