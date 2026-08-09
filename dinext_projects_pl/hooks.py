@@ -64,7 +64,6 @@ fixtures = [
         "filters": [
             ["document_type", "in", [
                 "Budget",
-                "Expense Claim",
                 "Purchase Invoice",
                 "Sales Invoice",
             ]],
