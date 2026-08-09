@@ -49,12 +49,6 @@ fixtures = [
         ]
     },
     {
-        "doctype": "Dashboard Chart",
-        "filters": [
-            ["module", "in", ["Dinext Projects Pl"]]
-        ]
-    },
-    {
         "doctype": "Role",
         "filters": [
             ["name", "in", [
