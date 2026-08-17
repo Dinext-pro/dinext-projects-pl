@@ -3,6 +3,13 @@ import { loadGridData, reloadTable } from "./data.js";
 import { applyPlanDeltaVisibility, getColumns, refreshColumns } from "./columns.js";
 import { attachTreePersistence, getExpandedIds, syncExpandedIds } from "./tree.js";
 import { onSaveCells, onValidateCells } from "./save.js";
+import { buildToolbarItems } from "./toolbar.js";
+import {
+	ensurePlDefaults,
+	start_fullscreen_overlay_watch,
+	stop_fullscreen_overlay_watch,
+	bring_overlays_into_fullscreen,
+} from "./controls.js";
 
 const FS_SHELL_CLASS = "budget-container--fullscreen";
 
@@ -47,7 +54,22 @@ function resolveFullscreenOpts(container) {
 	};
 }
 
+function bindFullscreenOverlayPortal(options) {
+	const prevEnter = options.onFullscreenEnter;
+	const prevExit = options.onFullscreenExit;
+	options.onFullscreenEnter = (ctx) => {
+		if (typeof prevEnter === "function") prevEnter(ctx);
+		start_fullscreen_overlay_watch();
+		bring_overlays_into_fullscreen();
+	};
+	options.onFullscreenExit = (ctx) => {
+		if (typeof prevExit === "function") prevExit(ctx);
+		stop_fullscreen_overlay_watch();
+	};
+}
+
 function buildTableOptions(frm, state) {
+	ensurePlDefaults(frm);
 	const opts = {
 		container: state.container,
 		data: state.rows,
@@ -66,6 +88,10 @@ function buildTableOptions(frm, state) {
 		rowCheck: { enabled: true, unit: "row", selectAll: true },
 		canCheckRow: ({ row }) => !row?.summary_kind && !!row?.account,
 		rowReorder: { enabled: false },
+		toolbar: {
+			persistKey: `project-budget:${frm.doc?.name || "new"}`,
+			items: buildToolbarItems(frm),
+		},
 		theme: {
 			cellHorizontalPadding: 2,
 			columnBorder: true,
@@ -83,6 +109,7 @@ function buildTableOptions(frm, state) {
 			rowHeight: 29,
 			headerHeight: 22,
 			groupHeaderHeight: 22,
+			suppressMovableColumns: true,
 		},
 	};
 
@@ -90,6 +117,7 @@ function buildTableOptions(frm, state) {
 	if (fullscreen) {
 		opts.fullscreen = fullscreen;
 	}
+	bindFullscreenOverlayPortal(opts);
 	return opts;
 }
 

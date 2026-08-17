@@ -215,80 +215,20 @@ function render_pl_chart(frm, init = true) {
     return renderChart(frm, init);
 }
 
-function add_pl_forecast_dropdown(frm, controls) {
-    const raw = dinext_projects.project_budget_forecast_menu;
-    const menu_array = Array.isArray(raw) ? raw : [];
-    const items = menu_array.filter(
-        (x) => x && typeof x.label === "string" && typeof x.action === "function"
-    );
-    if (items.length === 0) return;
-
-    const $wrapper = $('<div class="pl-forecast-dropdown-wrapper dropdown"></div>');
-    const $btn = $(`
-        <button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-            ᛣ ${__("Добавить прогноз")}
-        </button>
-    `);
-    const $menu = $('<ul class="dropdown-menu dropdown-menu-right" role="menu"></ul>');
-
-    items.forEach((item) => {
-        const $li = $('<li role="presentation"></li>');
-        const $a = $(`<a class="dropdown-item" href="#" role="menuitem">${item.label}</a>`);
-        $a.on("click", function(e) {
-            e.preventDefault();
-            item.action(frm);
-            $wrapper.find(".dropdown-menu").removeClass("show");
-            $btn.removeClass("show");
-        });
-        $li.append($a);
-        $menu.append($li);
-    });
-
-    $wrapper.append($btn).append($menu);
-    controls.append($wrapper);
-}
+dinext_projects_pl.renderPlChart = render_pl_chart;
 
 function refresh_project_budget_forecast_dropdown(frm) {
-    const $planning = frm.get_field("custom_planning") && frm.get_field("custom_planning").$wrapper;
-    if (!$planning || !$planning.length) return;
-    const $existing = $planning.find(".pl-forecast-dropdown-wrapper");
-    let $controls = $existing.length ? $existing.parent() : $planning.find(".budget-controls");
-    if (!$controls || !$controls.length) return;
-    if ($existing.length) $existing.remove();
-    add_pl_forecast_dropdown(frm, $controls);
+    const api = get_project_budget_api();
+    if (api?.refreshForecastDropdown) {
+        api.refreshForecastDropdown(frm);
+        return;
+    }
+    window.ProjectBudget?.refreshForecastDropdown?.(frm);
 }
 
 frappe.provide("dinext_projects");
 dinext_projects.refresh_project_budget_forecast_dropdown = refresh_project_budget_forecast_dropdown;
 dinext_projects.refresh_pl_forecast_dropdown = refresh_project_budget_forecast_dropdown;
-
-function addBudgetViewOptionsControl(frm, controls) {
-    frm.budget_view_options = frm.budget_view_options || __("Forecast and actual");
-    const control = frappe.ui.form.make_control({
-		parent: controls,
-		df: {
-			fieldtype: 'Select',
-			fieldname: "view-options",
-			options: [
-                __("Forecast and actual"),
-                __("Forecast only"),
-                __("Actual only"),
-            ],
-			get_status: function(i) {
-                return "Write";
-            },
-            change: async function(i){
-                if ( this.value != this.last_value ) {
-                    frm.budget_view_options = this.value;
-                    get_project_budget_api()?.onViewOptionsChange(frm);
-                }
-            }
-		},
-		value: frm.budget_view_options,
-		only_input: true,
-        render_input: true
-	});
-}
 
 /**
  * Resolve at call time — doctype_js may load bridge/project_pl out of order;
@@ -330,42 +270,15 @@ function render_budget_table(frm) {
         budgetApi.destroy(frm);
     }
     wrapper.addClass("budget-container").empty();
-
-    let controls = $('<div class="budget-controls"></div>').appendTo(wrapper);
     $('<div class="budget-table"></div>').appendTo(wrapper);
 
-    controls.append(`
-        <button class="btn btn-default" id="bg-save_plan">${__('Сохранить план')}</button>
-        <button class="btn btn-default" id="bg-toggle_plan">${__("Показать план")}</button>
-        <button class="btn btn-default" id="bg-toggle_delta">${__("Показать Δ")}</button>
-    `);
-
-    frm.bg_hide_plan = frm.bg_hide_plan || true;
-    frm.bg_hide_delta = frm.bg_hide_delta || true;
-
-    addBudgetViewOptionsControl(frm, controls);
-    add_pl_forecast_dropdown(frm, controls);
-
-    controls.find('#bg-save_plan').on('click', function() {
-        const preview = get_project_budget_api();
-        if (preview?.saveForecastAsPlan) {
-            preview.saveForecastAsPlan(frm);
-            return;
-        }
-        frappe.msgprint(__("Project Budget не загружен"));
-    });
-
-    controls.find('#bg-toggle_plan').on('click', function() {
-        frm.bg_hide_plan = !frm.bg_hide_plan;
-        $(this).text(frm.bg_hide_plan ? __("Показать план") : __("Скрыть план"));
-        get_project_budget_api()?.onTogglePlanOrDelta(frm);
-        render_pl_chart(frm);
-    });
-    controls.find('#bg-toggle_delta').on('click', function() {
-        frm.bg_hide_delta = !frm.bg_hide_delta;
-        $(this).text(frm.bg_hide_delta ? __("Показать Δ") : __("Скрыть Δ"));
-        get_project_budget_api()?.onTogglePlanOrDelta(frm);
-    });
+    if (frm.bg_hide_plan === undefined) {
+        frm.bg_hide_plan = true;
+    }
+    if (frm.bg_hide_delta === undefined) {
+        frm.bg_hide_delta = true;
+    }
+    frm.budget_view_options = frm.budget_view_options || __("Forecast and actual");
 
     schedule_pl_mount(frm);
 }

@@ -6,26 +6,89 @@
 	max-width: 100% !important;
 }
 
-.budget-container .budget-controls {
+.budget-container .budget-table.dinext-table {
+	margin-top: 0;
+}
+
+/*
+ * Domain controls on toolbar custom host.
+ * Host itself gets .budget-controls (not a sibling of the table).
+ */
+.budget-container .dinext-table-toolbar-custom.budget-controls {
+	display: flex;
+	align-items: center;
+	flex-wrap: nowrap;
+	gap: 6px;
+	flex: 0 1 auto;
+	min-width: 0;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls > .frappe-control[data-fieldname="view-options"] {
+	position: relative;
+	flex: 0 0 150px;
+	width: 150px;
+	margin: 0 !important;
+	padding: 0;
+	align-self: center;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls > .frappe-control[data-fieldname="view-options"] .form-control {
+	width: 150px;
+	height: 28px;
+	min-height: 28px;
+	padding: 2px 24px 2px 8px;
+	margin: 0;
+	line-height: 1.2;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-toolbar-checkbox-wrapper {
 	display: inline-flex;
 	align-items: center;
-	flex-wrap: wrap;
-	gap: 6px;
-	width: 100%;
-	margin-bottom: 0.5rem;
+	flex: 0 0 auto;
 }
 
-.budget-container .budget-controls .pl-forecast-dropdown-wrapper {
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-toolbar-checkbox-wrapper .frappe-control,
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-toolbar-checkbox-wrapper .checkbox {
+	margin: 0;
+	display: inline-flex;
+	align-items: center;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls > .btn {
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-save-plan-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding-left: 8px;
+	padding-right: 8px;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-forecast-dropdown-wrapper {
 	margin-left: auto;
+	flex: 0 0 auto;
 }
 
-.budget-container .budget-controls .frappe-control {
-	flex: 0 1 150px;
-	margin-bottom: 0;
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-forecast-dropdown-wrapper .btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
 }
 
-.budget-container .budget-table.dinext-table {
-	margin-top: 0.25rem;
+.pl-toolbar-forecast-menu {
+	right: auto !important;
+	width: max-content;
+	min-width: 0;
+	max-width: min(360px, calc(100vw - 16px));
+}
+
+.pl-toolbar-forecast-menu li {
+	cursor: pointer;
+	padding: 8px 15px;
+	white-space: nowrap;
 }
 
 @media (min-width: 576px) {
@@ -348,8 +411,8 @@
 	background-color: var(--card-bg, var(--bg-color, #fff));
 }
 
-.budget-container:fullscreen .budget-controls,
-.budget-container.budget-container--fullscreen .budget-controls {
+.budget-container:fullscreen .dinext-table-toolbar-custom.budget-controls,
+.budget-container.budget-container--fullscreen .dinext-table-toolbar-custom.budget-controls {
 	flex: 0 0 auto;
 	margin-bottom: 0;
 }
