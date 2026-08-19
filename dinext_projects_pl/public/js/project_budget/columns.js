@@ -1,6 +1,3 @@
-import { MERGE_GROUP } from "./constants.js";
-import { dimensionCellRenderer } from "./dimensions-ui.js";
-
 /** Legacy period group width: 210 − 70 per hidden plan − 50 per hidden Δ. */
 const LEGACY_PERIOD_GROUP_WIDTH = 210;
 const LEGACY_PLAN_SUBCOL_WIDTH = 70;
@@ -299,17 +296,10 @@ function buildTotalColumn(frm, periods) {
 	};
 }
 
-/**
- * Column set: # + Статья [+ Измерение] + period groups + Итого.
- * show_dimensions → merge Статья + Dimension column (non-Task fingerprint).
- */
+/** Column set: # + Статья + period groups + Итого. */
 export function getColumns(frm, periods) {
 	const form = frm || (typeof cur_frm !== "undefined" ? cur_frm : null);
 	const periodList = periods || form?.project_budget?.periods || [];
-	const showDimensions = !!form?.bg_show_dimensions;
-	const spanRows = showDimensions
-		? DinextTable.createMergeGroupSpanRows({ mergeGroup: MERGE_GROUP })
-		: undefined;
 
 	const baseColumns = [
 		withoutColumnFilter(
@@ -324,7 +314,6 @@ export function getColumns(frm, periods) {
 				pinned: "left",
 				hide: true,
 				tree: false,
-				spanRows,
 				valueGetter: serialValueGetter,
 			})
 		),
@@ -332,32 +321,14 @@ export function getColumns(frm, periods) {
 			field: "account_label",
 			headerName: __("Account"),
 			headerClass: HEADER_CENTER,
-			width: showDimensions ? 260 : 300,
+			width: 300,
 			minWidth: 200,
 			pinned: "left",
 			tree: true,
 			edit: false,
 			sortable: false,
-			spanRows,
 		},
 	];
-
-	if (showDimensions) {
-		baseColumns.push({
-			field: "dimension_label",
-			colId: "dimension_label",
-			headerName: __("Dimension"),
-			headerClass: HEADER_CENTER,
-			width: 220,
-			minWidth: 160,
-			pinned: "left",
-			tree: false,
-			edit: false,
-			sortable: false,
-			suppressMovable: true,
-			cellRenderer: dimensionCellRenderer(form || {}),
-		});
-	}
 
 	return [
 		...baseColumns,

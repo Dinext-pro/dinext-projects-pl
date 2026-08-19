@@ -3,14 +3,157 @@
  * Pattern mirrors WE work_efforts/table/controls.js.
  */
 
+const PERIOD_TYPES = ["month", "quarter", "year"];
+
+function viewLabelByKey(key) {
+	if (key === "forecast_only") {
+		return __("Forecast only");
+	}
+	if (key === "actual_only") {
+		return __("Actual only");
+	}
+	return __("Forecast and actual");
+}
+
+function viewKeyByLabel(label) {
+	if (label === __("Forecast only") || label === "Forecast only") {
+		return "forecast_only";
+	}
+	if (label === __("Actual only") || label === "Actual only") {
+		return "actual_only";
+	}
+	return "forecast_actual";
+}
+
+function toolbarPrefsKey(frm) {
+	const name = frm.doc?.name;
+	if (!name || frm.is_new?.()) {
+		return null;
+	}
+	return `project-budget:prefs:${name}`;
+}
+
+function readToolbarPrefs(frm) {
+	const key = toolbarPrefsKey(frm);
+	if (!key || typeof window === "undefined" || !window.localStorage) {
+		return null;
+	}
+	try {
+		const raw = window.localStorage.getItem(key);
+		if (!raw) {
+			return null;
+		}
+		const obj = JSON.parse(raw);
+		return obj && typeof obj === "object" && !Array.isArray(obj) ? obj : null;
+	} catch (_err) {
+		return null;
+	}
+}
+
+function persistToolbarPrefs(frm) {
+	const key = toolbarPrefsKey(frm);
+	if (!key || typeof window === "undefined" || !window.localStorage) {
+		return;
+	}
+	try {
+		window.localStorage.setItem(
+			key,
+			JSON.stringify({
+				period_type: frm._pl_period_type || "month",
+				view: viewKeyByLabel(frm.budget_view_options),
+				hide_plan: !!frm.bg_hide_plan,
+				hide_delta: !!frm.bg_hide_delta,
+				accumulated_values: !!frm.bg_accumulated_values,
+				show_zero_rows: !!frm.bg_show_zero_rows,
+			})
+		);
+	} catch (_err) {
+		// quota / privacy mode
+	}
+}
+
+function applyToolbarPrefs(frm) {
+	const prefs = readToolbarPrefs(frm);
+	if (!prefs) {
+		return;
+	}
+	if (PERIOD_TYPES.includes(prefs.period_type)) {
+		frm._pl_period_type = prefs.period_type;
+	}
+	if (prefs.view === "forecast_actual" || prefs.view === "forecast_only" || prefs.view === "actual_only") {
+		frm.budget_view_options = viewLabelByKey(prefs.view);
+	}
+	if (typeof prefs.hide_plan === "boolean") {
+		frm.bg_hide_plan = prefs.hide_plan;
+	}
+	if (typeof prefs.hide_delta === "boolean") {
+		frm.bg_hide_delta = prefs.hide_delta;
+	}
+	if (typeof prefs.accumulated_values === "boolean") {
+		frm.bg_accumulated_values = prefs.accumulated_values;
+	}
+	if (typeof prefs.show_zero_rows === "boolean") {
+		frm.bg_show_zero_rows = prefs.show_zero_rows;
+	}
+}
+
 function ensurePlDefaults(frm) {
+	if (!frm._pl_toolbar_prefs_applied) {
+		applyToolbarPrefs(frm);
+		frm._pl_toolbar_prefs_applied = true;
+	}
 	if (frm.bg_hide_plan === undefined) {
 		frm.bg_hide_plan = true;
 	}
 	if (frm.bg_hide_delta === undefined) {
 		frm.bg_hide_delta = true;
 	}
+	if (frm.bg_accumulated_values === undefined) {
+		frm.bg_accumulated_values = false;
+	}
+	if (frm.bg_show_zero_rows === undefined) {
+		frm.bg_show_zero_rows = false;
+	}
+	if (!frm._pl_period_type) {
+		frm._pl_period_type = "month";
+	}
 	frm.budget_view_options = frm.budget_view_options || __("Forecast and actual");
+}
+
+function addPeriodTypeControl(frm, host) {
+	const labelByValue = {
+		month: __("Month"),
+		quarter: __("Quarter"),
+		year: __("Year"),
+	};
+	const valueByLabel = {
+		[__("Month")]: "month",
+		[__("Quarter")]: "quarter",
+		[__("Year")]: "year",
+		Month: "month",
+		Quarter: "quarter",
+		Year: "year",
+	};
+	frappe.ui.form.make_control({
+		parent: host,
+		df: {
+			fieldtype: "Select",
+			fieldname: "period-type",
+			options: [__("Month"), __("Quarter"), __("Year")],
+			get_status: () => "Write",
+			change: function () {
+				if (this.value === this.last_value) {
+					return;
+				}
+				frm._pl_period_type = valueByLabel[this.value] || "month";
+				persistToolbarPrefs(frm);
+				window.ProjectBudget?.onPeriodOrAggregateChange(frm);
+			},
+		},
+		value: labelByValue[frm._pl_period_type] || __("Month"),
+		only_input: true,
+		render_input: true,
+	});
 }
 
 function addViewOptionsControl(frm, host) {
@@ -28,6 +171,7 @@ function addViewOptionsControl(frm, host) {
 					return;
 				}
 				frm.budget_view_options = this.value;
+				persistToolbarPrefs(frm);
 				window.ProjectBudget?.onViewOptionsChange(frm);
 			},
 		},
@@ -45,6 +189,7 @@ function addToolbarCheckbox(host, opts) {
 			fieldtype: "Check",
 			fieldname: opts.fieldname,
 			label: opts.label,
+			get_status: () => "Write",
 			onchange: opts.onchange,
 		},
 		value: opts.value,
@@ -53,6 +198,13 @@ function addToolbarCheckbox(host, opts) {
 	});
 	control.refresh();
 	return control;
+}
+
+function checkboxOn(control) {
+	if (typeof control?.get_input_value === "function") {
+		return !!cint(control.get_input_value());
+	}
+	return !!control?.get_value?.();
 }
 
 function refreshChart(frm) {
@@ -184,7 +336,8 @@ function bindDropdownPortal($wrapper, $btn, $menu) {
 
 /**
  * Mount domain controls into DinextTable toolbar custom host (once).
- * Order: view mode → Save plan → Plan → Δ → Add forecast.
+ * Order: period → view → Save plan → Plan → Δ →
+ * Show Plan → Show Δ → Accumulated Values → Show Zero Rows → Add forecast.
  */
 export function mount_toolbar_controls(frm, host) {
 	if (host.data("pl-controls-mounted")) {
@@ -195,6 +348,7 @@ export function mount_toolbar_controls(frm, host) {
 	host.addClass("budget-controls");
 	ensurePlDefaults(frm);
 
+	addPeriodTypeControl(frm, host);
 	addViewOptionsControl(frm, host);
 
 	host.append(`
@@ -207,10 +361,11 @@ export function mount_toolbar_controls(frm, host) {
 
 	addToolbarCheckbox(host, {
 		fieldname: "show_plan",
-		label: __("Plan"),
+		label: __("Show Plan"),
 		value: !frm.bg_hide_plan,
 		onchange: function () {
-			frm.bg_hide_plan = !this.get_value();
+			frm.bg_hide_plan = !checkboxOn(this);
+			persistToolbarPrefs(frm);
 			window.ProjectBudget?.onTogglePlanOrDelta(frm);
 			refreshChart(frm);
 		},
@@ -218,11 +373,34 @@ export function mount_toolbar_controls(frm, host) {
 
 	addToolbarCheckbox(host, {
 		fieldname: "show_delta",
-		label: "Δ",
+		label: __("Show Δ"),
 		value: !frm.bg_hide_delta,
 		onchange: function () {
-			frm.bg_hide_delta = !this.get_value();
+			frm.bg_hide_delta = !checkboxOn(this);
+			persistToolbarPrefs(frm);
 			window.ProjectBudget?.onTogglePlanOrDelta(frm);
+		},
+	});
+
+	addToolbarCheckbox(host, {
+		fieldname: "accumulated_values",
+		label: __("Accumulated Values"),
+		value: !!frm.bg_accumulated_values,
+		onchange: function () {
+			frm.bg_accumulated_values = checkboxOn(this);
+			persistToolbarPrefs(frm);
+			window.ProjectBudget?.onPeriodOrAggregateChange(frm);
+		},
+	});
+
+	addToolbarCheckbox(host, {
+		fieldname: "show_zero_rows",
+		label: __("Show Zero Rows"),
+		value: !!frm.bg_show_zero_rows,
+		onchange: function () {
+			frm.bg_show_zero_rows = checkboxOn(this);
+			persistToolbarPrefs(frm);
+			window.ProjectBudget?.onPeriodOrAggregateChange(frm);
 		},
 	});
 
