@@ -5,9 +5,73 @@ import { applyPlanDeltaVisibility, getColumns, refreshColumns } from "./columns.
 import { attachTreePersistence, getExpandedIds, syncExpandedIds } from "./tree.js";
 import { onSaveCells, onValidateCells } from "./save.js";
 import { buildToolbarItems } from "./toolbar.js";
+import {
+	ensurePlDefaults,
+	start_fullscreen_overlay_watch,
+	stop_fullscreen_overlay_watch,
+	bring_overlays_into_fullscreen,
+} from "./controls.js";
+
+const FS_SHELL_CLASS = "budget-container--fullscreen";
+
+/** Fullscreen shell = .budget-container (controls + table), like WR. */
+function resolveFullscreenOpts(container) {
+	const shell = container?.closest?.(".budget-container");
+	if (!shell) {
+		return null;
+	}
+
+	const afterLayout = () => {
+		requestAnimationFrame(() => {
+			window.dispatchEvent(new Event("resize"));
+		});
+	};
+
+	return {
+		target: "shell",
+		shell,
+		onEnter: ({ element }) => {
+			element?.classList.add(FS_SHELL_CLASS);
+			if (container) {
+				container.dataset.plV2PrevHeight = container.style.height || "";
+				container.dataset.plV2PrevMinHeight = container.style.minHeight || "";
+				container.style.height = "auto";
+				container.style.minHeight = "0";
+				container.style.flex = "1 1 auto";
+			}
+			afterLayout();
+		},
+		onExit: ({ element }) => {
+			element?.classList.remove(FS_SHELL_CLASS);
+			if (container) {
+				container.style.height = container.dataset.plV2PrevHeight || "min(50vh, 560px)";
+				container.style.minHeight = container.dataset.plV2PrevMinHeight || "280px";
+				container.style.flex = "";
+				delete container.dataset.plV2PrevHeight;
+				delete container.dataset.plV2PrevMinHeight;
+			}
+			afterLayout();
+		},
+	};
+}
+
+function bindFullscreenOverlayPortal(options) {
+	const prevEnter = options.onFullscreenEnter;
+	const prevExit = options.onFullscreenExit;
+	options.onFullscreenEnter = (ctx) => {
+		if (typeof prevEnter === "function") prevEnter(ctx);
+		start_fullscreen_overlay_watch();
+		bring_overlays_into_fullscreen();
+	};
+	options.onFullscreenExit = (ctx) => {
+		if (typeof prevExit === "function") prevExit(ctx);
+		stop_fullscreen_overlay_watch();
+	};
+}
 
 function buildTableOptions(frm, state) {
-	return {
+	ensurePlDefaults(frm);
+	const opts = {
 		container: state.container,
 		data: state.rows,
 		columns: getColumns(frm, state.periods),
@@ -49,9 +113,17 @@ function buildTableOptions(frm, state) {
 			rowHeight: 29,
 			headerHeight: 22,
 			groupHeaderHeight: 22,
+			suppressMovableColumns: true,
 		},
 		// Fullscreen: core default (target: container). Domain controls live in toolbar.
 	};
+
+	const fullscreen = resolveFullscreenOpts(state.container);
+	if (fullscreen) {
+		opts.fullscreen = fullscreen;
+	}
+	bindFullscreenOverlayPortal(opts);
+	return opts;
 }
 
 function applyRuntime(frm, table) {

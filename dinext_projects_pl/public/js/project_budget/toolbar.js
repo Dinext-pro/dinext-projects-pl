@@ -1,6 +1,6 @@
 /**
- * Domain chrome for DinextTable toolbar — same visuals as former `.budget-controls`.
- * Mount once into stable custom host (id reused across toolbar refreshes).
+ * Domain chrome for DinextTable toolbar — ISS budget controls
+ * (period, dimensions, hierarchy) on stable custom host.
  *
  * @param {Form} frm
  */
