@@ -2,7 +2,7 @@
 
 ## 📖 Обзор
 
-**Dinext Projects P&L** — это приложение для Frappe/ERPNext, которое расширяет стандартный DocType `Project` функциями проектного P&L, планирования, прогноза, отчетности и согласования бюджета. После семантического разделения владеет финансовыми masters (`Cost Level`, `Rate Category` / `Rate Table`, `Account Table`, `Cost Center Table`, `Business Area`, `Project Payment Scheme`, `Worker Level`), rate-control reports, ролями `Dinext_Financier` / `Dinext_Fin_Dir` / `Dinext_Budget_Approver` и workspace **Фин. Контроль**.
+**Dinext Projects P&L** — это приложение для Frappe/ERPNext, которое расширяет стандартный DocType `Project` функциями проектного P&L, планирования, прогноза, отчетности и согласования бюджета. После семантического разделения владеет финансовыми masters (`Cost Level`, `Rate Category` / `Rate Table`, `Account Table`, `Cost Center Table`, `Business Area`, `Project Payment Scheme`, `Worker Level`), rate-control reports, ролями `Dinext_Financier` / `Dinext_Fin_Dir` / `Dinext_Budget_Approver`, workspaces **Фин. Контроль** и **Аналитика**, а также Number Card **Коммерческие проекты**.
 
 Приложение объединяет кастомный P&L-интерфейс и отдельную вкладку `Метрики` в карточке проекта с Dinext-логикой бюджетирования. Текущие плановые и прогнозные данные отображаются и редактируются в UI проекта, EVM-показатели рассчитываются на сервере через единый whitelisted API и отображаются на вкладке `Метрики`, а сохранение плана работает в двух режимах: через стандартные ERPNext-документы `Budget` и `Monthly Distribution` с workflow согласования либо через прямую запись в кастомный read model `Project Budget`. Точные утвержденные помесячные суммы хранятся отдельно от процентного `Monthly Distribution`, поэтому persisted-значения плана не дрейфуют из-за round-trip округления.
 
@@ -28,6 +28,7 @@
   - двойной клик по ячейке плановой суммы открывает соответствующий approved `Budget`;
   - двойной клик по ячейке факта открывает `General Ledger`.
 - **Script Report** `Project Budget Plan vs Forecast` для сравнения плана с прогнозом и фактом.
+- **Workspace «Аналитика»** (вложенный под «Мои проекты») с финансовыми number cards/charts и shortcuts на ERPNext reports; Number Card **«Коммерческие проекты»** поставляется этим приложением.
 - **Fixture-driven доставка метаданных** для workflow, workflow states, actions, roles, accounting dimensions, custom fields, client scripts и связанной metadata.
 
 ## 🚀 Установка
@@ -46,7 +47,7 @@ bench install-app dinext_projects_pl
 bench --site $SITE migrate
 ```
 
-Приложение опирается на fixture-based доставку метаданных. При установке и миграции применяются custom fields, client/server scripts, accounting dimensions, workflow `Dinext Budget Approval`, workflow states/actions, финансовые роли, number cards/charts и rate-control reports.
+Приложение опирается на fixture-based и module JSON доставку метаданных. При установке и миграции применяются custom fields, client/server scripts, accounting dimensions, workflow `Dinext Budget Approval`, workflow states/actions, финансовые роли, workspaces «Фин. Контроль» / «Аналитика», number cards/charts и rate-control reports.
 
 `required_apps`: `dinext_common`, `doctype_permission`, `dinext_projects`.
 
@@ -287,6 +288,14 @@ node --test tests/js/project_pl_echarts.test.js
         │   └── project_budget_dimension/
         ├── report/
         │   └── project_budget_plan_vs_forecast/
+        ├── workspace/
+        │   ├── аналитика/
+        │   └── фин._контроль/
+        ├── number_card/
+        │   ├── выручка/
+        │   ├── расходы/
+        │   └── коммерческие_проекты/
+        ├── dashboard_chart/
         └── tests/
             ├── test_app_bootstrap.py
             └── test_financial_metrics_service.py
@@ -294,6 +303,8 @@ node --test tests/js/project_pl_echarts.test.js
 
 - `dinext_projects_pl/hooks.py` подключает client assets, fixtures, override для `Budget` и submit/cancel hooks.
 - `dinext_projects_pl/fixtures/` содержит system-generated metadata, экспортированную из сайта.
+- `dinext_projects_pl/dinext_projects_pl/workspace/` содержит Desk Workspaces «Фин. Контроль» и «Аналитика» (module JSON).
+- `dinext_projects_pl/dinext_projects_pl/number_card/` и `dashboard_chart/` содержат финансовые KPI и charts; Number Card «Коммерческие проекты» также принадлежит этому модулю.
 - `dinext_projects_pl/public/js/` содержит UI проекта, агрегацию данных, рендеринг P&L-графика, вкладки `P&L`/`Метрики` и интерактивные обработчики навигации.
 - `dinext_projects_pl/public/js/project_pl_financial_metrics.js` — thin client render для вкладки `Метрики`; расчет выполняется на сервере.
 - `dinext_projects_pl/dinext_projects_pl/budget_approval/` содержит app-owned flow согласования бюджета и sync с `Project Budget`.
