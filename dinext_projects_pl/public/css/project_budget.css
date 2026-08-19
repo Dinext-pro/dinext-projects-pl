@@ -6,6 +6,10 @@
 	max-width: 100% !important;
 }
 
+.budget-container .budget-table.dinext-table {
+	margin-top: 0;
+}
+
 /*
  * Domain controls on toolbar custom host.
  * Host itself gets .budget-controls (not a child) — do not nest those selectors.
@@ -23,6 +27,12 @@
 .budget-container .dinext-table-toolbar-custom.budget-controls .pl-forecast-dropdown-wrapper {
 	margin-left: auto;
 	flex: 0 0 auto;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-forecast-dropdown-wrapper .btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
 }
 
 /* View-options Select (only_input): wrapper is itself `.form-group.frappe-control`. */
@@ -66,8 +76,35 @@
 	margin: 0;
 }
 
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-toolbar-checkbox-wrapper {
+	display: inline-flex;
+	align-items: center;
+	flex: 0 0 auto;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-toolbar-checkbox-wrapper .frappe-control,
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-toolbar-checkbox-wrapper .checkbox {
+	margin: 0;
+	display: inline-flex;
+	align-items: center;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls > .btn {
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-save-plan-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding-left: 8px;
+	padding-right: 8px;
+}
+
 /* Portaled forecast menu (body). */
-.pl-toolbar-dropdown-menu {
+.pl-toolbar-dropdown-menu,
+.pl-toolbar-forecast-menu {
 	right: auto !important;
 	width: max-content;
 	min-width: 0;
@@ -75,8 +112,14 @@
 }
 
 .pl-toolbar-dropdown-menu li,
-.pl-toolbar-dropdown-menu .dropdown-item {
+.pl-toolbar-dropdown-menu .dropdown-item,
+.pl-toolbar-forecast-menu li {
 	cursor: pointer;
+}
+
+.pl-toolbar-forecast-menu li {
+	padding: 8px 15px;
+	white-space: nowrap;
 }
 
 .budget-container .budget-table.dinext-table {
@@ -419,6 +462,33 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.budget-container:fullscreen,
+.budget-container.budget-container--fullscreen {
+	height: 100%;
+	box-sizing: border-box;
+	padding: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	background-color: var(--card-bg, var(--bg-color, #fff));
+}
+
+.budget-container:fullscreen .dinext-table-toolbar-custom.budget-controls,
+.budget-container.budget-container--fullscreen .dinext-table-toolbar-custom.budget-controls {
+	flex: 0 0 auto;
+	margin-bottom: 0;
+}
+
+.budget-container:fullscreen .budget-table,
+.budget-container.budget-container--fullscreen .budget-table,
+.budget-container:fullscreen .budget-table.dinext-table,
+.budget-container.budget-container--fullscreen .budget-table.dinext-table {
+	flex: 1 1 auto;
+	min-height: 0;
+	height: auto !important;
+	max-height: none !important;
 }
 
 .budget-table.dinext-table .pl-dim-add {

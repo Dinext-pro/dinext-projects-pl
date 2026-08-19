@@ -98,6 +98,40 @@ function withCenterAlign(col) {
 	};
 }
 
+function withoutColumnFilter(col) {
+	return { ...col, filterable: false };
+}
+
+/** Amount editor: digits + decimal; reject letters / negatives. Empty → 0. */
+function plAmountValueParser(params) {
+	const raw = params.newValue;
+	if (raw == null || raw === "") {
+		return 0;
+	}
+	if (typeof raw === "number") {
+		if (!Number.isFinite(raw) || raw < 0) {
+			return params.oldValue;
+		}
+		return raw;
+	}
+	const trimmed = String(raw).trim().replace(/\s/g, "");
+	if (!trimmed) {
+		return 0;
+	}
+	if (!/^\d+([.,]\d+)?$/.test(trimmed)) {
+		return params.oldValue;
+	}
+	const normalized =
+		trimmed.includes(",") && !trimmed.includes(".")
+			? trimmed.replace(",", ".")
+			: trimmed.replace(/,/g, "");
+	const value = Number(normalized);
+	if (!Number.isFinite(value) || value < 0) {
+		return params.oldValue;
+	}
+	return value;
+}
+
 /** Serial over every tree row (DFS), like StickyDataTable rowIndex + 1. */
 function buildRowSerialMap(rows) {
 	const map = new Map();
@@ -133,20 +167,32 @@ function serialValueGetter(params) {
 
 function buildPeriodLeaf(opts) {
 	const { field, colId, headerName, width, hide, valueFormatter, edit, pinned } = opts;
-	const col = withCenterAlign({
-		field,
-		colId,
-		headerName,
-		...fixedWidth(width),
-		sortable: false,
-		suppressMovable: true,
-		tree: false,
-		type: "number",
-		edit: edit === undefined ? false : edit,
-		hide: !!hide,
-		valueFormatter,
-		cellClassRules: { ...AMOUNT_CELL_CLASS_RULES },
-	});
+	const col = withoutColumnFilter(
+		withCenterAlign({
+			field,
+			colId,
+			headerName,
+			...fixedWidth(width),
+			sortable: false,
+			suppressMovable: true,
+			tree: false,
+			type: "number",
+			hide: !!hide,
+			valueFormatter,
+			cellClassRules: { ...AMOUNT_CELL_CLASS_RULES },
+		})
+	);
+	if (edit !== undefined) {
+		col.edit = edit;
+		col.cellEditor = "agNumberCellEditor";
+		col.cellEditorParams = {
+			min: 0,
+			allowedCharPattern: "\\d\\.,",
+		};
+		col.valueParser = plAmountValueParser;
+	} else {
+		col.edit = false;
+	}
 	if (pinned) {
 		col.pinned = pinned;
 	}
@@ -266,20 +312,22 @@ export function getColumns(frm, periods) {
 		: undefined;
 
 	const baseColumns = [
-		withCenterAlign({
-			field: "account_serial",
-			colId: "account_serial",
-			// Legacy index header is blank.
-			headerName: "",
-			...fixedWidth(41),
-			sortable: false,
-			suppressMovable: true,
-			pinned: "left",
-			hide: true,
-			tree: false,
-			spanRows,
-			valueGetter: serialValueGetter,
-		}),
+		withoutColumnFilter(
+			withCenterAlign({
+				field: "account_serial",
+				colId: "account_serial",
+				// Legacy index header is blank.
+				headerName: "",
+				...fixedWidth(41),
+				sortable: false,
+				suppressMovable: true,
+				pinned: "left",
+				hide: true,
+				tree: false,
+				spanRows,
+				valueGetter: serialValueGetter,
+			})
+		),
 		{
 			field: "account_label",
 			headerName: __("Account"),

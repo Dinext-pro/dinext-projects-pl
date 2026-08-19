@@ -64,6 +64,12 @@ frappe.provide("dinext_projects_pl.projectBudget");
 		});
 	}
 
+	function refreshForecastDropdown(frm) {
+		whenReady(frm, () => {
+			window.ProjectBudget.refreshForecastDropdown?.(frm);
+		});
+	}
+
 	Object.assign(dinext_projects_pl.projectBudget, {
 		whenReady,
 		onTogglePlanOrDelta,
@@ -71,6 +77,7 @@ frappe.provide("dinext_projects_pl.projectBudget");
 		onViewOptionsChange,
 		onPeriodOrAggregateChange,
 		saveForecastAsPlan,
+		refreshForecastDropdown,
 		destroy(frm) {
 			window.ProjectBudget?.destroy(frm);
 		},

@@ -15,8 +15,10 @@ import {
 import {
 	buildSavePlanPayload,
 	getSelectedRows,
+	hasSavePlanSelection,
 	saveForecastAsPlan,
 } from "./selection.js";
+import { refreshForecastDropdown } from "./controls.js";
 import { buildChartData, refreshChart } from "./chart-adapter.js";
 import {
 	accountAllowsTask,
@@ -52,8 +54,10 @@ const ProjectBudget = {
 	onPeriodOrAggregateChange,
 	onViewOptionsChange,
 	getSelectedRows,
+	hasSavePlanSelection,
 	buildSavePlanPayload,
 	saveForecastAsPlan,
+	refreshForecastDropdown,
 	buildChartData,
 	refreshChart,
 
