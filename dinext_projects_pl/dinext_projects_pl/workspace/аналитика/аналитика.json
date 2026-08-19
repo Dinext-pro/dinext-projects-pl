@@ -1,0 +1,101 @@
+{
+ "charts": [
+  {
+   "chart_name": "Доходы и расходы",
+   "label": "Profit and Loss"
+  },
+  {
+   "chart_name": "Выручка по клиентам",
+   "label": "Выручка по клиентам"
+  }
+ ],
+ "content": "[{\"id\":\"eMtZ9Fy0gH\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Выручка\",\"col\":3}},{\"id\":\"N65ZHSyY7l\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Расходы\",\"col\":3}},{\"id\":\"TDPW86dFns\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Выручка по клиентам\",\"col\":6}},{\"id\":\"fbT-RKyGBj\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Profit and Loss\",\"col\":12}},{\"id\":\"xQCqDfrHL0\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Analytics\",\"col\":4}},{\"id\":\"ErwPamfJwj\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Доходы и расходы\",\"col\":4}},{\"id\":\"E-tgoZrGYl\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Profitability Analysis\",\"col\":4}},{\"id\":\"b_mFAu3HHf\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"pNeqzFQcsg\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Коммерческие проекты\",\"col\":3}},{\"id\":\"R3LSYcG11t\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Клиенты\",\"col\":3}},{\"id\":\"EDwIvlztSt\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Подрядчики\",\"col\":3}},{\"id\":\"EknIsFC-Lf\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Специалисты\",\"col\":3}}]",
+ "creation": "2026-02-07 13:31:04.102966",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "accounting",
+ "idx": 0,
+ "indicator_color": "green",
+ "is_hidden": 0,
+ "label": "Аналитика",
+ "links": [],
+ "modified": "2026-08-10 02:27:26.307103",
+ "modified_by": "Administrator",
+ "module": "Dinext Projects Pl",
+ "name": "Аналитика",
+ "number_cards": [
+  {
+   "label": "Выручка",
+   "number_card_name": "Выручка"
+  },
+  {
+   "label": "Коммерческие проекты",
+   "number_card_name": "Коммерческие проекты"
+  },
+  {
+   "label": "Расходы",
+   "number_card_name": "Расходы"
+  },
+  {
+   "label": "Клиенты",
+   "number_card_name": "Active Customers"
+  },
+  {
+   "label": "Специалисты",
+   "number_card_name": "Специалисты"
+  },
+  {
+   "label": "Подрядчики",
+   "number_card_name": "Active Suppliers"
+  }
+ ],
+ "owner": "Administrator",
+ "parent_page": "Мои проекты",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [
+  {
+   "role": "Dinext_Projects_Admin"
+  },
+  {
+   "role": "Dinext_Management"
+  },
+  {
+   "role": "Dinext_Sales_Manager"
+  },
+  {
+   "role": "Dinext_Project_Manager"
+  }
+ ],
+ "sequence_id": 23.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Sales Analytics",
+   "link_to": "Sales Analytics",
+   "report_ref_doctype": "Sales Order",
+   "type": "Report"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Profitability Analysis",
+   "link_to": "Profitability Analysis",
+   "report_ref_doctype": "GL Entry",
+   "type": "Report"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Доходы и расходы",
+   "link_to": "Profit and Loss Statement",
+   "report_ref_doctype": "GL Entry",
+   "type": "Report"
+  }
+ ],
+ "title": "Аналитика"
+}

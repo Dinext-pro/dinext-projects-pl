@@ -5,3 +5,4 @@
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
 dinext_projects_pl.patches.add_project_budget_report_indexes
+dinext_projects_pl.patches.reassign_analytics_workspace_module
