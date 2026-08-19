@@ -19,16 +19,28 @@ from dinext_projects_pl.models import (
 from dinext_projects_pl.dinext_projects_pl.project_budget.save import (
 	run_save_project_budget_forecast,
 )
-from dinext_projects_pl.dinext_projects_pl.project_budget.dim_options import (
-	run_add_project_budget_dimension,
-	run_get_account_dimension_options,
-)
 
 
 @frappe.whitelist()
-def get_project_budget_grid() -> ProjectBudgetGridResponse:
+def get_project_budget_grid(
+	project=None,
+	period_type=None,
+	view_options=None,
+	view_mode=None,
+	show_zero_rows=None,
+) -> ProjectBudgetGridResponse:
 	"""Scalar Project Budget grid (DinextTable)."""
-	form_input: ProjectBudgetGridFormInput = frappe.form_dict
+	# Bind xcall kwargs explicitly — form_dict alone can drop 0 / collide with extras.
+	form_dict = frappe.form_dict or {}
+	form_input: ProjectBudgetGridFormInput = {
+		"project": project if project is not None else form_dict.get("project"),
+		"period_type": period_type if period_type is not None else form_dict.get("period_type"),
+		"view_options": view_options if view_options is not None else form_dict.get("view_options"),
+		"view_mode": view_mode if view_mode is not None else form_dict.get("view_mode"),
+		"show_zero_rows": (
+			show_zero_rows if show_zero_rows is not None else form_dict.get("show_zero_rows")
+		),
+	}
 	return run_get_project_budget_grid(form_input)
 
 
@@ -37,15 +49,3 @@ def save_project_budget_forecast() -> dict:
 	"""Batch save forecast (pba_expected) from Project Budget grid."""
 	form_input: ProjectBudgetSaveForecastFormInput = frappe.form_dict
 	return run_save_project_budget_forecast(form_input)
-
-
-@frappe.whitelist()
-def get_account_dimension_options() -> dict:
-	"""Dimension types + link options allowed for account (Accounting Dimension Filter)."""
-	return run_get_account_dimension_options(frappe.form_dict)
-
-
-@frappe.whitelist()
-def add_project_budget_dimension() -> dict:
-	"""Add dimension: new Project Budget bucket or mutate existing pb_docname."""
-	return run_add_project_budget_dimension(frappe.form_dict)

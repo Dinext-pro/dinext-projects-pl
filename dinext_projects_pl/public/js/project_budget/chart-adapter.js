@@ -1,6 +1,5 @@
 /**
- * Chart data from frm.project_budget (same shape as legacy build_pl_chart_data).
- * Walk mirrors summary.py: plan / fact|forecast via own_fact, not rolled actual_*.
+ * Chart data from displayed grid rows (same roots as Gross Profit summary).
  */
 
 function toFloat(value) {
@@ -8,32 +7,16 @@ function toFloat(value) {
 	return Number.isFinite(n) ? n : 0;
 }
 
-function rowPeriodAmount(row, periodKey, valueKey) {
-	const field = valueKey === "fact" ? `own_fact_${periodKey}` : `${valueKey}_${periodKey}`;
-	const direct = toFloat(row?.[field]);
-	// Merge tails are siblings under parent — parent walk includes them.
-	if (direct) {
-		return direct;
-	}
-	let total = 0;
-	for (const child of row?.children || []) {
-		total += rowPeriodAmount(child, periodKey, valueKey);
-	}
-	return total;
-}
-
 function calcPeriodIncomeExpense(rootRows, period) {
 	const key = period.key || `${period.year}_${period.month}`;
-	const actualKey = period.is_past ? "fact" : "forecast";
-
 	let plan_income = 0;
 	let plan_expenses = 0;
 	let actual_income = 0;
 	let actual_expenses = 0;
 
 	for (const row of rootRows || []) {
-		const plan = rowPeriodAmount(row, key, "plan");
-		const actual = rowPeriodAmount(row, key, actualKey);
+		const plan = toFloat(row[`plan_${key}`]);
+		const actual = toFloat(row[`actual_${key}`]);
 		const rtype = row.root_type || "";
 		if (rtype === "Expense") {
 			plan_expenses += plan;
@@ -85,32 +68,45 @@ export function buildChartData(frm) {
 		profit_actual.push(parseFloat((r.actual_income - r.actual_expenses).toFixed(2)));
 	}
 
+	const accumulated = !!frm.bg_accumulated_values;
 	const cumulative_profit_plan = [];
 	const cumulative_profit_actual = [];
 	const cumulative_income_plan = [];
 	const cumulative_income_actual = [];
 	const cumulative_expenses_plan = [];
 	const cumulative_expenses_actual = [];
-	let cumP = 0;
-	let cumA = 0;
-	let cumIncomePlan = 0;
-	let cumIncomeActual = 0;
-	let cumExpensesPlan = 0;
-	let cumExpensesActual = 0;
 
-	for (let i = 0; i < profit_plan.length; i++) {
-		cumP += profit_plan[i];
-		cumA += profit_actual[i];
-		cumIncomePlan += plan_income[i];
-		cumIncomeActual += actual_income[i];
-		cumExpensesPlan += plan_expenses[i];
-		cumExpensesActual += actual_expenses[i];
-		cumulative_profit_plan.push(parseFloat(cumP.toFixed(2)));
-		cumulative_profit_actual.push(parseFloat(cumA.toFixed(2)));
-		cumulative_income_plan.push(parseFloat(cumIncomePlan.toFixed(2)));
-		cumulative_income_actual.push(parseFloat(cumIncomeActual.toFixed(2)));
-		cumulative_expenses_plan.push(parseFloat(cumExpensesPlan.toFixed(2)));
-		cumulative_expenses_actual.push(parseFloat(cumExpensesActual.toFixed(2)));
+	if (accumulated) {
+		// Period series already running totals — do not sum again (report chart).
+		for (let i = 0; i < profit_plan.length; i++) {
+			cumulative_profit_plan.push(profit_plan[i]);
+			cumulative_profit_actual.push(profit_actual[i]);
+			cumulative_income_plan.push(plan_income[i]);
+			cumulative_income_actual.push(actual_income[i]);
+			cumulative_expenses_plan.push(plan_expenses[i]);
+			cumulative_expenses_actual.push(actual_expenses[i]);
+		}
+	} else {
+		let cumP = 0;
+		let cumA = 0;
+		let cumIncomePlan = 0;
+		let cumIncomeActual = 0;
+		let cumExpensesPlan = 0;
+		let cumExpensesActual = 0;
+		for (let i = 0; i < profit_plan.length; i++) {
+			cumP += profit_plan[i];
+			cumA += profit_actual[i];
+			cumIncomePlan += plan_income[i];
+			cumIncomeActual += actual_income[i];
+			cumExpensesPlan += plan_expenses[i];
+			cumExpensesActual += actual_expenses[i];
+			cumulative_profit_plan.push(parseFloat(cumP.toFixed(2)));
+			cumulative_profit_actual.push(parseFloat(cumA.toFixed(2)));
+			cumulative_income_plan.push(parseFloat(cumIncomePlan.toFixed(2)));
+			cumulative_income_actual.push(parseFloat(cumIncomeActual.toFixed(2)));
+			cumulative_expenses_plan.push(parseFloat(cumExpensesPlan.toFixed(2)));
+			cumulative_expenses_actual.push(parseFloat(cumExpensesActual.toFixed(2)));
+		}
 	}
 
 	return {

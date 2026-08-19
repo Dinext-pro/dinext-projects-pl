@@ -31,47 +31,20 @@ def _root_type(row: ProjectBudgetRow) -> str:
 	return str(row.get("root_type") or "")
 
 
-def _row_period_amount(row: ProjectBudgetRow, period_key: str, value_key: str) -> float:
-	"""Legacy get_row_period_total: own/direct if nonzero, else sum descendants.
-
-	Uses own_fact_* for fact (not rolled fact_* / actual_*) so rollup display
-	cannot double-count when walking the tree.
-
-	Merge tails are siblings under the parent (not in head.children); parent walk
-	already includes them. Head with own + nested children: own wins (legacy).
-	"""
-	if value_key == "fact":
-		field = f"own_fact_{period_key}"
-	else:
-		field = f"{value_key}_{period_key}"
-
-	direct = _to_float(row.get(field))
-	if direct:
-		return direct
-
-	total = 0.0
-	for child in row.get("children") or []:
-		total += _row_period_amount(child, period_key, value_key)
-	return total
-
-
 def calc_period_income_expense(
 	root_rows: list[ProjectBudgetRow],
 	period: ProjectBudgetDisplayPeriod,
 ) -> tuple[float, float, float, float]:
-	"""plan_income, plan_expenses, actual_income, actual_expenses — like calc_column_total."""
+	"""Report addProfitRow: sum displayed plan_/actual_ on Income/Expense roots."""
 	period_key = period["key"]
-	# Legacy: past → fact, future → forecast (not display actual_*).
-	actual_key = "fact" if period.get("is_past") else "forecast"
-
 	plan_income = 0.0
 	plan_expenses = 0.0
 	actual_income = 0.0
 	actual_expenses = 0.0
 
 	for row in root_rows:
-		plan = _row_period_amount(row, period_key, "plan")
-		actual = _row_period_amount(row, period_key, actual_key)
+		plan = _to_float(row.get(f"plan_{period_key}"))
+		actual = _to_float(row.get(f"actual_{period_key}"))
 		rtype = _root_type(row)
 		if rtype == "Expense":
 			plan_expenses += plan

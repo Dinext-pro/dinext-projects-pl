@@ -40,12 +40,6 @@ frappe.provide("dinext_projects_pl.projectBudget");
 		});
 	}
 
-	function onToggleDimensions(frm) {
-		whenReady(frm, () => {
-			window.ProjectBudget.onToggleDimensions(frm);
-		});
-	}
-
 	function onViewOptionsChange(frm) {
 		whenReady(frm, () => {
 			window.ProjectBudget.onViewOptionsChange(frm);
@@ -73,7 +67,6 @@ frappe.provide("dinext_projects_pl.projectBudget");
 	Object.assign(dinext_projects_pl.projectBudget, {
 		whenReady,
 		onTogglePlanOrDelta,
-		onToggleDimensions,
 		onViewOptionsChange,
 		onPeriodOrAggregateChange,
 		saveForecastAsPlan,

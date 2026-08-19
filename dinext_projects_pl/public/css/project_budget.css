@@ -152,6 +152,11 @@
 		min-width: 100%;
 	}
 
+	#project-custom_pl div[data-fieldname="custom_accumulated_values"] .control-label,
+	#project-custom_pl div[data-fieldname="custom_accumulated_values"] > label {
+		display: none;
+	}
+
 	#project-custom_pl button > .icon {
 		margin: 0 10px 0 0;
 	}
@@ -446,24 +451,6 @@
 	color: #e03636 !important;
 }
 
-/* Dimension column (+ add, WE-like) */
-.budget-table.dinext-table .pl-dim-cell {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	width: 100%;
-	min-height: 100%;
-	box-sizing: border-box;
-}
-
-.budget-table.dinext-table .pl-dim-label {
-	flex: 1 1 auto;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
 .budget-container:fullscreen,
 .budget-container.budget-container--fullscreen {
 	height: 100%;
@@ -489,17 +476,5 @@
 	min-height: 0;
 	height: auto !important;
 	max-height: none !important;
-}
-
-.budget-table.dinext-table .pl-dim-add {
-	flex: 0 0 auto;
-	padding: 0 4px;
-	line-height: 1.2;
-	margin-left: auto;
-}
-
-.pl-dim-add-menu {
-	max-height: 280px;
-	overflow: auto;
 }
 

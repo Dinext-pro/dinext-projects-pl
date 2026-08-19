@@ -1,4 +1,3 @@
-import { MERGE_GROUP } from "./constants.js";
 import { initState } from "./state.js";
 import { loadGridData, reloadTable } from "./data.js";
 import { applyPlanDeltaVisibility, getColumns, refreshColumns } from "./columns.js";
@@ -105,10 +104,8 @@ function buildTableOptions(frm, state) {
 		},
 		onValidateCells: (ctx) => onValidateCells(frm, ctx),
 		onSaveCells: (ctx) => onSaveCells(frm, ctx),
-		mergeGroup: MERGE_GROUP,
+		treeColumnField: "account_label",
 		gridOptions: {
-			// Needed for Статья merge when «Показать измерения»; ok when off.
-			enableCellSpan: true,
 			// Legacy: row ~29px, header block ~45px total.
 			rowHeight: 29,
 			headerHeight: 22,
@@ -204,27 +201,6 @@ export async function onViewOptionsChange(frm) {
 
 /** Period granularity or fact-aggregation toggle → reload grid + chart. */
 export async function onPeriodOrAggregateChange(frm) {
-	const table = await reloadTable(frm, initTable, refreshRuntime);
-	if (window.ProjectBudget?.refreshChart) {
-		window.ProjectBudget.refreshChart(frm);
-	}
-	return table;
-}
-
-/** Toggle «Показать / Скрыть измерения» → remount (column + merge span change). */
-export async function onToggleDimensions(frm) {
-	const state = frm.project_budget;
-	const container = state?.container;
-	if (state?.table?.destroy) {
-		state.table.destroy();
-	}
-	if (state) {
-		state.table = null;
-		state._initPromise = null;
-		if (container) {
-			state.container = container;
-		}
-	}
 	const table = await reloadTable(frm, initTable, refreshRuntime);
 	if (window.ProjectBudget?.refreshChart) {
 		window.ProjectBudget.refreshChart(frm);
