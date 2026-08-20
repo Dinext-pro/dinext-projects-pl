@@ -1,0 +1,479 @@
+/* Project Budget tab — table, controls, chart, financial metrics */
+
+/* --- shell / controls (ex project_pl_style.js) --- */
+
+.budget-container {
+	max-width: 100% !important;
+}
+
+.budget-container .budget-table.dinext-table {
+	margin-top: 0;
+}
+
+/*
+ * Domain controls on toolbar custom host.
+ * Host itself gets .budget-controls (not a child) — do not nest those selectors.
+ */
+.budget-container .dinext-table-toolbar-custom.budget-controls {
+	display: flex;
+	align-items: center;
+	flex-wrap: nowrap;
+	gap: 6px;
+	flex: 0 0 auto;
+	min-width: max-content;
+	width: max-content;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-forecast-dropdown-wrapper {
+	flex: 0 0 auto;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-forecast-dropdown-wrapper .btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+/* View-options Select (only_input): wrapper is itself `.form-group.frappe-control`. */
+.budget-container .dinext-table-toolbar-custom.budget-controls > .frappe-control[data-fieldname="view-options"],
+.budget-container .dinext-table-toolbar-custom.budget-controls > .frappe-control[data-fieldname="period-type"] {
+	position: relative;
+	flex: 0 0 150px;
+	width: 150px;
+	margin: 0 !important;
+	padding: 0;
+	align-self: center;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls > .frappe-control[data-fieldname="period-type"] {
+	flex: 0 0 110px;
+	width: 110px;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls > .frappe-control[data-fieldname="view-options"] .form-control,
+.budget-container .dinext-table-toolbar-custom.budget-controls > .frappe-control[data-fieldname="period-type"] .form-control {
+	width: 100%;
+	height: 28px;
+	min-height: 28px;
+	padding: 2px 24px 2px 8px;
+	margin: 0;
+	line-height: 1.2;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-toolbar-check-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0;
+	font-weight: normal;
+	white-space: nowrap;
+	user-select: none;
+	cursor: pointer;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-toolbar-check-toggle input {
+	margin: 0;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-toolbar-checkbox-wrapper {
+	display: inline-flex;
+	align-items: center;
+	flex: 0 0 auto;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-toolbar-checkbox-wrapper .frappe-control,
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-toolbar-checkbox-wrapper .checkbox {
+	margin: 0;
+	display: inline-flex;
+	align-items: center;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls > .btn {
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-save-plan-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding-left: 8px;
+	padding-right: 8px;
+}
+
+/* Portaled forecast menu (body). */
+.pl-toolbar-dropdown-menu,
+.pl-toolbar-forecast-menu {
+	right: auto !important;
+	width: max-content;
+	min-width: 0;
+	max-width: min(360px, calc(100vw - 16px));
+}
+
+.pl-toolbar-dropdown-menu li,
+.pl-toolbar-dropdown-menu .dropdown-item,
+.pl-toolbar-forecast-menu li {
+	cursor: pointer;
+}
+
+.pl-toolbar-forecast-menu li {
+	padding: 8px 15px;
+	white-space: nowrap;
+}
+
+.budget-container .budget-table.dinext-table {
+	width: 100%;
+	min-height: 280px;
+	height: min(50vh, 560px);
+	max-height: 560px;
+}
+
+/* Host has fixed height (+ inline from mount) — clear for core container fullscreen. */
+.budget-container .budget-table.dinext-table:fullscreen,
+.budget-container .budget-table.dinext-table.dinext-table--fullscreen {
+	height: 100% !important;
+	max-height: none !important;
+	min-height: 0 !important;
+}
+
+@media (min-width: 576px) {
+	#project-custom_pl .report-summary {
+		flex-wrap: nowrap;
+	}
+
+	#project-custom_pl .report-summary .summary-item,
+	#project-custom_pl .report-summary .summary-separator .summary-value {
+		margin: 0;
+	}
+
+	#project-custom_pl div[data-fieldname="periodicity"],
+	#project-custom_pl div[data-fieldname="accumulated_values"] span.label-area {
+		min-width: 100%;
+	}
+
+	#project-custom_pl div[data-fieldname="custom_accumulated_values"] .control-label,
+	#project-custom_pl div[data-fieldname="custom_accumulated_values"] > label {
+		display: none;
+	}
+
+	#project-custom_pl button > .icon {
+		margin: 0 10px 0 0;
+	}
+}
+
+#project-custom_pl div[data-fieldname="custom_pl_chart"].pl-chart-wrapper,
+#project-custom_pl div[data-fieldname="custom_pl_chart"] .pl-chart-container,
+.pl-chart-wrapper {
+	width: 100%;
+	max-width: 100%;
+}
+
+.pl-chart-container {
+	width: 100%;
+	min-height: 360px;
+	height: 360px;
+	overflow: visible;
+	background: transparent;
+}
+
+.pl-chart-wrapper.pl-chart-expanded .pl-chart-container {
+	min-height: 440px;
+	height: 440px;
+}
+
+.pl-chart-error {
+	padding: 24px;
+	color: var(--red-500, #c0392b);
+}
+
+.project-financial-metrics {
+	margin: 1rem 0 1.25rem;
+}
+
+.project-financial-metrics .evm-metrics-section {
+	border: 1px solid var(--border-color);
+	border-radius: var(--border-radius-md);
+	background: var(--card-bg);
+	padding: 1rem;
+}
+
+.project-financial-metrics .evm-metrics-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 1rem;
+	margin-bottom: 0.75rem;
+}
+
+.project-financial-metrics .evm-metrics-reporting-date {
+	flex: 0 0 auto;
+	min-width: 11rem;
+}
+
+.project-financial-metrics .evm-metrics-reporting-date .form-group {
+	margin-bottom: 0;
+}
+
+.project-financial-metrics .evm-metrics-title {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--text-color);
+}
+
+.project-financial-metrics .evm-metrics-note {
+	margin-top: 0.25rem;
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
+.project-financial-metrics .evm-metrics-warning,
+.project-financial-metrics .evm-metrics-empty {
+	margin-top: 0.75rem;
+	padding: 0.75rem 0.875rem;
+	border-radius: var(--border-radius-md);
+	background: var(--bg-light-gray);
+	color: var(--text-muted);
+	font-size: 13px;
+}
+
+.project-financial-metrics .evm-metrics-warning {
+	border: 1px solid var(--warning-border);
+	color: var(--warning-text, var(--text-color));
+}
+
+.project-financial-metrics .evm-metrics-tracks {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem;
+	align-items: start;
+	margin-top: 0.75rem;
+}
+
+.project-financial-metrics .evm-track-card {
+	border: 1px solid var(--border-color);
+	border-radius: var(--border-radius-md);
+	background: var(--subtle-fg);
+	padding: 0.875rem;
+}
+
+.project-financial-metrics .evm-track-title {
+	margin-bottom: 0.75rem;
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--text-color);
+}
+
+.project-financial-metrics .evm-metric-group + .evm-metric-group {
+	margin-top: 0.875rem;
+}
+
+.project-financial-metrics .evm-metric-group-title {
+	margin-bottom: 0.375rem;
+	font-size: 12px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+	color: var(--text-muted);
+}
+
+.project-financial-metrics .evm-metric-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1rem;
+	padding: 0.375rem 0;
+	border-top: 1px solid var(--border-color);
+}
+
+.project-financial-metrics .evm-metric-group .evm-metric-row:first-of-type {
+	border-top: 0;
+}
+
+.project-financial-metrics .evm-metric-label-wrap {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.375rem;
+	min-width: 0;
+}
+
+.project-financial-metrics .evm-metric-label {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0.25rem;
+	color: var(--text-color);
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.project-financial-metrics .evm-metric-code {
+	font-weight: 600;
+	letter-spacing: 0.01em;
+}
+
+.project-financial-metrics .evm-metric-short-name {
+	color: var(--text-muted);
+	font-weight: 400;
+}
+
+.project-financial-metrics .evm-metric-help {
+	display: inline-flex;
+	justify-content: center;
+	align-items: center;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	border: 1px solid var(--border-color);
+	color: var(--text-muted);
+	font-size: 10px;
+	line-height: 1;
+	cursor: help;
+	user-select: none;
+	background: var(--card-bg);
+}
+
+.project-financial-metrics .evm-metric-value {
+	white-space: nowrap;
+	font-feature-settings: "tnum";
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--text-color);
+	text-align: right;
+}
+
+.project-financial-metrics .evm-metric-row.is-good .evm-metric-value {
+	color: var(--green-600);
+}
+
+.project-financial-metrics .evm-metric-row.is-bad .evm-metric-value {
+	color: var(--red-600);
+}
+
+@media (max-width: 991px) {
+	.project-financial-metrics .evm-metrics-tracks {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* --- DinextTable (ex pl-v2.css); class hooks pl-v2-* until JS rename --- */
+
+.budget-table.dinext-table {
+	width: 100%;
+	min-height: 280px;
+	height: min(50vh, 560px);
+	max-height: 560px;
+	--project-budget-row-height: 29px;
+	--ag-font-size: 14px;
+	--ag-header-font-weight: 600;
+	--ag-cell-horizontal-padding: 2px;
+}
+
+.budget-container > .budget-table:not(.dinext-table) {
+	width: 100%;
+	min-height: 280px;
+	height: min(50vh, 560px);
+	max-height: 560px;
+	box-sizing: border-box;
+}
+
+.budget-table.dinext-table .ag-header-cell,
+.budget-table.dinext-table .ag-header-group-cell {
+	font-weight: 600;
+}
+
+.budget-table.dinext-table .ag-header-cell.project-budget-header--center .ag-header-cell-label,
+.budget-table.dinext-table .ag-header-group-cell.project-budget-header--center .ag-header-group-cell-label,
+.budget-table.dinext-table .project-budget-header--center .ag-header-cell-label,
+.budget-table.dinext-table .project-budget-header--center .ag-header-group-cell-label {
+	justify-content: center;
+	width: 100%;
+	text-align: center;
+}
+
+.budget-table.dinext-table .ag-header-row:not(.ag-header-row-column-group) .ag-header-cell-text {
+	font-size: 10px;
+	font-weight: 600;
+}
+
+.budget-table.dinext-table .ag-header-row-column-group .ag-header-group-text {
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.budget-table.dinext-table .ag-header-cell[col-id="__dinext_row_check"] .ag-header-cell-text,
+.budget-table.dinext-table .ag-header-cell[col-id="account_serial"] .ag-header-cell-text,
+.budget-table.dinext-table .ag-header-cell[col-id="account_label"] .ag-header-cell-text {
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.budget-table.dinext-table .ag-cell {
+	line-height: 21px;
+	font-feature-settings: "tnum";
+}
+
+.budget-table.dinext-table .ag-cell[col-id^="plan_"],
+.budget-table.dinext-table .ag-cell[col-id^="actual_"],
+.budget-table.dinext-table .ag-cell[col-id^="delta_"],
+.budget-table.dinext-table .ag-floating-bottom .ag-cell[col-id^="plan_"],
+.budget-table.dinext-table .ag-floating-bottom .ag-cell[col-id^="actual_"],
+.budget-table.dinext-table .ag-floating-bottom .ag-cell[col-id^="delta_"] {
+	font-size: 12px;
+}
+
+.budget-table.dinext-table .dinext-table-cell--align-center .ag-cell-value,
+.budget-table.dinext-table .dinext-table-cell--align-center .ag-cell-wrapper {
+	justify-content: center;
+	text-align: center;
+}
+
+.budget-table.dinext-table .ag-cell.project-budget-cell--zero,
+.budget-table.dinext-table .ag-cell.project-budget-cell--zero .ag-cell-value {
+	color: var(--bg-dark-gray, #999) !important;
+}
+
+.budget-table.dinext-table .ag-floating-bottom .ag-row,
+.budget-table.dinext-table .dinext-table-row--summary {
+	font-weight: 700;
+	background: transparent !important;
+	background-color: transparent !important;
+}
+
+.budget-table.dinext-table .ag-cell.project-budget-cell--profit-pos,
+.budget-table.dinext-table .ag-cell.project-budget-cell--profit-pos .ag-cell-value {
+	color: #28a745 !important;
+}
+
+.budget-table.dinext-table .ag-cell.project-budget-cell--profit-neg,
+.budget-table.dinext-table .ag-cell.project-budget-cell--profit-neg .ag-cell-value {
+	color: #e03636 !important;
+}
+
+.budget-container:fullscreen,
+.budget-container.budget-container--fullscreen {
+	height: 100%;
+	box-sizing: border-box;
+	padding: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	background-color: var(--card-bg, var(--bg-color, #fff));
+}
+
+.budget-container:fullscreen .dinext-table-toolbar-custom.budget-controls,
+.budget-container.budget-container--fullscreen .dinext-table-toolbar-custom.budget-controls {
+	flex: 0 0 auto;
+	margin-bottom: 0;
+}
+
+.budget-container:fullscreen .budget-table,
+.budget-container.budget-container--fullscreen .budget-table,
+.budget-container:fullscreen .budget-table.dinext-table,
+.budget-container.budget-container--fullscreen .budget-table.dinext-table {
+	flex: 1 1 auto;
+	min-height: 0;
+	height: auto !important;
+	max-height: none !important;
+}
+

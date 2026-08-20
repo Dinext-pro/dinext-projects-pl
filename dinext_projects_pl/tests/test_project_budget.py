@@ -316,6 +316,54 @@ class TestProjectBudget(FrappeTestCase):
         )
         self.assertEqual(actual_forecast_amounts, forecast_amounts)
 
+    def test_save_plan_direct_writes_zero_to_clear_plan(self):
+        period = self._current_period()
+        dimensions = [{"doc": "Task", "docname": self.task.name}]
+        self._seed_project_budget_forecast(dimensions, {(period.year, period.month): 1200})
+
+        old_config_value = getattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY, None)
+        had_config_value = hasattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY)
+        setattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY, 0)
+
+        try:
+            save_budget_plan_for_approval(
+                self.project.name,
+                [
+                    {
+                        "account": self.expense_account,
+                        "dimensions": dimensions,
+                        "amounts": [
+                            {"year": period.year, "month": period.month, "plan_value": 300},
+                        ],
+                    }
+                ],
+            )
+            save_budget_plan_for_approval(
+                self.project.name,
+                [
+                    {
+                        "account": self.expense_account,
+                        "dimensions": dimensions,
+                        "amounts": [
+                            {"year": period.year, "month": period.month, "plan_value": 0},
+                        ],
+                    }
+                ],
+            )
+        finally:
+            if had_config_value:
+                setattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY, old_config_value)
+            else:
+                delattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY)
+
+        project_budget = self._get_project_budget(dimensions)
+        actual_plan = next(
+            row.pba_plan
+            for row in project_budget.project_budget_amount
+            if row.pba_year == period.year and row.pba_month == period.month
+        )
+        self.assertEqual(actual_plan, 0)
+
     @classmethod
     def _make_project(cls):
         project = frappe.get_doc(
@@ -336,9 +384,10 @@ class TestProjectBudget(FrappeTestCase):
                 "doctype": "Task",
                 "subject": f"Budget Approval Task {frappe.generate_hash(length=6)}",
                 "project": project_name,
+                "type": "Issue",
             }
         )
-        task.insert(ignore_permissions=True)
+        task.insert(ignore_permissions=True, ignore_mandatory=True)
         return task
 
     @staticmethod
