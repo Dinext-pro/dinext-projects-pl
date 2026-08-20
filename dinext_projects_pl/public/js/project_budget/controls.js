@@ -215,26 +215,89 @@ function refreshChart(frm) {
 	window.ProjectBudget?.refreshChart?.(frm);
 }
 
-function getForecastMenuItems() {
-	const raw = window.dinext_projects?.project_budget_forecast_menu;
-	const menu_array = Array.isArray(raw) ? raw : [];
-	return menu_array.filter(
-		(x) => x && typeof x.label === "string" && typeof x.action === "function"
+function ensureForecastMenuAliasSync() {
+	const dp = window.dinext_projects || (window.dinext_projects = {});
+	if (!Array.isArray(dp.project_pl_forecast_menu)) {
+		dp.project_pl_forecast_menu = [];
+	}
+	if (
+		!Array.isArray(dp.project_budget_forecast_menu) ||
+		dp.project_budget_forecast_menu !== dp.project_pl_forecast_menu
+	) {
+		if (
+			Array.isArray(dp.project_budget_forecast_menu) &&
+			dp.project_budget_forecast_menu.length &&
+			!dp.project_pl_forecast_menu.length
+		) {
+			dp.project_pl_forecast_menu = dp.project_budget_forecast_menu;
+		}
+		dp.project_budget_forecast_menu = dp.project_pl_forecast_menu;
+	}
+}
+
+/**
+ * Registry items from PWA / risk — same conditions as original registrars:
+ * - Cost from WE: always (when PWA registered)
+ * - Revenue from WE: only T&M payment scheme
+ * - Risk reserve: only when project has contingency_reserve risks
+ * Also drop stale/dup entries left in the global menu between Project refreshes.
+ */
+function getForecastMenuItems(frm) {
+	ensureForecastMenuAliasSync();
+	const raw = Array.isArray(window.dinext_projects?.project_budget_forecast_menu)
+		? window.dinext_projects.project_budget_forecast_menu
+		: [];
+	const isTm = frm?.doc?.custom_payment_scheme === "Время и затраты (T&M)";
+	const hasReserveRisk = (frm?.doc?.custom_project_risks || []).some(
+		(r) => r && r.contingency_reserve
 	);
+	const revenueLabel = __("Revenue forecast from work efforts");
+	const seen = new Set();
+	const out = [];
+	for (const item of raw) {
+		if (!item || typeof item.label !== "string" || typeof item.action !== "function") {
+			continue;
+		}
+		if (item.__dinext_risk_reserve_forecast && !hasReserveRisk) {
+			continue;
+		}
+		if (item.__pwr_pl_forecast_from_we && item.label === revenueLabel && !isTm) {
+			continue;
+		}
+		const key = item.__dinext_risk_reserve_forecast
+			? "__risk__"
+			: item.__pwr_pl_forecast_from_we
+				? `__we__:${item.label}`
+				: item.label;
+		if (seen.has(key)) {
+			continue;
+		}
+		seen.add(key);
+		out.push(item);
+	}
+	return out;
+}
+
+/** Insert after period select (3rd slot). Fallback: append. */
+function placeForecastDropdown(host, $wrapper) {
+	const $period = host.find('.frappe-control[data-fieldname="period-type"]').first();
+	if ($period.length) {
+		$wrapper.insertAfter($period);
+	} else {
+		host.append($wrapper);
+	}
 }
 
 function addForecastDropdown(frm, host) {
-	const items = getForecastMenuItems();
+	const items = getForecastMenuItems(frm);
+	host.find(".pl-forecast-dropdown-wrapper").remove();
 	if (!items.length) {
 		return;
 	}
 
-	host.find(".pl-forecast-dropdown-wrapper").remove();
-
 	const $wrapper = $('<div class="pl-forecast-dropdown-wrapper dropdown"></div>');
 	const $btn = $(`
 		<button class="btn btn-default dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
-			<i class="fa fa-plus" aria-hidden="true"></i>
 			<span>${__("Add forecast")}</span>
 		</button>
 	`);
@@ -253,7 +316,7 @@ function addForecastDropdown(frm, host) {
 	});
 
 	$wrapper.append($btn).append($menu);
-	host.append($wrapper);
+	placeForecastDropdown(host, $wrapper);
 	bindDropdownPortal($wrapper, $btn, $menu);
 }
 
@@ -336,8 +399,8 @@ function bindDropdownPortal($wrapper, $btn, $menu) {
 
 /**
  * Mount domain controls into DinextTable toolbar custom host (once).
- * Order: period → view → Save plan → Plan → Δ →
- * Show Plan → Show Δ → Accumulated Values → Show Zero Rows → Add forecast.
+ * Order: view → period → Add forecast → Save plan →
+ * Show Plan → Show Δ → Accumulated Values → Show Zero Rows.
  */
 export function mount_toolbar_controls(frm, host) {
 	if (host.data("pl-controls-mounted")) {
@@ -348,8 +411,9 @@ export function mount_toolbar_controls(frm, host) {
 	host.addClass("budget-controls");
 	ensurePlDefaults(frm);
 
-	addPeriodTypeControl(frm, host);
 	addViewOptionsControl(frm, host);
+	addPeriodTypeControl(frm, host);
+	addForecastDropdown(frm, host);
 
 	host.append(`
 		<button class="btn btn-default pl-save-plan-btn" id="bg-save_plan" type="button"
@@ -408,7 +472,9 @@ export function mount_toolbar_controls(frm, host) {
 		window.ProjectBudget?.saveForecastAsPlan(frm);
 	});
 
-	addForecastDropdown(frm, host);
+	// PWA/risk register menu on Project.refresh — may land after first paint.
+	setTimeout(() => addForecastDropdown(frm, host), 0);
+	setTimeout(() => addForecastDropdown(frm, host), 250);
 }
 
 export function refreshForecastDropdown(frm) {

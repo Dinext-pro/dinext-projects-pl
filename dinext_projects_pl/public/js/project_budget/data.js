@@ -213,7 +213,8 @@ function filterZeroValueRows(rows, periods) {
 			row.has_children = true;
 			row.expandable = 1;
 			kept.push(row);
-		} else if (rowHasOwnValue(row, periods)) {
+		} else if (row.task || rowHasOwnValue(row, periods)) {
+			// Keep Task WBS stubs (legacy always expanded full tree under account).
 			delete row.children;
 			row.has_children = false;
 			row.expandable = 0;

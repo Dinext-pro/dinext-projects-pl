@@ -140,7 +140,11 @@ def _load_project_tasks(project: str) -> list[dict]:
 
 
 def _load_accounts_allowing_task(company: str) -> set[str]:
-	"""Accounts where Accounting Dimension Filter allows document_type Task."""
+	"""Accounts where Accounting Dimension Filter applies to Task.
+
+	ADF.accounting_dimension stores document_type (e.g. \"Task\"), same as
+	forecast_utils.get_income_accounts_with_task_dimension.
+	"""
 	filters = frappe.get_all(
 		"Accounting Dimension Filter",
 		filters={"company": company, "disabled": 0},
@@ -149,11 +153,14 @@ def _load_accounts_allowing_task(company: str) -> set[str]:
 	)
 	allowed: set[str] = set()
 	for filt in filters:
-		dim_name = filt.get("accounting_dimension") or ""
+		dim_name = (filt.get("accounting_dimension") or "").strip()
 		if not dim_name or dim_name in EXCLUDED_DIMENSIONS:
 			continue
-		doc_type = frappe.db.get_value("Accounting Dimension", dim_name, "document_type")
-		if doc_type != "Task":
+		# Prefer document_type match; field itself is often already \"Task\".
+		doc_type = frappe.db.get_value(
+			"Accounting Dimension", {"document_type": dim_name}, "document_type"
+		) or frappe.db.get_value("Accounting Dimension", dim_name, "document_type")
+		if dim_name != "Task" and doc_type != "Task":
 			continue
 		for acct in frappe.get_all(
 			"Applicable On Account",
@@ -553,7 +560,12 @@ def _filter_zero_value_rows(
 	rows: list[ProjectBudgetRow],
 	periods: list[ProjectBudgetDisplayPeriod],
 ) -> list[ProjectBudgetRow]:
-	"""Drop empty nodes; keep ancestors of rows with values (report filter_out_zero_value_rows)."""
+	"""Drop empty nodes; keep ancestors of valued rows and Task WBS stubs.
+
+	Legacy P&L always expanded full Task tree under Task-allowed accounts so
+	users can enter plan/forecast on empty stubs. Zero-row filter must not
+	strip those stubs (only empty CoA/risk leaves without Task).
+	"""
 	kept: list[ProjectBudgetRow] = []
 	for row in rows:
 		children = _filter_zero_value_rows(list(row.get("children") or []), periods)
@@ -562,7 +574,7 @@ def _filter_zero_value_rows(
 			row["has_children"] = True
 			row["expandable"] = 1
 			kept.append(row)
-		elif _row_has_value(row, periods):
+		elif row.get("task") or _row_has_value(row, periods):
 			row.pop("children", None)
 			row["has_children"] = False
 			row["expandable"] = 0
