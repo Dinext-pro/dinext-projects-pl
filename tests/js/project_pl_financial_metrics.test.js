@@ -11,7 +11,7 @@ const modulePath = path.resolve(
     "dinext_projects_pl",
     "public",
     "js",
-    "project_pl_financial_metrics.js"
+    "project_budget_metrics.js"
 );
 const dashboardModulePath = path.resolve(
     __dirname,
@@ -20,7 +20,7 @@ const dashboardModulePath = path.resolve(
     "dinext_projects_pl",
     "public",
     "js",
-    "project_pl_dashboard.js"
+    "project_budget_dashboard.js"
 );
 const echartsModulePath = path.resolve(
     __dirname,
@@ -29,7 +29,7 @@ const echartsModulePath = path.resolve(
     "dinext_projects_pl",
     "public",
     "js",
-    "project_pl_echarts.js"
+    "project_budget_chart.js"
 );
 
 class FakeElement {
@@ -323,6 +323,7 @@ function loadDashboardModule() {
     const source = fs.readFileSync(dashboardModulePath, "utf8");
     const context = createContext();
     context.globalThis = context;
+    context.window = context;
     vm.createContext(context);
     vm.runInContext(source, context, { filename: dashboardModulePath });
     return context;
@@ -495,7 +496,7 @@ test("render_financial_metrics shows short names and detailed tooltip text", asy
     assert.match(renderedMarkup, /Это весь утвержденный бюджет проекта/);
 });
 
-test("echarts chart render still invokes financial metrics and chart creation", async () => {
+test("echarts chart render does not fetch financial metrics", async () => {
     const context = loadEchartsModule();
     const chartWrapper = new FakeElement("chart-wrapper");
 
@@ -517,43 +518,46 @@ test("echarts chart render still invokes financial metrics and chart creation", 
 
     await context._render_pl_chart(frm, true);
 
-    assert.equal(frm.metricsRenderCount, 1);
+    assert.equal(frm.metricsRenderCount || 0, 0);
     assert.equal(context.__chartCalls.length, 1);
 });
 
-test("echarts render uses global financial metrics contract", async () => {
-    const context = loadEchartsModule();
-    const chartWrapper = new FakeElement("chart-wrapper");
+test("concurrent fetch_financial_metrics shares one API call", async () => {
+    const context = loadFinancialMetricsModule();
     const frm = {
-        aggregatedBudget: { root: { parent_account: null, task: null } },
-        bg_hide_plan: false,
-        get_field(fieldname) {
-            if (fieldname === "custom_pl_chart") {
-                return { $wrapper: chartWrapper };
-            }
-
-            return null;
+        doc: { name: "PROJ-0001" },
+        _financial_metrics_reporting_date: "2026-01-15",
+        is_new() {
+            return false;
+        },
+        get_field() {
+            return { $wrapper: new FakeElement("metrics") };
         },
     };
 
-    context.globalThis.render_financial_metrics = (targetFrm) => {
-        targetFrm.metricsRenderCount = (targetFrm.metricsRenderCount || 0) + 1;
-    };
+    const [a, b] = await Promise.all([
+        context.fetch_financial_metrics(frm),
+        context.fetch_financial_metrics(frm),
+    ]);
 
-    await context._render_pl_chart(frm, true);
-
-    assert.equal(frm.metricsRenderCount, 1);
-    assert.equal(context.__chartCalls.length, 1);
+    assert.equal(context.__apiCalls.length, 1);
+    assert.equal(a, b);
 });
 
-test("dashboard refresh renders financial metrics immediately", () => {
+test("dashboard refresh schedules lazy mount instead of eager metrics", () => {
     const context = loadDashboardModule();
     let renderCount = 0;
+    let bindCalls = [];
     context.globalThis.render_financial_metrics = () => {
         renderCount += 1;
     };
     context.add_buttons = () => {};
     context.add_project_profit_loss_chart = () => {};
+    context.project_workload_assignment = {
+        bindLazyTabMount(frm, fieldname, mountFn) {
+            bindCalls.push({ fieldname, mountFn });
+        },
+    };
 
     const frm = {
         doc: { name: "PROJ-0001" },
@@ -564,5 +568,10 @@ test("dashboard refresh renders financial metrics immediately", () => {
 
     context.__formHandlers.Project.refresh(frm);
 
+    assert.equal(renderCount, 0);
+    assert.equal(bindCalls.length, 1);
+    assert.equal(bindCalls[0].fieldname, "custom_metrics");
+
+    bindCalls[0].mountFn();
     assert.equal(renderCount, 1);
 });

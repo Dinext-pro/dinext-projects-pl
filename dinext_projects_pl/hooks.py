@@ -19,20 +19,6 @@ fixtures = [
         ]
     },
     {
-        "doctype": "Client Script",
-        "filters": [
-            ["module", "in", ["Dinext Projects Pl"]],
-            ["enabled", "=", 1]
-        ]
-    },
-    {
-        "doctype": "Server Script",
-        "filters": [
-            ["module", "in", ["Dinext Projects Pl"]],
-            ["disabled", "=", 0]
-        ]
-    },
-    {
         "doctype": "Report",
         "filters": [
             ["module", "in", ["Dinext Projects Pl"]],
@@ -155,16 +141,21 @@ after_migrate = "dinext_projects_pl.install.sync_accounting_dimensions"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-doctype_js = {"Project": 
+doctype_js = {"Project":
     [
-        "public/js/project_pl_navigation.js",
-        "public/js/project_pl_style.js",
-        "public/js/project_pl.js",
-        "public/js/project_pl_calc.js",
-        "public/js/project_pl_echarts.js",
-        "public/js/project_pl_financial_metrics.js",
-        "public/js/project_pl_dashboard.js",
+        "public/js/project_budget_navigation.js",
+        "public/js/project_budget/boot.js",
+        "public/js/project_budget_tab.js",
+        "public/js/project_budget_chart.js",
+        "public/js/project_budget_metrics.js",
+        "public/js/project_budget_dashboard.js",
     ]
+}
+
+doctype_css = {
+	"Project": [
+		"public/css/project_budget.css",
+	],
 }
 # doctype_js = {"doctype" : "public/js/doctype.js"}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}

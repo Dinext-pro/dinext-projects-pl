@@ -11,7 +11,7 @@ const echartsModulePath = path.resolve(
     "dinext_projects_pl",
     "public",
     "js",
-    "project_pl_echarts.js"
+    "project_budget_chart.js"
 );
 
 class FakeElement {
@@ -818,7 +818,7 @@ test("tooltip valueFormatter returns plain currency text without html wrapper", 
     assert.equal(formatted.includes("<div"), false);
 });
 
-test("render_pl_chart invokes financial metrics and creates echarts instance", async () => {
+test("render_pl_chart creates echarts instance without financial metrics fetch", async () => {
     const context = loadEchartsModule();
     const frm = createChartFrm();
     frm.metricsRenderCount = 0;
@@ -828,7 +828,7 @@ test("render_pl_chart invokes financial metrics and creates echarts instance", a
 
     await context._render_pl_chart(frm, true);
 
-    assert.equal(frm.metricsRenderCount, 1);
+    assert.equal(frm.metricsRenderCount, 0);
     assert.equal(context.__echartsCalls.init.length, 1);
     assert.equal(context.__echartsCalls.setOption.length, 1);
     assert.ok(context.__echartsCalls.resize.length >= 1);

@@ -228,71 +228,35 @@ function build_pl_chart_data(frm) {
     if (pl_chart_debug_enabled()) {
         console.time("build_pl_chart_data");
     }
-    let periods = get_budget_display_periods(frm, "month");
-    let labels = periods.map((p) => `${p.year}-${String(p.month).padStart(2, "0")}`);
-
-    let plan_income = [];
-    let actual_income = [];
-    let plan_expenses = [];
-    let actual_expenses = [];
-    let profit_plan = [];
-    let profit_actual = [];
-    let roots = getFinancialRootRows(frm.aggregatedBudget);
-
-    periods.forEach((period) => {
-        let r = calc_column_total(frm, period, roots, true);
-        plan_income.push(parseFloat(r.plan_income.toFixed(2)));
-        actual_income.push(parseFloat(r.actual_income.toFixed(2)));
-        plan_expenses.push(parseFloat((-r.plan_expenses).toFixed(2)));
-        actual_expenses.push(parseFloat((-r.actual_expenses).toFixed(2)));
-        profit_plan.push(parseFloat((r.plan_income - r.plan_expenses).toFixed(2)));
-        profit_actual.push(parseFloat((r.actual_income - r.actual_expenses).toFixed(2)));
-    });
-
-    let cumulative_profit_plan = [];
-    let cumulative_profit_actual = [];
-    let cumulative_income_plan = [];
-    let cumulative_income_actual = [];
-    let cumulative_expenses_plan = [];
-    let cumulative_expenses_actual = [];
-    let cumP = 0;
-    let cumA = 0;
-    let cumIncomePlan = 0;
-    let cumIncomeActual = 0;
-    let cumExpensesPlan = 0;
-    let cumExpensesActual = 0;
-    for (let i = 0; i < profit_plan.length; i++) {
-        cumP += profit_plan[i];
-        cumA += profit_actual[i];
-        cumIncomePlan += plan_income[i];
-        cumIncomeActual += actual_income[i];
-        cumExpensesPlan += plan_expenses[i];
-        cumExpensesActual += actual_expenses[i];
-        cumulative_profit_plan.push(parseFloat(cumP.toFixed(2)));
-        cumulative_profit_actual.push(parseFloat(cumA.toFixed(2)));
-        cumulative_income_plan.push(parseFloat(cumIncomePlan.toFixed(2)));
-        cumulative_income_actual.push(parseFloat(cumIncomeActual.toFixed(2)));
-        cumulative_expenses_plan.push(parseFloat(cumExpensesPlan.toFixed(2)));
-        cumulative_expenses_actual.push(parseFloat(cumExpensesActual.toFixed(2)));
+    // P3: chart only from project_budget (Sticky aggregatedBudget path removed).
+    const fromV2 = window.ProjectBudget?.buildChartData?.(frm);
+    if (fromV2) {
+        if (pl_chart_debug_enabled()) {
+            console.timeEnd("build_pl_chart_data");
+        }
+        return fromV2;
     }
 
+    const periods = get_budget_display_periods(frm, "month");
+    const labels = periods.map((p) => `${p.year}-${String(p.month).padStart(2, "0")}`);
+    const zeros = periods.map(() => 0);
     if (pl_chart_debug_enabled()) {
         console.timeEnd("build_pl_chart_data");
     }
     return {
         labels,
-        plan_income,
-        actual_income,
-        plan_expenses,
-        actual_expenses,
-        profit_plan,
-        profit_actual,
-        cumulative_profit_plan,
-        cumulative_profit_actual,
-        cumulative_income_plan,
-        cumulative_income_actual,
-        cumulative_expenses_plan,
-        cumulative_expenses_actual,
+        plan_income: zeros.slice(),
+        actual_income: zeros.slice(),
+        plan_expenses: zeros.slice(),
+        actual_expenses: zeros.slice(),
+        profit_plan: zeros.slice(),
+        profit_actual: zeros.slice(),
+        cumulative_profit_plan: zeros.slice(),
+        cumulative_profit_actual: zeros.slice(),
+        cumulative_income_plan: zeros.slice(),
+        cumulative_income_actual: zeros.slice(),
+        cumulative_expenses_plan: zeros.slice(),
+        cumulative_expenses_actual: zeros.slice(),
         periods,
     };
 }
@@ -1165,7 +1129,12 @@ function ensure_pl_chart_theme_observer() {
 function render_pl_chart_impl(frm, init = true) {
     bind_pl_tab_listener_once(frm);
 
-    if (Object.values(frm.aggregatedBudget).length > LARGE_DATA_THRESHOLD) {
+    const plRowCount = (() => {
+        const walk = (rows) =>
+            (rows || []).reduce((n, r) => n + 1 + walk(r.children), 0);
+        return walk(frm.project_budget?.rows);
+    })();
+    if (plRowCount > LARGE_DATA_THRESHOLD) {
         if (pl_chart_debug_enabled()) {
             console.log("requestIdleCallback( render_pl_chart )");
         }
@@ -1186,10 +1155,8 @@ function _render_pl_chart(frm, init = true) {
     return load_pl_echarts()
         .then(function () {
             try {
-                const renderFinancialMetrics = globalThis.render_financial_metrics;
-                if (typeof renderFinancialMetrics === "function") {
-                    renderFinancialMetrics(frm);
-                }
+                // Financial metrics: owned by project_budget_dashboard (lazy tab mount).
+                // Do not call render_financial_metrics here — avoids duplicate API on P&L open.
 
                 const chartData = get_pl_chart_data(frm);
                 const option = get_pl_echarts_option(frm, chartData);
