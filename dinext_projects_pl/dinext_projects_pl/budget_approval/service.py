@@ -190,7 +190,7 @@ def _group_plan_rows(company: str, rows: list[dict]) -> dict:
             year = int(amount.get("year"))
             month = int(amount.get("month"))
             plan_value = float(amount.get("plan_value") or 0)
-            if plan_value <= 0:
+            if plan_value < 0:
                 continue
 
             fiscal_year = get_fiscal_year(
