@@ -43,42 +43,57 @@ class TestProjectBudgetPlanVsForecastPermissions(FrappeTestCase):
 
 		self.writable_project = self._make_project("WRITABLE")
 		self.readonly_project = self._make_project("READONLY")
+		self.noaccess_project = self._make_project("NOACCESS")
 		self._grant_project_access(self.writable_project.name, write=1)
 		self._grant_project_access(self.readonly_project.name, write=0)
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
-		for project in (self.writable_project, self.readonly_project):
-			frappe.share.remove("Project", project.name, self.test_user)
+		for project in (self.writable_project, self.readonly_project, self.noaccess_project):
+			if frappe.db.exists("DocShare", {"share_doctype": "Project", "share_name": project.name, "user": self.test_user}):
+				frappe.share.remove("Project", project.name, self.test_user)
 			if frappe.db.exists("Project", project.name):
 				frappe.delete_doc("Project", project.name, ignore_permissions=True, force=1)
 		frappe.db.commit()
 
-	def test_get_writable_report_projects_requires_write_permission(self):
+	def test_get_writable_report_projects_requires_read_permission(self):
 		frappe.set_user(self.test_user)
-		writable = get_writable_report_projects({"company": self.company})
-		self.assertIn(self.writable_project.name, writable)
-		self.assertNotIn(self.readonly_project.name, writable)
+		readable = get_writable_report_projects({"company": self.company})
+		self.assertIn(self.writable_project.name, readable)
+		self.assertIn(self.readonly_project.name, readable)
+		self.assertNotIn(self.noaccess_project.name, readable)
 
 	def test_apply_report_project_permissions_narrows_explicit_filter(self):
 		frappe.set_user(self.test_user)
 		filters = {
 			"company": self.company,
-			"project": [self.writable_project.name, self.readonly_project.name],
+			"project": [
+				self.writable_project.name,
+				self.readonly_project.name,
+				self.noaccess_project.name,
+			],
 		}
 		apply_report_project_permissions(filters)
-		self.assertEqual(filters.get("project"), self.writable_project.name)
-		self.assertEqual(filters.get("_report_writable_projects"), [self.writable_project.name])
+		self.assertEqual(
+			sorted(filters.get("project")),
+			sorted([self.writable_project.name, self.readonly_project.name]),
+		)
+		self.assertEqual(
+			sorted(filters.get("_report_writable_projects")),
+			sorted([self.writable_project.name, self.readonly_project.name]),
+		)
 
-	def test_get_writable_report_project_names_requires_write_permission(self):
+	def test_get_writable_report_project_names_requires_read_permission(self):
 		frappe.set_user(self.test_user)
-		writable = get_writable_report_project_names(company=self.company)
-		self.assertIn(self.writable_project.name, writable)
-		self.assertNotIn(self.readonly_project.name, writable)
+		readable = get_writable_report_project_names(company=self.company)
+		self.assertIn(self.writable_project.name, readable)
+		self.assertIn(self.readonly_project.name, readable)
+		self.assertNotIn(self.noaccess_project.name, readable)
 
 	def test_get_report_project_options_shows_project_name(self):
 		frappe.set_user(self.test_user)
 		options = get_report_project_options(company=self.company)
+		option_values = [option["value"] for option in options]
 		writable_option = next(
 			(option for option in options if option["value"] == self.writable_project.name),
 			None,
@@ -86,11 +101,13 @@ class TestProjectBudgetPlanVsForecastPermissions(FrappeTestCase):
 		self.assertIsNotNone(writable_option)
 		self.assertEqual(writable_option["label"], self.writable_project.project_name)
 		self.assertIn(self.writable_project.name, writable_option["description"])
-		self.assertNotIn(self.readonly_project.name, [option["value"] for option in options])
+		self.assertIn(self.readonly_project.name, option_values)
+		self.assertNotIn(self.noaccess_project.name, option_values)
 
-	def test_execute_excludes_projects_without_write_permission(self):
+	def test_execute_excludes_projects_without_read_permission(self):
 		self._seed_project_budget(self.writable_project.name, 1000)
 		self._seed_project_budget(self.readonly_project.name, 9000)
+		self._seed_project_budget(self.noaccess_project.name, 5000)
 
 		frappe.set_user(self.test_user)
 		filters = {
@@ -107,7 +124,7 @@ class TestProjectBudgetPlanVsForecastPermissions(FrappeTestCase):
 		expense_account = self._get_expense_account()
 		expense_row = next((row for row in data if row.get("account") == expense_account), None)
 		self.assertIsNotNone(expense_row)
-		self.assertEqual(float(expense_row.get("forecast_2026_06") or 0), 1000.0)
+		self.assertEqual(float(expense_row.get("forecast_2026_06") or 0), 10000.0)
 
 	def _grant_project_access(self, project_name, write):
 		frappe.share.add("Project", project_name, self.test_user, read=1, write=write)

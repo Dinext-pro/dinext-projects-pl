@@ -1,17 +1,35 @@
 //https://erp.dinord.ru/app/issue/ISS-2025-01541
+// Heavy P&L dashboard (financial metrics + query_report) only when tab «P&L» is visible.
+// Use custom_metrics (not custom_planning): bindLazyTabMount allows one listener per fieldname.
+const PL_DASHBOARD_LAZY_FIELD = "custom_metrics";
+
 frappe.ui.form.on('Project', {
 	refresh: function(frm) {
 		if (frm.doc.name && !frm.is_new()) {
-            const renderFinancialMetrics = globalThis.render_financial_metrics;
-            if (typeof renderFinancialMetrics === "function") {
-                renderFinancialMetrics(frm);
-            }
-		    add_buttons( frm );
-            add_project_profit_loss_chart(frm);
-            //render_pl_chart(frm);
+			schedule_pl_dashboard_mount(frm);
         }
 	},
 })
+
+function mount_pl_dashboard(frm) {
+	const tasks = [];
+	const renderFinancialMetrics = globalThis.render_financial_metrics;
+	if (typeof renderFinancialMetrics === "function") {
+		tasks.push(Promise.resolve(renderFinancialMetrics(frm)));
+	}
+	add_buttons(frm);
+	tasks.push(Promise.resolve(add_project_profit_loss_chart(frm)));
+	return Promise.all(tasks);
+}
+
+function schedule_pl_dashboard_mount(frm) {
+	const bind = window.project_workload_assignment?.bindLazyTabMount;
+	if (typeof bind !== "function") {
+		console.error("[Project P&L Dashboard] bindLazyTabMount missing — refuse eager mount");
+		return;
+	}
+	bind(frm, PL_DASHBOARD_LAZY_FIELD, () => mount_pl_dashboard(frm));
+}
 
 function add_buttons( frm ) {
     if ( !frm.$open_pl_statements ) {
@@ -87,6 +105,28 @@ function add_buttons( frm ) {
         },
         render_input: true,
     });
+
+    // 4th slot in the same button row (unused HTML field after Expenses).
+    if ( !frm.$open_variance ) {
+        frm.$open_variance = $("#project-custom_pl div[data-fieldname='custom_accumulated_values']");
+    }
+
+    frm.$open_variance.empty();
+    frm.$open_variance.show();
+
+    frappe.ui.form.make_control({
+        parent: frm.$open_variance,
+        df: {
+            label: __("Budget Variance"),
+            fieldname: "open_budget_variance",
+            fieldtype: "Button",
+            btn_size: 'sm',
+            click: function(){
+                dinext_projects_pl.navigate_to_budget_variance_report?.(frm);
+            }
+        },
+        render_input: true,
+    });
 }
 
 function get_gl_chart_filters(frm, account) {
@@ -126,24 +166,30 @@ function get_pl_chart_filters(frm) {
 function add_project_profit_loss_chart(frm) {
     clear_profit_loss_chart( frm );
     // Получаем данные P&L по проекту
-    frappe.call({
-        method: "frappe.desk.query_report.run",
-		type: "GET",
-		quiet: true,
-		silent: true,
-		args: {
-			report_name: "Profit and Loss Statement",
-			filters: get_pl_chart_filters(frm),
-			ignore_prepared_report: false,
-			is_tree: true,
-			parent_field: "parent_account",
-			are_default_filters: false,
-		},
-        callback: function(r) {
-            if (r.message) {
-                render_profit_loss_chart(frm, r.message);
-            }
-        }
+    return new Promise((resolve) => {
+        frappe.call({
+            method: "frappe.desk.query_report.run",
+            type: "GET",
+            quiet: true,
+            silent: true,
+            args: {
+                report_name: "Profit and Loss Statement",
+                filters: get_pl_chart_filters(frm),
+                ignore_prepared_report: false,
+                is_tree: true,
+                parent_field: "parent_account",
+                are_default_filters: false,
+            },
+            callback: function(r) {
+                if (r.message) {
+                    render_profit_loss_chart(frm, r.message);
+                }
+                resolve();
+            },
+            error: function() {
+                resolve();
+            },
+        });
     });
 }
 

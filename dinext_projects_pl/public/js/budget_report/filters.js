@@ -475,6 +475,9 @@ br.is_budget_report_view = function (report) {
 
 br.cleanup_budget_report_page_layout = function (options) {
 	options = options || {};
+	if (typeof br.restore_custom_export === "function") {
+		br.restore_custom_export(frappe.query_report);
+	}
 	var $page = $("#page-query-report");
 	if (!$page.length) {
 		return;

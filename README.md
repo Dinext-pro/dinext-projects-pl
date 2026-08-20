@@ -118,9 +118,10 @@ frappe.call({
 Другие приложения могут расширять выпадающее меню `Добавить прогноз` через глобальный реестр:
 
 ```javascript
-frappe.provide("dinext_projects.project_pl_forecast_menu");
-dinext_projects.project_pl_forecast_menu = dinext_projects.project_pl_forecast_menu || [];
-dinext_projects.project_pl_forecast_menu.push({
+frappe.provide("dinext_projects.project_budget_forecast_menu");
+dinext_projects.project_budget_forecast_menu =
+  dinext_projects.project_budget_forecast_menu || [];
+dinext_projects.project_budget_forecast_menu.push({
   label: __("Мой прогноз"),
   action(frm) {
     // кастомная логика
@@ -128,7 +129,11 @@ dinext_projects.project_pl_forecast_menu.push({
 });
 ```
 
-Если пункты добавлены после первичной отрисовки, вызовите `dinext_projects.refresh_pl_forecast_dropdown(frm)`.
+Если пункты добавлены после первичной отрисовки, вызовите
+`dinext_projects.refresh_project_budget_forecast_dropdown(frm)`.
+
+Для cutover со старым risk доступны aliases: `project_pl_forecast_menu` и
+`refresh_pl_forecast_dropdown` (тот же массив / та же функция).
 
 ## 📦 Технологии
 
@@ -258,12 +263,15 @@ node --test tests/js/project_pl_echarts.test.js
     │   ├── workflow_action_master.json
     │   └── workflow_state.json
     ├── public/
+    │   ├── css/
+    │   │   └── project_budget.css
     │   └── js/
-    │       ├── project_pl.js
-    │       ├── project_pl_calc.js
-    │       ├── project_pl_dashboard.js
-    │       ├── project_pl_financial_metrics.js
-    │       └── project_pl_style.js
+    │       ├── project_budget/          # DinextTable module (ProjectBudget)
+    │       ├── project_budget_tab.js
+    │       ├── project_budget_navigation.js
+    │       ├── project_budget_chart.js
+    │       ├── project_budget_dashboard.js
+    │       └── project_budget_metrics.js
     ├── tests/
     │   └── js/
     │       ├── project_pl_financial_metrics.test.js
