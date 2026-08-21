@@ -112,7 +112,7 @@ function ensurePlDefaults(frm) {
 		frm.bg_accumulated_values = false;
 	}
 	if (frm.bg_show_zero_rows === undefined) {
-		frm.bg_show_zero_rows = false;
+		frm.bg_show_zero_rows = true;
 	}
 	if (!frm._pl_period_type) {
 		frm._pl_period_type = "month";
@@ -242,16 +242,43 @@ function ensureForecastMenuAliasSync() {
  * - Risk reserve: only when project has contingency_reserve risks
  * Also drop stale/dup entries left in the global menu between Project refreshes.
  */
+function isTmPaymentScheme(frm) {
+	const scheme = frm?.doc?.custom_payment_scheme;
+	if (!scheme) {
+		return false;
+	}
+	// Exact option + tolerant match (legacy/partial labels).
+	if (scheme === "Время и затраты (T&M)") {
+		return true;
+	}
+	return /T\s*&\s*M/i.test(String(scheme)) || /время\s+и\s+затраты/i.test(String(scheme));
+}
+
+function isWeRevenueForecastItem(item) {
+	if (!item?.__pwr_pl_forecast_from_we) {
+		return false;
+	}
+	if (item.__pwr_pl_forecast_kind === "revenue") {
+		return true;
+	}
+	if (item.__pwr_pl_forecast_kind === "cost") {
+		return false;
+	}
+	// Legacy items without kind: compare source + translated label.
+	const source = "Revenue forecast from work efforts";
+	const label = item.label || "";
+	return label === source || label === __(source);
+}
+
 function getForecastMenuItems(frm) {
 	ensureForecastMenuAliasSync();
 	const raw = Array.isArray(window.dinext_projects?.project_budget_forecast_menu)
 		? window.dinext_projects.project_budget_forecast_menu
 		: [];
-	const isTm = frm?.doc?.custom_payment_scheme === "Время и затраты (T&M)";
+	const isTm = isTmPaymentScheme(frm);
 	const hasReserveRisk = (frm?.doc?.custom_project_risks || []).some(
-		(r) => r && r.contingency_reserve
+		(r) => r && Number(r.contingency_reserve)
 	);
-	const revenueLabel = __("Revenue forecast from work efforts");
 	const seen = new Set();
 	const out = [];
 	for (const item of raw) {
@@ -261,13 +288,13 @@ function getForecastMenuItems(frm) {
 		if (item.__dinext_risk_reserve_forecast && !hasReserveRisk) {
 			continue;
 		}
-		if (item.__pwr_pl_forecast_from_we && item.label === revenueLabel && !isTm) {
+		if (isWeRevenueForecastItem(item) && !isTm) {
 			continue;
 		}
 		const key = item.__dinext_risk_reserve_forecast
 			? "__risk__"
 			: item.__pwr_pl_forecast_from_we
-				? `__we__:${item.label}`
+				? `__we__:${item.__pwr_pl_forecast_kind || item.label}`
 				: item.label;
 		if (seen.has(key)) {
 			continue;
@@ -400,7 +427,7 @@ function bindDropdownPortal($wrapper, $btn, $menu) {
 /**
  * Mount domain controls into DinextTable toolbar custom host (once).
  * Order: view → period → Add forecast → Save plan →
- * Show Plan → Show Δ → Accumulated Values → Show Zero Rows.
+ * Plan → Δ → Empty rows → Accumulated Values.
  */
 export function mount_toolbar_controls(frm, host) {
 	if (host.data("pl-controls-mounted")) {
@@ -425,7 +452,7 @@ export function mount_toolbar_controls(frm, host) {
 
 	addToolbarCheckbox(host, {
 		fieldname: "show_plan",
-		label: __("Show Plan"),
+		label: __("Plan"),
 		value: !frm.bg_hide_plan,
 		onchange: function () {
 			frm.bg_hide_plan = !checkboxOn(this);
@@ -437,12 +464,23 @@ export function mount_toolbar_controls(frm, host) {
 
 	addToolbarCheckbox(host, {
 		fieldname: "show_delta",
-		label: __("Show Δ"),
+		label: __("Δ"),
 		value: !frm.bg_hide_delta,
 		onchange: function () {
 			frm.bg_hide_delta = !checkboxOn(this);
 			persistToolbarPrefs(frm);
 			window.ProjectBudget?.onTogglePlanOrDelta(frm);
+		},
+	});
+
+	addToolbarCheckbox(host, {
+		fieldname: "show_zero_rows",
+		label: __("Empty rows"),
+		value: !!frm.bg_show_zero_rows,
+		onchange: function () {
+			frm.bg_show_zero_rows = checkboxOn(this);
+			persistToolbarPrefs(frm);
+			window.ProjectBudget?.onPeriodOrAggregateChange(frm);
 		},
 	});
 
@@ -457,17 +495,6 @@ export function mount_toolbar_controls(frm, host) {
 		},
 	});
 
-	addToolbarCheckbox(host, {
-		fieldname: "show_zero_rows",
-		label: __("Show Zero Rows"),
-		value: !!frm.bg_show_zero_rows,
-		onchange: function () {
-			frm.bg_show_zero_rows = checkboxOn(this);
-			persistToolbarPrefs(frm);
-			window.ProjectBudget?.onPeriodOrAggregateChange(frm);
-		},
-	});
-
 	host.find("#bg-save_plan").on("click", function () {
 		window.ProjectBudget?.saveForecastAsPlan(frm);
 	});
@@ -475,6 +502,7 @@ export function mount_toolbar_controls(frm, host) {
 	// PWA/risk register menu on Project.refresh — may land after first paint.
 	setTimeout(() => addForecastDropdown(frm, host), 0);
 	setTimeout(() => addForecastDropdown(frm, host), 250);
+	setTimeout(() => addForecastDropdown(frm, host), 800);
 }
 
 export function refreshForecastDropdown(frm) {
