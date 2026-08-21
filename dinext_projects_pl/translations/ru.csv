@@ -122,10 +122,13 @@ Saving plan...,Сохранение плана...,
 Searching for approved budget...,Поиск согласованного бюджета...,
 Show empty rows,Показать пустые строки,
 "Show Future Fact","Показывать будущий факт",""
+"Empty rows","Пустые строки",""
+"Plan","План",""
 "Show Plan","Показывать план",""
 "Show Zero Columns","Показывать нулевые колонки",""
 "Show Zero Rows","Показывать нулевые строки",""
 "Show Δ","Показывать Δ",""
+"Δ","Δ",""
 "Shows how efficiently you need to work going forward to stay within the total budget. A value less than or equal to one is considered achievable.","Показывает, насколько эффективно нужно работать дальше, чтобы уложиться в общий бюджет. Значение меньше или равно единице считается достижимым.",""
 "Shows how much money has already been spent or recorded as actuals by this date.","Показывает, сколько денег уже реально потрачено или отражено по факту к этой дате.",""
 "Shows how much more money is needed to complete under the current forecast.","Показывает, сколько еще денег потребуется до завершения при текущем прогнозе.",""
