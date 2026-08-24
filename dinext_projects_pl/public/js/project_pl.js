@@ -583,30 +583,104 @@ function updateBudgetTable(frm, periodType="month") {
     cur_frm.budget_dt.bodyScrollable.dispatchEvent(new CustomEvent('scroll'));
 }
 
+function mapConsolidatedTasks(message) {
+    const rows = Array.isArray(message) ? message : [];
+    const out = {};
+    for (let i = 0; i < rows.length; i++) {
+        const task = rows[i];
+        if (task && task.value) {
+            out[task.value] = task;
+        }
+    }
+    return out;
+}
+
+function budgetHasTaskRows(aggregatedBudget) {
+    if (!aggregatedBudget) {
+        return false;
+    }
+    const keys = Object.keys(aggregatedBudget);
+    for (let i = 0; i < keys.length; i++) {
+        if (aggregatedBudget[keys[i]] && aggregatedBudget[keys[i]].task) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function is_project_budget_ready(frm) {
+    if (frm && frm.project_budget && (frm.project_budget.rows?.length || frm.project_budget.table)) {
+        return true;
+    }
+    return !!(frm && frm.aggregatedBudget && Object.keys(frm.aggregatedBudget).length);
+}
+
+function refresh_project_budget(frm) {
+    if (!frm) {
+        return;
+    }
+    frm.__plTaskDimInflight = null;
+    load_budget_data(frm, "month");
+}
+
+globalThis.is_project_budget_ready = is_project_budget_ready;
+globalThis.refresh_project_budget = refresh_project_budget;
+
 globalThis.updateTaskDimension = (frm, updateRows=false) => {
-    if (!frm.aggregatedBudget) return;
-    if (frm.aggregatedTasks) {
-        updateTaskDimensionOptimized(frm);
-    } 
-    
-    addRiskDimensionRows(frm.aggregatedBudget);
-    rollup_fact_budget( frm.aggregatedBudget );
-
-    let visibleRows;
-    if (updateRows) {
-        visibleRows =  frm.budget_dt.bodyRenderer.visibleRowIndices;
+    if (!frm || !frm.aggregatedBudget) return;
+    if (frm.__plTaskDimInflight) {
+        return frm.__plTaskDimInflight;
     }
-    //console.timeLog("updateTaskDimension");
-    refreshBudget( frm, frm.aggregatedBudget );
-    frm.budget_dt.rowmanager.collapseAllNodes();
 
-    if ( visibleRows ) {
-        frm.budget_dt.rowmanager.showRows(visibleRows);
-    } else {
-        frm.budget_dt.rowmanager.setTreeDepth(1);
+    const alreadyExpanded = budgetHasTaskRows(frm.aggregatedBudget);
+
+    const finish = function () {
+        if (!alreadyExpanded && frm.aggregatedTasks && Object.keys(frm.aggregatedTasks).length) {
+            updateTaskDimensionOptimized(frm);
+        }
+        if (!alreadyExpanded) {
+            addRiskDimensionRows(frm.aggregatedBudget);
+        }
+        rollup_fact_budget(frm.aggregatedBudget);
+
+        let visibleRows;
+        if (updateRows && frm.budget_dt && frm.budget_dt.bodyRenderer) {
+            visibleRows = frm.budget_dt.bodyRenderer.visibleRowIndices;
+        }
+        refreshBudget(frm, frm.aggregatedBudget);
+        if (frm.budget_dt && frm.budget_dt.rowmanager) {
+            frm.budget_dt.rowmanager.collapseAllNodes();
+            if (visibleRows) {
+                frm.budget_dt.rowmanager.showRows(visibleRows);
+            } else {
+                frm.budget_dt.rowmanager.setTreeDepth(1);
+            }
+        }
+        render_pl_chart(frm);
+    };
+
+    const hasTasks = frm.aggregatedTasks && Object.keys(frm.aggregatedTasks).length;
+    if (!alreadyExpanded && !hasTasks && frm.doc && frm.doc.name) {
+        frm.__plTaskDimInflight = frappe
+            .xcall("project_workload_assignment.api.get_work_efforts_consolidated_data", {
+                project: frm.doc.name,
+                view_options: frm.view_options || frm.budget_view_options || "Forecast and Fact",
+            })
+            .then(function (message) {
+                frm.aggregatedTasks = mapConsolidatedTasks(message);
+                finish();
+            })
+            .catch(function (err) {
+                console.error("updateTaskDimension: consolidated tasks failed", err);
+                finish();
+            })
+            .finally(function () {
+                frm.__plTaskDimInflight = null;
+            });
+        return frm.__plTaskDimInflight;
     }
-    //console.timeEnd("updateTaskDimension");
-    render_pl_chart(frm);
+
+    finish();
 }
 
 function dimensionsEqual(dim1, dim2) {
@@ -886,8 +960,32 @@ function aggregatedBudgetToTreeOrder(aggregatedBudget) {
 //Функция для "свертывания" (rollup) фактических данных:
 //для каждой статьи суммируются фактические цифры (fact_*) из всех дочерних статей с тем же dimension.
 function rollup_fact_budget(aggregatedBudget) {
-    // Получаем массив задач, отсортированный по убыванию indent (то есть от самых глубоких к родительским)
+    // Deepest first. Idempotent: restore own GL facts, drop previous rollup buckets, then add children.
     let accountsArray = Object.values(aggregatedBudget).sort((a, b) => (b.indent || 0) - (a.indent || 0));
+    accountsArray.forEach(row => {
+        if (!Array.isArray(row.dimension_data)) {
+            return;
+        }
+        row.dimension_data = row.dimension_data.filter(bucket => bucket && !bucket.__rolledOnly);
+        row.dimension_data.forEach(bucket => {
+            if (!bucket.__ownFacts) {
+                bucket.__ownFacts = {};
+                for (let prop in bucket) {
+                    if (prop.startsWith("fact_")) {
+                        bucket.__ownFacts[prop] = parseFloat(bucket[prop]) || 0;
+                    }
+                }
+            }
+            for (let prop in bucket) {
+                if (prop.startsWith("fact_")) {
+                    delete bucket[prop];
+                }
+            }
+            for (let prop in bucket.__ownFacts) {
+                bucket[prop] = bucket.__ownFacts[prop];
+            }
+        });
+    });
     accountsArray.forEach(child => {
         let parentKey = child._parentKey
             ? child._parentKey
@@ -897,12 +995,10 @@ function rollup_fact_budget(aggregatedBudget) {
 
         if ( parentKey && aggregatedBudget[ parentKey ]) {
             let parent = aggregatedBudget[ parentKey ];
-            // Для каждой записи по dimension в дочерней статье
-            child.dimension_data.forEach(childDimEntry => {
+            (child.dimension_data || []).forEach(childDimEntry => {
                 let dim = child.task
                     ? childDimEntry.dimensions.filter(item => !( item.doc == "Task" && item.docname == child.task.value ))
                     : [...(childDimEntry.dimensions || [])];
-                // Строки-риски: в родителя добавляем без измерения Project Risk
                 if (child.risk) {
                     dim = dim.filter(item => item.doc !== "Project Risk");
                 }
@@ -911,13 +1007,12 @@ function rollup_fact_budget(aggregatedBudget) {
                 }
                 let parentDimEntry = (parent.dimension_data || []).find( x => dimensionsEqual( x.dimensions, dim ) );
 
-                // Перебираем все свойства, начинающиеся с "fact_"
                 for (let prop in childDimEntry) {
                     if (prop.startsWith("fact_")) {
                         let childFact = parseFloat(childDimEntry[prop]) || 0;
                         if (childFact) {
                             if (!parentDimEntry) {
-                                parentDimEntry = { dimensions: dim };
+                                parentDimEntry = { dimensions: dim, __rolledOnly: true };
                                 parent.dimension_data.push(parentDimEntry);
                             }
                             parentDimEntry[prop] = (parseFloat(parentDimEntry[prop]) || 0) + childFact;
@@ -1602,7 +1697,7 @@ function save_bg_forecast_as_plan(frm) {
                     : __("Budgets submitted for approval");
 
                 frappe.show_alert(successMessage, 5);
-                load_budget_data(frm, "month", true);
+                refresh_project_budget(frm);
                 load_and_render_project_dashboard(frm);
             }
         }

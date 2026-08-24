@@ -112,6 +112,27 @@ def _period_match_criterion(pba, month_periods):
 	return criterion
 
 
+def _month_periods_from_filters(filters):
+	"""Inclusive (year, month) range. Do not filter pba_month independently — Dec–Nov across years is empty."""
+	from_year = cint(filters.get("from_year"))
+	to_year = cint(filters.get("to_year"))
+	from_month = cint(filters.get("from_month")) or 1
+	to_month = cint(filters.get("to_month")) or 12
+	if not from_year or not to_year:
+		return []
+	periods = []
+	year, month = from_year, from_month
+	while (year, month) <= (to_year, to_month):
+		periods.append((year, month))
+		month += 1
+		if month > 12:
+			month = 1
+			year += 1
+		if len(periods) > 240:
+			break
+	return periods
+
+
 # ---------------------------------------------------------------------------
 # Account / CoA
 # ---------------------------------------------------------------------------
@@ -313,13 +334,9 @@ def build_budget_raw_query(filters, *, project=None, projects=None):
 		.orderby(pba.pba_month)
 	)
 
-	from_month = cint(filters.get("from_month"))
-	if from_month:
-		query = query.where(pba.pba_month >= from_month)
-
-	to_month = cint(filters.get("to_month"))
-	if to_month:
-		query = query.where(pba.pba_month <= to_month)
+	period_criterion = _period_match_criterion(pba, _month_periods_from_filters(filters))
+	if period_criterion is not None:
+		query = query.where(period_criterion)
 
 	if projects is not None:
 		query = query.where(pb.pb_project.isin(projects))
