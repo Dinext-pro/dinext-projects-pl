@@ -297,63 +297,129 @@ function build_pl_chart_data(frm) {
     };
 }
 
+function make_pl_chart_dataset(name, values, chartType, kind, isPlan) {
+    const layer =
+        kind === "period_profit"
+            ? "profit"
+            : kind === "cumulative_profit" ||
+                kind === "cumulative_income" ||
+                kind === "cumulative_expense"
+              ? "cumulative"
+              : "bar";
+
+    return {
+        name,
+        values,
+        chartType,
+        plLayer: layer,
+        plSeriesKind: kind,
+        plIsPlan: Boolean(isPlan),
+    };
+}
+
 function get_pl_chart_data(frm) {
     let d = build_pl_chart_data(frm);
     let datasets = [];
     let view = get_pl_chart_view_label(frm);
 
     if (!frm.bg_hide_plan) {
-        datasets.push({ name: __("Income - plan"), values: d.plan_income, chartType: "bar" });
+        datasets.push(make_pl_chart_dataset(__("Income - plan"), d.plan_income, "bar", "income", true));
     }
-    datasets.push({ name: __("Income") + " - " + view, values: d.actual_income, chartType: "bar" });
+    datasets.push(
+        make_pl_chart_dataset(__("Income") + " - " + view, d.actual_income, "bar", "income", false)
+    );
     if (!frm.bg_hide_plan) {
-        datasets.push({ name: __("Expenses - plan"), values: d.plan_expenses, chartType: "bar" });
+        datasets.push(
+            make_pl_chart_dataset(__("Expenses - plan"), d.plan_expenses, "bar", "expense", true)
+        );
     }
-    datasets.push({ name: __("Expenses") + " - " + view, values: d.actual_expenses, chartType: "bar" });
+    datasets.push(
+        make_pl_chart_dataset(
+            __("Expenses") + " - " + view,
+            d.actual_expenses,
+            "bar",
+            "expense",
+            false
+        )
+    );
 
     if (!frm.bg_hide_plan) {
-        datasets.push({ name: __("Profit - plan"), values: d.profit_plan, chartType: "line" });
+        datasets.push(
+            make_pl_chart_dataset(__("Profit - plan"), d.profit_plan, "line", "period_profit", true)
+        );
     }
-    datasets.push({ name: __("Profit") + " - " + view, values: d.profit_actual, chartType: "line" });
+    datasets.push(
+        make_pl_chart_dataset(
+            __("Profit") + " - " + view,
+            d.profit_actual,
+            "line",
+            "period_profit",
+            false
+        )
+    );
 
     if (!frm.bg_hide_plan) {
-        datasets.push({
-            name: __("Cumulative profit - plan"),
-            values: d.cumulative_profit_plan,
-            chartType: "line",
-        });
+        datasets.push(
+            make_pl_chart_dataset(
+                __("Cumulative profit - plan"),
+                d.cumulative_profit_plan,
+                "line",
+                "cumulative_profit",
+                true
+            )
+        );
     }
-    datasets.push({
-        name: __("Cumulative profit") + " - " + view,
-        values: d.cumulative_profit_actual,
-        chartType: "line",
-    });
+    datasets.push(
+        make_pl_chart_dataset(
+            __("Cumulative profit") + " - " + view,
+            d.cumulative_profit_actual,
+            "line",
+            "cumulative_profit",
+            false
+        )
+    );
 
     if (is_pl_chart_expanded(frm)) {
         if (!frm.bg_hide_plan) {
-            datasets.push({
-                name: __("Cumulative income - plan"),
-                values: d.cumulative_income_plan,
-                chartType: "line",
-            });
+            datasets.push(
+                make_pl_chart_dataset(
+                    __("Cumulative income - plan"),
+                    d.cumulative_income_plan,
+                    "line",
+                    "cumulative_income",
+                    true
+                )
+            );
         }
-        datasets.push({
-            name: __("Cumulative income") + " - " + view,
-            values: d.cumulative_income_actual,
-            chartType: "line",
-        });
+        datasets.push(
+            make_pl_chart_dataset(
+                __("Cumulative income") + " - " + view,
+                d.cumulative_income_actual,
+                "line",
+                "cumulative_income",
+                false
+            )
+        );
         if (!frm.bg_hide_plan) {
-            datasets.push({
-                name: __("Cumulative expenses - plan"),
-                values: d.cumulative_expenses_plan,
-                chartType: "line",
-            });
+            datasets.push(
+                make_pl_chart_dataset(
+                    __("Cumulative expenses - plan"),
+                    d.cumulative_expenses_plan,
+                    "line",
+                    "cumulative_expense",
+                    true
+                )
+            );
         }
-        datasets.push({
-            name: __("Cumulative expenses") + " - " + view,
-            values: d.cumulative_expenses_actual,
-            chartType: "line",
-        });
+        datasets.push(
+            make_pl_chart_dataset(
+                __("Cumulative expenses") + " - " + view,
+                d.cumulative_expenses_actual,
+                "line",
+                "cumulative_expense",
+                false
+            )
+        );
     }
 
     let yMarkers = null;
@@ -486,10 +552,26 @@ function get_pl_chart_dataset_layer(dataset) {
         return dataset.plLayer;
     }
 
-    const name = String(dataset.name || "");
-    if (name.includes(__("Cumulative"))) {
+    if (dataset.plSeriesKind === "period_profit") {
+        return "profit";
+    }
+    if (
+        dataset.plSeriesKind === "cumulative_profit" ||
+        dataset.plSeriesKind === "cumulative_income" ||
+        dataset.plSeriesKind === "cumulative_expense"
+    ) {
         return "cumulative";
     }
+    if (dataset.plSeriesKind === "income" || dataset.plSeriesKind === "expense") {
+        return "bar";
+    }
+
+    // RU "Прибыль накопл." contains Profit, not Cumulative — check profit series first.
+    if (is_pl_cumulative_profit_series(dataset) || is_pl_cumulative_volume_series(dataset)) {
+        return "cumulative";
+    }
+
+    const name = String(dataset.name || "");
     if (name.includes(__("Profit"))) {
         return "profit";
     }

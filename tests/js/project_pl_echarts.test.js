@@ -74,6 +74,23 @@ function createTranslationStub() {
     return (text) => text;
 }
 
+function createRussianChartTranslations() {
+    const map = {
+        "Cumulative profit": "Прибыль накопл.",
+        "Cumulative profit - plan": "Прибыль накопл. - план",
+        Profit: "Прибыль",
+        "Profit - plan": "Прибыль - план",
+        Income: "Доходы",
+        "Income - plan": "Доходы - план",
+        Expenses: "Расходы",
+        "Expenses - plan": "Расходы - план",
+        "actual/forecast": "факт/прогноз",
+        " - plan": " - план",
+        "Planned profit: ": "Плановая прибыль: ",
+    };
+    return (text) => (Object.prototype.hasOwnProperty.call(map, text) ? map[text] : text);
+}
+
 function createEchartsContext() {
     const echartsCalls = {
         init: [],
@@ -200,9 +217,12 @@ function createEchartsContext() {
     return context;
 }
 
-function loadEchartsModule() {
+function loadEchartsModule(overrides = {}) {
     const source = fs.readFileSync(echartsModulePath, "utf8");
     const context = createEchartsContext();
+    if (overrides.__) {
+        context.__ = overrides.__;
+    }
     vm.createContext(context);
     vm.runInContext(source, context, { filename: echartsModulePath });
     return context;
@@ -394,6 +414,44 @@ test("get_pl_echarts_option adds cumulative area lines and plan marker line", ()
     assert.equal(markerSeries.markLine.data[0][0].coord[1], 120);
     assert.equal(markerSeries.markLine.data[0][0].label.position, "insideStartTop");
     assert.equal(markerSeries.markLine.data[0][0].label.formatter, "Planned profit: 120");
+});
+
+test("get_pl_echarts_option keeps cumulative profit area line on Russian labels", () => {
+    const context = loadEchartsModule({ __: createRussianChartTranslations() });
+    const frm = createChartFrm({ bg_hide_plan: true });
+    const chartData = context.get_pl_chart_data(frm);
+    const option = context.get_pl_echarts_option(frm, chartData);
+
+    const areaSeries = option.series.filter((series) => series.areaStyle);
+    const customSeries = option.series.filter((series) => series.type === "custom");
+    const cumDataset = chartData.datasets.find((ds) => ds.plSeriesKind === "cumulative_profit");
+
+    assert.equal(cumDataset.name, "Прибыль накопл. - факт/прогноз");
+    assert.equal(areaSeries.length, 1);
+    assert.equal(areaSeries[0].type, "line");
+    assert.equal(areaSeries[0].name, "Прибыль накопл. - факт/прогноз");
+    assert.equal(customSeries.length, 1);
+    assert.equal(customSeries[0].name, "Прибыль - факт/прогноз");
+});
+
+test("get_pl_echarts_option treats untagged Russian cumulative profit as area line", () => {
+    const context = loadEchartsModule({ __: createRussianChartTranslations() });
+    const frm = createChartFrm({ bg_hide_plan: true });
+    const option = context.get_pl_echarts_option(frm, {
+        labels: ["2026-01", "2026-02"],
+        datasets: [
+            { name: "Прибыль накопл. - факт/прогноз", values: [10, 20], chartType: "line" },
+            { name: "Прибыль - факт/прогноз", values: [10, 10], chartType: "line" },
+        ],
+        dataObj: { periods: [] },
+    });
+
+    const area = option.series.find((series) => series.areaStyle);
+    const custom = option.series.find((series) => series.type === "custom");
+
+    assert.equal(area.type, "line");
+    assert.equal(area.name, "Прибыль накопл. - факт/прогноз");
+    assert.equal(custom.name, "Прибыль - факт/прогноз");
 });
 
 test("get_pl_echarts_option expands y axis to include plan profit marker", () => {

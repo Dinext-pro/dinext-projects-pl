@@ -623,8 +623,52 @@ function refresh_project_budget(frm) {
     load_budget_data(frm, "month");
 }
 
+function rememberPlTaskMap(frm) {
+    if (!frm || !frm.doc || !frm.doc.name) {
+        return;
+    }
+    if (frm.aggregatedTasks && Object.keys(frm.aggregatedTasks).length) {
+        frm.__plTaskMap = frm.aggregatedTasks;
+        frm.__plTaskMapProject = frm.doc.name;
+    }
+}
+
+function restorePlTaskMap(frm) {
+    if (!frm || !frm.doc || frm.__plTaskMapProject !== frm.doc.name) {
+        return false;
+    }
+    if (frm.aggregatedTasks && Object.keys(frm.aggregatedTasks).length) {
+        return true;
+    }
+    if (frm.__plTaskMap && Object.keys(frm.__plTaskMap).length) {
+        frm.aggregatedTasks = frm.__plTaskMap;
+        return true;
+    }
+    return false;
+}
+
+function installLegacyProjectBudgetAdapter() {
+    if (window.ProjectBudget && !window.ProjectBudget.__plLegacyAdapter) {
+        return;
+    }
+    window.ProjectBudget = {
+        __plLegacyAdapter: true,
+        refresh: function (frm) {
+            refresh_project_budget(frm);
+        },
+        buildParentAdjustments: function () {
+            return { parent_adjustments: [], adjusted_parents: [] };
+        },
+        isBudgetReady: is_project_budget_ready,
+        isReady: function () {
+            return true;
+        },
+    };
+}
+
 globalThis.is_project_budget_ready = is_project_budget_ready;
 globalThis.refresh_project_budget = refresh_project_budget;
+installLegacyProjectBudgetAdapter();
 
 globalThis.updateTaskDimension = (frm, updateRows=false) => {
     if (!frm || !frm.aggregatedBudget) return;
@@ -633,8 +677,21 @@ globalThis.updateTaskDimension = (frm, updateRows=false) => {
     }
 
     const alreadyExpanded = budgetHasTaskRows(frm.aggregatedBudget);
+    let hasTasks = frm.aggregatedTasks && Object.keys(frm.aggregatedTasks).length;
+
+    // PWA cleared the shared map after WE remount or tree mutation.
+    // Expanded grid + empty map: full reload, not a second Optimized pass.
+    if (alreadyExpanded && !hasTasks) {
+        refresh_project_budget(frm);
+        return;
+    }
+
+    if (!hasTasks) {
+        hasTasks = restorePlTaskMap(frm);
+    }
 
     const finish = function () {
+        rememberPlTaskMap(frm);
         if (!alreadyExpanded && frm.aggregatedTasks && Object.keys(frm.aggregatedTasks).length) {
             updateTaskDimensionOptimized(frm);
         }
@@ -659,7 +716,6 @@ globalThis.updateTaskDimension = (frm, updateRows=false) => {
         render_pl_chart(frm);
     };
 
-    const hasTasks = frm.aggregatedTasks && Object.keys(frm.aggregatedTasks).length;
     if (!alreadyExpanded && !hasTasks && frm.doc && frm.doc.name) {
         frm.__plTaskDimInflight = frappe
             .xcall("project_workload_assignment.api.get_work_efforts_consolidated_data", {
@@ -668,6 +724,7 @@ globalThis.updateTaskDimension = (frm, updateRows=false) => {
             })
             .then(function (message) {
                 frm.aggregatedTasks = mapConsolidatedTasks(message);
+                rememberPlTaskMap(frm);
                 finish();
             })
             .catch(function (err) {
