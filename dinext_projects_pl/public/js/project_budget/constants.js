@@ -8,4 +8,4 @@ export const SAVE_PLAN_API =
 	"dinext_projects_pl.dinext_projects_pl.budget_approval.service.save_budget_plan_for_approval";
 
 /** Period leaf fields; `plan_total` → key `total` (not in period map). */
-export const PERIOD_FIELD_RE = /^(plan|forecast|fact|actual|delta|own_fact)_/;
+export const PERIOD_FIELD_RE = /^(plan|forecast|fact|actual|delta|own_fact|own_plan)_/;

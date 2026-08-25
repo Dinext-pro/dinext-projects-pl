@@ -65,7 +65,8 @@ class ProjectBudgetRow(TypedDict, total=False):
 	pb_docname: str
 	children: list[ProjectBudgetRow]
 	summary_kind: str
-	# периоды: plan_2026_7, forecast_2026_7, fact_2026_7, actual_2026_7, delta_2026_7
+	# периоды: plan_2026_7, own_plan_2026_7, forecast_2026_7, fact_2026_7,
+	# own_fact_2026_7, actual_2026_7, delta_2026_7
 	# итого: plan_total, actual_total, delta_total
 
 
