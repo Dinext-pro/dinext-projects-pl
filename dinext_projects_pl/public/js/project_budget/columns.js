@@ -6,6 +6,7 @@ const LEGACY_DELTA_SUBCOL_WIDTH = 50;
 const ALIGN_CENTER = "dinext-table-cell--align-center";
 const HEADER_CENTER = "project-budget-header--center";
 const CELL_ZERO = "project-budget-cell--zero";
+const CELL_PLAN_AGG = "project-budget-cell--plan-agg";
 const CELL_PROFIT_POS = "project-budget-cell--profit-pos";
 const CELL_PROFIT_NEG = "project-budget-cell--profit-neg";
 
@@ -54,6 +55,38 @@ function formatDelta(params) {
 function isZeroValue(params) {
 	const n = toNumber(params.value);
 	return n != null && n === 0;
+}
+
+function hasOwnPlanInPeriod(data, periodKey) {
+	return Number(data?.[`own_plan_${periodKey}`]) > 0;
+}
+
+function hasAnyOwnPlan(data) {
+	if (!data) return false;
+	for (const key of Object.keys(data)) {
+		if (key.startsWith("own_plan_") && Number(data[key]) > 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/** Display plan from children, not an explicit own envelope. Skip 0 (already --zero). */
+function isAggregatedPlanCell(params) {
+	const data = params.data;
+	const field = params.colDef?.field || "";
+	if (!data || data.summary_kind || !field.startsWith("plan_")) {
+		return false;
+	}
+	const n = toNumber(params.value);
+	if (n == null || n === 0) {
+		return false;
+	}
+	if (field === "plan_total") {
+		return !hasAnyOwnPlan(data);
+	}
+	const periodKey = field.slice("plan_".length);
+	return !hasOwnPlanInPeriod(data, periodKey);
 }
 
 const AMOUNT_CELL_CLASS_RULES = {
@@ -176,7 +209,10 @@ function buildPeriodLeaf(opts) {
 			type: "number",
 			hide: !!hide,
 			valueFormatter,
-			cellClassRules: { ...AMOUNT_CELL_CLASS_RULES },
+			cellClassRules: {
+				...AMOUNT_CELL_CLASS_RULES,
+				...(String(field).startsWith("plan_") ? { [CELL_PLAN_AGG]: isAggregatedPlanCell } : {}),
+			},
 		})
 	);
 	if (edit !== undefined) {

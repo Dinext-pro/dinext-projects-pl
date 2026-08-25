@@ -84,6 +84,92 @@ export function parentForecastLimit(rows, row, key) {
 	return null;
 }
 
+export function planOf(row, key) {
+	return Number(row?.[`own_plan_${key}`] ?? 0);
+}
+
+function rowPlanMatchKey(row) {
+	return `${row?.account || ""}|${dimsKey(row?.dimensions)}`;
+}
+
+export function overlayPlanWrites(rows, writes) {
+	const index = {};
+	for (const row of flattenTree(rows)) {
+		if (row?.summary_kind) continue;
+		index[rowPlanMatchKey(row)] = row;
+	}
+	const keys = [];
+	const seen = new Set();
+	for (const write of writes || []) {
+		const row = index[`${write.account || ""}|${dimsKey(write.dimensions)}`];
+		for (const amount of write.amounts || []) {
+			if (!amount?.year || !amount?.month) continue;
+			const key = `${amount.year}_${amount.month}`;
+			if (!seen.has(key)) {
+				seen.add(key);
+				keys.push(key);
+			}
+			if (row) {
+				row[`own_plan_${key}`] = Number(amount.plan_value || 0);
+			}
+		}
+	}
+	return keys;
+}
+
+export function rollupDisplayPlan(rows, periodKeys) {
+	for (const row of rows || []) {
+		const children = row.children || [];
+		rollupDisplayPlan(children, periodKeys);
+		for (const key of periodKeys) {
+			const own = planOf(row, key);
+			if (own > 0) {
+				row[`plan_${key}`] = own;
+			} else if (children.length) {
+				row[`plan_${key}`] = children.reduce(
+					(sum, child) => sum + Number(child[`plan_${key}`] || 0),
+					0
+				);
+			} else {
+				row[`plan_${key}`] = own;
+			}
+		}
+	}
+}
+
+export function findPlanEnvelopeError(rows, periodKeys) {
+	for (const row of flattenTree(rows)) {
+		if (row?.summary_kind) continue;
+		const children = row.children || [];
+		if (!children.length) continue;
+		for (const key of periodKeys) {
+			const own = planOf(row, key);
+			if (!(own > 0)) continue;
+			const childSum = children.reduce(
+				(sum, child) => sum + Number(child[`plan_${key}`] || 0),
+				0
+			);
+			if (own < childSum) {
+				const label = row.account_label || row.account || "";
+				return __("{0}: value cannot be less than the sum of child items ({1})", [
+					label,
+					Math.round(childSum).toLocaleString("ru-RU"),
+				]);
+			}
+		}
+	}
+	return null;
+}
+
+export function validatePlanWrites(rows, writes) {
+	if (!writes?.length) return null;
+	const cloned = JSON.parse(JSON.stringify(rows || []));
+	const keys = overlayPlanWrites(cloned, writes);
+	if (!keys.length) return null;
+	rollupDisplayPlan(cloned, keys);
+	return findPlanEnvelopeError(cloned, keys);
+}
+
 /** Display periods: prefer project_budget, fallback get_budget_display_periods. */
 export function getDisplayPeriods(frm) {
 	const fromV2 = frm?.project_budget?.periods;

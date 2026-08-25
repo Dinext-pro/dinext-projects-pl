@@ -433,6 +433,11 @@
 	color: var(--bg-dark-gray, #999) !important;
 }
 
+.budget-table.dinext-table .ag-cell.project-budget-cell--plan-agg,
+.budget-table.dinext-table .ag-cell.project-budget-cell--plan-agg .ag-cell-value {
+	color: var(--bg-dark-gray, #999) !important;
+}
+
 .budget-table.dinext-table .ag-floating-bottom .ag-row,
 .budget-table.dinext-table .dinext-table-row--summary {
 	font-weight: 700;
