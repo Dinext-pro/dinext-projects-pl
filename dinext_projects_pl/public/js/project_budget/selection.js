@@ -1,5 +1,5 @@
 import { PERIOD_FIELD_RE, SAVE_PLAN_API } from "./constants.js";
-import { flattenTree } from "./budget-tree.js";
+import { flattenTree, validatePlanWrites } from "./budget-tree.js";
 
 function isSavableRow(row) {
 	return !!(row && !row.summary_kind && row.account);
@@ -107,7 +107,7 @@ function tryAddPlanAmount(groups, seen, row, period) {
 	}
 	seen.add(dedupe);
 
-	const currentPlan = Number(row[`plan_${key}`] ?? 0);
+	const currentPlan = Number(row[`own_plan_${key}`] ?? 0);
 	const newPlanValue = period.is_past
 		? Number(row[`own_fact_${key}`] ?? 0)
 		: Number(row[`forecast_${key}`] ?? 0);
@@ -212,6 +212,12 @@ export function saveForecastAsPlan(frm) {
 	const data = buildSavePlanPayload(frm);
 	if (!data.length) {
 		frappe.msgprint(__("No changes to save."));
+		return;
+	}
+
+	const limitError = validatePlanWrites(frm.project_budget?.rows || [], data);
+	if (limitError) {
+		frappe.msgprint(limitError);
 		return;
 	}
 
