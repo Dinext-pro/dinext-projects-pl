@@ -28,6 +28,9 @@ from dinext_projects_pl.dinext_projects_pl.budget_approval.bootstrap import (
     STATE_CANCELLED_DRAFT,
     STATE_PENDING_APPROVAL,
 )
+from dinext_projects_pl.dinext_projects_pl.project_budget.plan_limits import (
+    validate_project_plan_writes,
+)
 
 PROJECT_BUDGET_DOCTYPE = "Project Budget"
 RISK_DIMENSION = "Project Risk"
@@ -45,6 +48,7 @@ def save_budget_plan_for_approval(project: str, data) -> dict:
         frappe.throw(_("No plan rows selected for approval"))
 
     project_doc = frappe.get_doc("Project", project)
+    validate_project_plan_writes(project, rows)
     grouped = _prepare_grouped_entries(project_doc, rows)
 
     if is_plan_approval_enabled():

@@ -22,6 +22,7 @@ class TestProjectBudgetGridFlags(FrappeTestCase):
 		row = {"id": amounts.pop("id", "r"), "children": amounts.pop("children", [])}
 		for prefix in ("plan", "forecast", "own_fact", "fact", "actual"):
 			row[f"{prefix}_{self.KEY}"] = float(amounts.get(prefix, 0))
+		row[f"own_plan_{self.KEY}"] = float(amounts.get("own_plan", amounts.get("plan", 0)))
 		return row
 
 	def test_row_has_value_uses_own_not_rolled_actual(self):
@@ -31,6 +32,8 @@ class TestProjectBudgetGridFlags(FrappeTestCase):
 		self.assertTrue(_row_has_value(own_fact, self.PERIODS))
 		own_plan = self._row(plan=10)
 		self.assertTrue(_row_has_value(own_plan, self.PERIODS))
+		rolled_only = self._row(plan=70, own_plan=0)
+		self.assertFalse(_row_has_value(rolled_only, self.PERIODS))
 
 	def test_filter_drops_empty_leaves_keeps_ancestors(self):
 		leaf_empty = self._row(id="empty")
@@ -58,3 +61,32 @@ class TestProjectBudgetGridFlags(FrappeTestCase):
 		self.assertEqual(parent[f"fact_{self.KEY}"], 250)
 		self.assertEqual(parent[f"actual_{self.KEY}"], 250)
 		self.assertEqual(parent[f"own_fact_{self.KEY}"], 10)
+		self.assertEqual(parent[f"own_plan_{self.KEY}"], 0)
+
+	def test_plan_rollup_sums_children_when_parent_has_no_own(self):
+		child_a = self._row(id="a", plan=40)
+		child_b = self._row(id="b", plan=30)
+		parent = self._row(id="parent", plan=0)
+		_rollup_child_fact(parent, [child_a, child_b], self.PERIODS, "forecast_and_fact")
+		self.assertEqual(parent[f"plan_{self.KEY}"], 70)
+		self.assertEqual(parent[f"own_plan_{self.KEY}"], 0)
+
+	def test_plan_rollup_keeps_own_envelope(self):
+		child = self._row(id="c", plan=40)
+		parent = self._row(id="parent", plan=100)
+		_rollup_child_fact(parent, [child], self.PERIODS, "forecast_and_fact")
+		self.assertEqual(parent[f"plan_{self.KEY}"], 100)
+		self.assertEqual(parent[f"own_plan_{self.KEY}"], 100)
+
+	def test_plan_rollup_zero_own_is_absent(self):
+		child = self._row(id="c", plan=40)
+		parent = self._row(id="parent", plan=0, own_plan=0)
+		_rollup_child_fact(parent, [child], self.PERIODS, "forecast_and_fact")
+		self.assertEqual(parent[f"plan_{self.KEY}"], 40)
+
+	def test_plan_rollup_uses_child_display_including_descendants(self):
+		grandchild_display = self._row(id="mid", plan=140, own_plan=0)
+		child = self._row(id="child", plan=0, own_plan=0)
+		parent = self._row(id="parent", plan=0, own_plan=0)
+		_rollup_child_fact(parent, [child, grandchild_display], self.PERIODS, "forecast_and_fact")
+		self.assertEqual(parent[f"plan_{self.KEY}"], 140)

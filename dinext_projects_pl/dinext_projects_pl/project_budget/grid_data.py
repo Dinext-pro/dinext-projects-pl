@@ -252,7 +252,8 @@ def _apply_amounts_from_buckets(
 		row[f"plan_{key}"] = plan  # type: ignore[literal-required]
 		row[f"forecast_{key}"] = forecast  # type: ignore[literal-required]
 		row[f"fact_{key}"] = fact  # type: ignore[literal-required]
-		# Own bucket fact (before tree rollup) — save-plan must not use rolled head totals.
+		# Own bucket amounts (before tree rollup) — save-plan must not use rolled head totals.
+		row[f"own_plan_{key}"] = plan  # type: ignore[literal-required]
 		row[f"own_fact_{key}"] = fact  # type: ignore[literal-required]
 		row[f"actual_{key}"] = actual  # type: ignore[literal-required]
 		row[f"delta_{key}"] = _calc_delta_pct(plan, actual)  # type: ignore[literal-required]
@@ -271,13 +272,36 @@ def _apply_row_totals(row: ProjectBudgetRow, periods: list[ProjectBudgetDisplayP
 	row["delta_total"] = _calc_delta_pct(plan_total, actual_total)  # type: ignore[literal-required]
 
 
+def _has_own_plan(value: object) -> bool:
+	"""Explicit 0 = no envelope: display falls back to children sum."""
+	return _to_float(value) > 0
+
+
+def _rollup_parent_plan(
+	parent: ProjectBudgetRow,
+	children: list[ProjectBudgetRow],
+	period_keys: list[str],
+) -> None:
+	"""Parent plan = own if set, else sum of already-rolled child display plans."""
+	for key in period_keys:
+		own_plan = _to_float(parent.get(f"own_plan_{key}"))
+		if _has_own_plan(own_plan):
+			parent[f"plan_{key}"] = own_plan  # type: ignore[literal-required]
+			continue
+		plan = 0.0
+		for child in children:
+			plan += _to_float(child.get(f"plan_{key}"))
+		parent[f"plan_{key}"] = plan  # type: ignore[literal-required]
+
+
 def _rollup_child_fact(
 	parent: ProjectBudgetRow,
 	children: list[ProjectBudgetRow],
 	periods: list[ProjectBudgetDisplayPeriod],
 	view_mode: ViewMode,
 ) -> None:
-	"""Parent fact/actual = own + descendants. child.fact already includes its descendants."""
+	"""Parent fact = own + descendants. Parent plan = own envelope or children sum."""
+	_rollup_parent_plan(parent, children, [period["key"] for period in periods])
 	for period in periods:
 		key = period["key"]
 		fact = _to_float(parent.get(f"own_fact_{key}"))
@@ -544,11 +568,11 @@ def _build_tree_rows(
 
 
 def _row_has_value(row: ProjectBudgetRow, periods: list[ProjectBudgetDisplayPeriod]) -> bool:
-	"""Own plan / forecast / fact. Rolled actual_* would keep every ancestor (filter no-op)."""
+	"""Own plan / forecast / fact. Rolled plan_/actual_* would keep every ancestor (filter no-op)."""
 	for period in periods:
 		key = period["key"]
 		if (
-			_to_float(row.get(f"plan_{key}"))
+			_to_float(row.get(f"own_plan_{key}"))
 			or _to_float(row.get(f"forecast_{key}"))
 			or _to_float(row.get(f"own_fact_{key}"))
 		):
