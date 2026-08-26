@@ -356,6 +356,90 @@ test("get_pl_echarts_option styles expanded cumulative volume lines like matchin
     assert.equal(cumPlanProfit.lineStyle.width, 2);
 });
 
+test("get_pl_echarts_option keeps cumulative profit area with Russian labels", () => {
+    const context = loadEchartsModule();
+    const ru = {
+        Cumulative: "Накопительно",
+        "Cumulative profit": "Прибыль накопл.",
+        "Cumulative profit - plan": "Прибыль накопл. - план",
+        Profit: "Прибыль",
+        "Profit - plan": "Прибыль - план",
+        Income: "Доход",
+        "Income - plan": "Доход - план",
+        Expenses: "Расход",
+        "Expenses - plan": "Расход - план",
+        "actual/forecast": "факт/прогноз",
+    };
+    context.__ = (text) => ru[text] || text;
+    const frm = createChartFrm({ bg_hide_plan: false });
+    const option = context.get_pl_echarts_option(frm, context.get_pl_chart_data(frm));
+    const cumPlan = option.series.find((series) => series.name === "Прибыль накопл. - план");
+    const periodProfit = option.series.find((series) => series.name === "Прибыль - план");
+
+    assert.ok(cumPlan);
+    assert.equal(cumPlan.type, "line");
+    assert.ok(cumPlan.areaStyle);
+    assert.equal(periodProfit.type, "custom");
+});
+
+test("get_pl_echarts_option classifies series by kind, not translated name", () => {
+    const context = loadEchartsModule();
+    context.__ = (text) =>
+        ({
+            Cumulative: "Накопительно",
+            "Cumulative profit": "Прибыль накопл.",
+            Profit: "Прибыль",
+        }[text] || text);
+    const frm = createChartFrm({ bg_hide_plan: false });
+    const option = context.get_pl_echarts_option(frm, {
+        labels: ["2026-01"],
+        datasets: [
+            {
+                name: "Прибыль накопл. - план",
+                values: [120],
+                chartType: "line",
+                plSeriesKind: "cumulative_profit",
+                plIsPlan: true,
+            },
+            {
+                name: "Прибыль - план",
+                values: [40],
+                chartType: "line",
+                plSeriesKind: "period_profit",
+                plIsPlan: true,
+            },
+        ],
+        dataObj: { periods: [{ year: 2026, month: 1 }] },
+    });
+    const cumPlan = option.series.find((series) => series.name === "Прибыль накопл. - план");
+    const periodProfit = option.series.find((series) => series.name === "Прибыль - план");
+
+    assert.equal(cumPlan.type, "line");
+    assert.ok(cumPlan.areaStyle);
+    assert.equal(periodProfit.type, "custom");
+    assert.equal(periodProfit.stackGroup, "plan");
+});
+
+test("stale chart render does not init after a newer render started", async () => {
+    const context = loadEchartsModule();
+    const frm = createChartFrm();
+    const pending = [];
+    const echarts = context.window.echarts;
+    context.window.echarts = null;
+    context.frappe.require = (_assets, callback) => {
+        pending.push(callback);
+    };
+
+    const first = context._render_pl_chart(frm, true);
+    const second = context._render_pl_chart(frm, true);
+    context.window.echarts = echarts;
+    pending.forEach((callback) => callback());
+    await Promise.all([first, second]);
+
+    assert.equal(context.__echartsCalls.init.length, 1);
+    assert.equal(context.__echartsCalls.dispose.length, 0);
+});
+
 test("get_pl_echarts_option matches cumulative volume line colors when plan is hidden", () => {
     const context = loadEchartsModule();
     const frm = createChartFrm({ bg_hide_plan: true, pl_chart_expanded: true });
@@ -468,8 +552,8 @@ test("get_pl_echarts_option renders profit as dashed custom series aligned to st
     assert.ok(actualProfit);
     assert.equal(typeof planProfit.renderItem, "function");
     assert.equal(typeof actualProfit.renderItem, "function");
-    assert.ok(String(planProfit.name).includes("Profit"));
-    assert.ok(String(actualProfit.name).includes("Profit"));
+    assert.equal(planProfit.stackGroup, "plan");
+    assert.equal(actualProfit.stackGroup, "actual");
 });
 
 test("get_pl_echarts_option aligns series colors with tooltip palette", () => {
