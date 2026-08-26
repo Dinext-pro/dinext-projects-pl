@@ -24,6 +24,8 @@ class TestProjectBudgetPlanLimits(FrappeTestCase):
 			f"own_plan_{self.KEY}": float(own_plan),
 			f"plan_{self.KEY}": float(plan_value),
 		}
+		if extra.get("risk"):
+			row["risk"] = extra["risk"]
 		return row
 
 	def test_validate_allows_parent_envelope_above_children(self):
@@ -130,4 +132,16 @@ class TestProjectBudgetPlanLimits(FrappeTestCase):
 		parent = self._row("parent", "Parent Acc", own_plan=0, children=[child])
 		rollup_display_plan([parent], [self.KEY])
 		self.assertEqual(parent[f"plan_{self.KEY}"], 40)
+		self.assertIsNone(find_plan_envelope_error([parent], [self.KEY]))
+
+	def test_envelope_ignores_risk_children(self):
+		task = self._row("task", "Task Acc", own_plan=40, dimensions=[{"doc": "Task", "docname": "T-1"}])
+		risk = self._row(
+			"risk",
+			"Parent Acc",
+			own_plan=80,
+			dimensions=[{"doc": "Project Risk", "docname": "R-1"}],
+			risk="R-1",
+		)
+		parent = self._row("parent", "Parent Acc", own_plan=50, children=[task, risk])
 		self.assertIsNone(find_plan_envelope_error([parent], [self.KEY]))

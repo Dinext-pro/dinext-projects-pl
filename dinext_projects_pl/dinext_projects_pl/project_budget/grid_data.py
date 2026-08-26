@@ -252,8 +252,9 @@ def _apply_amounts_from_buckets(
 		row[f"plan_{key}"] = plan  # type: ignore[literal-required]
 		row[f"forecast_{key}"] = forecast  # type: ignore[literal-required]
 		row[f"fact_{key}"] = fact  # type: ignore[literal-required]
-		# Own bucket amounts (before tree rollup) — save-plan must not use rolled head totals.
+		# Own bucket amounts (before tree rollup) — save must not use rolled head totals.
 		row[f"own_plan_{key}"] = plan  # type: ignore[literal-required]
+		row[f"own_forecast_{key}"] = forecast  # type: ignore[literal-required]
 		row[f"own_fact_{key}"] = fact  # type: ignore[literal-required]
 		row[f"actual_{key}"] = actual  # type: ignore[literal-required]
 		row[f"delta_{key}"] = _calc_delta_pct(plan, actual)  # type: ignore[literal-required]
@@ -272,9 +273,33 @@ def _apply_row_totals(row: ProjectBudgetRow, periods: list[ProjectBudgetDisplayP
 	row["delta_total"] = _calc_delta_pct(plan_total, actual_total)  # type: ignore[literal-required]
 
 
-def _has_own_plan(value: object) -> bool:
-	"""Explicit 0 = no envelope: display falls back to children sum."""
+def _has_own_amount(value: object) -> bool:
+	"""Explicit 0 = absent: display falls back to children sum (report analog)."""
 	return _to_float(value) > 0
+
+
+def _financial_children(children: list[ProjectBudgetRow]) -> list[ProjectBudgetRow]:
+	"""Risk reserves stay off CoA plan/forecast rollup (report analog)."""
+	return [child for child in children if not child.get("risk")]
+
+
+def _rollup_parent_metric(
+	parent: ProjectBudgetRow,
+	children: list[ProjectBudgetRow],
+	period_keys: list[str],
+	own_prefix: str,
+	display_prefix: str,
+) -> None:
+	financial = _financial_children(children)
+	for key in period_keys:
+		own = _to_float(parent.get(f"{own_prefix}_{key}"))
+		if _has_own_amount(own):
+			parent[f"{display_prefix}_{key}"] = own  # type: ignore[literal-required]
+			continue
+		total = 0.0
+		for child in financial:
+			total += _to_float(child.get(f"{display_prefix}_{key}"))
+		parent[f"{display_prefix}_{key}"] = total  # type: ignore[literal-required]
 
 
 def _rollup_parent_plan(
@@ -282,16 +307,17 @@ def _rollup_parent_plan(
 	children: list[ProjectBudgetRow],
 	period_keys: list[str],
 ) -> None:
-	"""Parent plan = own if set, else sum of already-rolled child display plans."""
-	for key in period_keys:
-		own_plan = _to_float(parent.get(f"own_plan_{key}"))
-		if _has_own_plan(own_plan):
-			parent[f"plan_{key}"] = own_plan  # type: ignore[literal-required]
-			continue
-		plan = 0.0
-		for child in children:
-			plan += _to_float(child.get(f"plan_{key}"))
-		parent[f"plan_{key}"] = plan  # type: ignore[literal-required]
+	"""Parent plan = own if set, else sum of non-risk child display plans."""
+	_rollup_parent_metric(parent, children, period_keys, "own_plan", "plan")
+
+
+def _rollup_parent_forecast(
+	parent: ProjectBudgetRow,
+	children: list[ProjectBudgetRow],
+	period_keys: list[str],
+) -> None:
+	"""Parent forecast = own if set, else sum of non-risk child display forecasts."""
+	_rollup_parent_metric(parent, children, period_keys, "own_forecast", "forecast")
 
 
 def _rollup_child_fact(
@@ -300,8 +326,10 @@ def _rollup_child_fact(
 	periods: list[ProjectBudgetDisplayPeriod],
 	view_mode: ViewMode,
 ) -> None:
-	"""Parent fact = own + descendants. Parent plan = own envelope or children sum."""
-	_rollup_parent_plan(parent, children, [period["key"] for period in periods])
+	"""Parent fact = own + descendants. Plan/forecast = own or non-risk children sum."""
+	period_keys = [period["key"] for period in periods]
+	_rollup_parent_plan(parent, children, period_keys)
+	_rollup_parent_forecast(parent, children, period_keys)
 	for period in periods:
 		key = period["key"]
 		fact = _to_float(parent.get(f"own_fact_{key}"))
@@ -573,7 +601,7 @@ def _row_has_value(row: ProjectBudgetRow, periods: list[ProjectBudgetDisplayPeri
 		key = period["key"]
 		if (
 			_to_float(row.get(f"own_plan_{key}"))
-			or _to_float(row.get(f"forecast_{key}"))
+			or _to_float(row.get(f"own_forecast_{key}"))
 			or _to_float(row.get(f"own_fact_{key}"))
 		):
 			return True
