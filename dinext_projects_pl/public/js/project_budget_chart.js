@@ -261,63 +261,129 @@ function build_pl_chart_data(frm) {
     };
 }
 
+function push_pl_chart_dataset(datasets, name, values, meta) {
+    datasets.push({
+        name,
+        values,
+        chartType: meta.chartType,
+        plLayer: meta.plLayer,
+        plSeriesKind: meta.plSeriesKind,
+        plIsPlan: !!meta.plIsPlan,
+    });
+}
+
 function get_pl_chart_data(frm) {
     let d = build_pl_chart_data(frm);
     let datasets = [];
     let view = get_pl_chart_view_label(frm);
 
     if (!frm.bg_hide_plan) {
-        datasets.push({ name: __("Income - plan"), values: d.plan_income, chartType: "bar" });
-    }
-    datasets.push({ name: __("Income") + " - " + view, values: d.actual_income, chartType: "bar" });
-    if (!frm.bg_hide_plan) {
-        datasets.push({ name: __("Expenses - plan"), values: d.plan_expenses, chartType: "bar" });
-    }
-    datasets.push({ name: __("Expenses") + " - " + view, values: d.actual_expenses, chartType: "bar" });
-
-    if (!frm.bg_hide_plan) {
-        datasets.push({ name: __("Profit - plan"), values: d.profit_plan, chartType: "line" });
-    }
-    datasets.push({ name: __("Profit") + " - " + view, values: d.profit_actual, chartType: "line" });
-
-    if (!frm.bg_hide_plan) {
-        datasets.push({
-            name: __("Cumulative profit - plan"),
-            values: d.cumulative_profit_plan,
-            chartType: "line",
+        push_pl_chart_dataset(datasets, __("Income - plan"), d.plan_income, {
+            chartType: "bar",
+            plLayer: "bar",
+            plSeriesKind: "income",
+            plIsPlan: true,
         });
     }
-    datasets.push({
-        name: __("Cumulative profit") + " - " + view,
-        values: d.cumulative_profit_actual,
-        chartType: "line",
+    push_pl_chart_dataset(datasets, __("Income") + " - " + view, d.actual_income, {
+        chartType: "bar",
+        plLayer: "bar",
+        plSeriesKind: "income",
     });
+    if (!frm.bg_hide_plan) {
+        push_pl_chart_dataset(datasets, __("Expenses - plan"), d.plan_expenses, {
+            chartType: "bar",
+            plLayer: "bar",
+            plSeriesKind: "expense",
+            plIsPlan: true,
+        });
+    }
+    push_pl_chart_dataset(datasets, __("Expenses") + " - " + view, d.actual_expenses, {
+        chartType: "bar",
+        plLayer: "bar",
+        plSeriesKind: "expense",
+    });
+
+    if (!frm.bg_hide_plan) {
+        push_pl_chart_dataset(datasets, __("Profit - plan"), d.profit_plan, {
+            chartType: "line",
+            plLayer: "profit",
+            plSeriesKind: "period_profit",
+            plIsPlan: true,
+        });
+    }
+    push_pl_chart_dataset(datasets, __("Profit") + " - " + view, d.profit_actual, {
+        chartType: "line",
+        plLayer: "profit",
+        plSeriesKind: "period_profit",
+    });
+
+    if (!frm.bg_hide_plan) {
+        push_pl_chart_dataset(datasets, __("Cumulative profit - plan"), d.cumulative_profit_plan, {
+            chartType: "line",
+            plLayer: "cumulative",
+            plSeriesKind: "cumulative_profit",
+            plIsPlan: true,
+        });
+    }
+    push_pl_chart_dataset(
+        datasets,
+        __("Cumulative profit") + " - " + view,
+        d.cumulative_profit_actual,
+        {
+            chartType: "line",
+            plLayer: "cumulative",
+            plSeriesKind: "cumulative_profit",
+        }
+    );
 
     if (is_pl_chart_expanded(frm)) {
         if (!frm.bg_hide_plan) {
-            datasets.push({
-                name: __("Cumulative income - plan"),
-                values: d.cumulative_income_plan,
-                chartType: "line",
-            });
+            push_pl_chart_dataset(
+                datasets,
+                __("Cumulative income - plan"),
+                d.cumulative_income_plan,
+                {
+                    chartType: "line",
+                    plLayer: "cumulative",
+                    plSeriesKind: "cumulative_income",
+                    plIsPlan: true,
+                }
+            );
         }
-        datasets.push({
-            name: __("Cumulative income") + " - " + view,
-            values: d.cumulative_income_actual,
-            chartType: "line",
-        });
+        push_pl_chart_dataset(
+            datasets,
+            __("Cumulative income") + " - " + view,
+            d.cumulative_income_actual,
+            {
+                chartType: "line",
+                plLayer: "cumulative",
+                plSeriesKind: "cumulative_income",
+            }
+        );
         if (!frm.bg_hide_plan) {
-            datasets.push({
-                name: __("Cumulative expenses - plan"),
-                values: d.cumulative_expenses_plan,
-                chartType: "line",
-            });
+            push_pl_chart_dataset(
+                datasets,
+                __("Cumulative expenses - plan"),
+                d.cumulative_expenses_plan,
+                {
+                    chartType: "line",
+                    plLayer: "cumulative",
+                    plSeriesKind: "cumulative_expense",
+                    plIsPlan: true,
+                }
+            );
         }
-        datasets.push({
-            name: __("Cumulative expenses") + " - " + view,
-            values: d.cumulative_expenses_actual,
-            chartType: "line",
-        });
+        push_pl_chart_dataset(
+            datasets,
+            __("Cumulative expenses") + " - " + view,
+            d.cumulative_expenses_actual,
+            {
+                chartType: "line",
+                plLayer: "cumulative",
+                plSeriesKind: "cumulative_expense",
+            }
+        );
     }
 
     let yMarkers = null;
@@ -369,19 +435,15 @@ const PL_CHART_BAR_STACK_ORDER = {
 };
 
 function get_pl_chart_bar_stack_group(dataset) {
-    const name = String(dataset.name || "");
-    if (name.includes(__(" - plan"))) {
-        return "plan";
-    }
-    return "actual";
+    return dataset.plIsPlan ? "plan" : "actual";
 }
 
 function get_pl_chart_bar_series_role(dataset) {
-    const name = String(dataset.name || "");
-    if (name.includes(__("Income"))) {
+    const kind = dataset.plSeriesKind;
+    if (kind === "income" || kind === "cumulative_income") {
         return 0;
     }
-    if (name.includes(__("Expenses"))) {
+    if (kind === "expense" || kind === "cumulative_expense") {
         return 1;
     }
     return 2;
@@ -450,97 +512,46 @@ function get_pl_chart_dataset_layer(dataset) {
         return dataset.plLayer;
     }
 
-    const name = String(dataset.name || "");
-    if (name.includes(__("Cumulative"))) {
+    const kind = dataset.plSeriesKind;
+    if (
+        kind === "cumulative_profit" ||
+        kind === "cumulative_income" ||
+        kind === "cumulative_expense"
+    ) {
         return "cumulative";
     }
-    if (name.includes(__("Profit"))) {
+    if (kind === "period_profit") {
         return "profit";
     }
     return "bar";
 }
 
 function is_pl_cumulative_profit_series(dataset) {
-    if (dataset.plSeriesKind === "cumulative_profit") {
-        return true;
-    }
-    return String(dataset.name || "").includes(__("Cumulative profit"));
+    return dataset.plSeriesKind === "cumulative_profit";
 }
 
 function is_pl_cumulative_volume_series(dataset) {
-    if (
+    return (
         dataset.plSeriesKind === "cumulative_income" ||
         dataset.plSeriesKind === "cumulative_expense"
-    ) {
-        return true;
-    }
-
-    const name = String(dataset.name || "");
-    return (
-        name.includes(__("Cumulative income")) || name.includes(__("Cumulative expenses"))
     );
 }
 
 function get_pl_chart_dataset_color(dataset, index, palette, frm) {
-    if (dataset.plSeriesKind === "income") {
-        if (frm.bg_hide_plan) {
-            return palette[0];
-        }
-        return palette[dataset.plIsPlan ? 0 : 1];
+    const kind = dataset.plSeriesKind;
+    const hidePlan = frm.bg_hide_plan;
+
+    if (kind === "income" || kind === "cumulative_income") {
+        return hidePlan ? palette[0] : palette[dataset.plIsPlan ? 0 : 1];
+    }
+    if (kind === "expense" || kind === "cumulative_expense") {
+        return hidePlan ? palette[1] : palette[dataset.plIsPlan ? 2 : 3];
+    }
+    if (kind === "period_profit" || kind === "cumulative_profit") {
+        return hidePlan ? palette[3] : palette[dataset.plIsPlan ? 4 : 5];
     }
 
-    if (dataset.plSeriesKind === "expense") {
-        if (frm.bg_hide_plan) {
-            return palette[1];
-        }
-        return palette[dataset.plIsPlan ? 2 : 3];
-    }
-
-    if (dataset.plSeriesKind === "period_profit") {
-        if (frm.bg_hide_plan) {
-            return palette[3];
-        }
-        return palette[dataset.plIsPlan ? 4 : 5];
-    }
-
-    if (dataset.plSeriesKind === "cumulative_income") {
-        if (frm.bg_hide_plan) {
-            return palette[0];
-        }
-        return palette[dataset.plIsPlan ? 0 : 1];
-    }
-
-    if (dataset.plSeriesKind === "cumulative_expense") {
-        if (frm.bg_hide_plan) {
-            return palette[1];
-        }
-        return palette[dataset.plIsPlan ? 2 : 3];
-    }
-
-    if (dataset.plSeriesKind === "cumulative_profit") {
-        if (frm.bg_hide_plan) {
-            return palette[3];
-        }
-        return palette[dataset.plIsPlan ? 4 : 5];
-    }
-
-    if (!is_pl_cumulative_volume_series(dataset)) {
-        return palette[index] || palette[palette.length - 1];
-    }
-
-    const name = String(dataset.name || "");
-    const isPlan = name.includes(__(" - plan"));
-    const isIncome = name.includes(__("Cumulative income"));
-
-    if (frm.bg_hide_plan) {
-        return palette[isIncome ? 0 : 1];
-    }
-
-    if (isIncome) {
-        return palette[isPlan ? 0 : 1];
-    }
-
-    return palette[isPlan ? 2 : 3];
+    return palette[index] || palette[palette.length - 1];
 }
 
 function build_pl_profit_dash_series(dataset, color, frm) {
@@ -1126,9 +1137,19 @@ function ensure_pl_chart_theme_observer() {
     });
 }
 
+function next_pl_chart_render_seq(frm) {
+    frm._plChartRenderSeq = (frm._plChartRenderSeq || 0) + 1;
+    return frm._plChartRenderSeq;
+}
+
+function is_stale_pl_chart_render(frm, seq) {
+    return seq != null && frm._plChartRenderSeq !== seq;
+}
+
 function render_pl_chart_impl(frm, init = true) {
     bind_pl_tab_listener_once(frm);
 
+    const seq = next_pl_chart_render_seq(frm);
     const plRowCount = (() => {
         const walk = (rows) =>
             (rows || []).reduce((n, r) => n + 1 + walk(r.children), 0);
@@ -1139,21 +1160,31 @@ function render_pl_chart_impl(frm, init = true) {
             console.log("requestIdleCallback( render_pl_chart )");
         }
         window.requestIdleCallback(function () {
-            _render_pl_chart(frm, init);
+            if (is_stale_pl_chart_render(frm, seq)) {
+                return;
+            }
+            _render_pl_chart(frm, init, seq);
         });
         return;
     }
 
-    return _render_pl_chart(frm, init);
+    return _render_pl_chart(frm, init, seq);
 }
 
-function _render_pl_chart(frm, init = true) {
+function _render_pl_chart(frm, init = true, seq = null) {
     if (pl_chart_debug_enabled()) {
         console.time("render_pl_chart");
     }
 
+    const token = seq ?? next_pl_chart_render_seq(frm);
     return load_pl_echarts()
         .then(function () {
+            if (is_stale_pl_chart_render(frm, token)) {
+                if (pl_chart_debug_enabled()) {
+                    console.timeEnd("render_pl_chart");
+                }
+                return;
+            }
             try {
                 // Financial metrics: owned by project_budget_dashboard (lazy tab mount).
                 // Do not call render_financial_metrics here — avoids duplicate API on P&L open.
