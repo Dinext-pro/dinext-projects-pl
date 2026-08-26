@@ -17,7 +17,7 @@ function validateForecastChange(frm, change) {
 	const rows = frm.project_budget?.rows || [];
 
 	const childrenSum = childForecastSum(row, periodKey);
-	if (childrenSum > 0 && value < childrenSum) {
+	if (value > 0 && childrenSum > 0 && value < childrenSum) {
 		return __("Value cannot be less than the sum of child items ({0})",
 			[Math.round(childrenSum).toLocaleString("ru-RU")]
 		);
@@ -74,6 +74,7 @@ function patchLocalForecast(frm, changes) {
 		const row = flat.find((r) => r.id === change.row?.id);
 		if (!row) continue;
 		const value = Number(change.newValue || 0);
+		row[`own_forecast_${periodKey}`] = value;
 		row[`forecast_${periodKey}`] = value;
 		row[`actual_${periodKey}`] = value;
 	}

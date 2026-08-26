@@ -110,7 +110,7 @@ function tryAddPlanAmount(groups, seen, row, period) {
 	const currentPlan = Number(row[`own_plan_${key}`] ?? 0);
 	const newPlanValue = period.is_past
 		? Number(row[`own_fact_${key}`] ?? 0)
-		: Number(row[`forecast_${key}`] ?? 0);
+		: Number(row[`own_forecast_${key}`] ?? row[`forecast_${key}`] ?? 0);
 
 	if (newPlanValue === currentPlan) {
 		return;

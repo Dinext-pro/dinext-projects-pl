@@ -32,12 +32,17 @@ export function dimsEqual(a, b) {
 }
 
 export function forecastOf(row, key) {
+	if (row?.[`own_forecast_${key}`] != null) {
+		return Number(row[`own_forecast_${key}`] || 0);
+	}
 	return Number(row?.[`forecast_${key}`] ?? row?.[`actual_${key}`] ?? 0);
 }
 
 export function setForecast(row, key, value) {
 	if (!row) return;
-	row[`forecast_${key}`] = Number(value) || 0;
+	const amount = Number(value) || 0;
+	row[`own_forecast_${key}`] = amount;
+	row[`forecast_${key}`] = amount;
 }
 
 export function findParent(rows, childId, parent = null) {
@@ -55,6 +60,7 @@ export function childForecastSum(row, key, excludeId = null) {
 	let sum = 0;
 	for (const child of row.children || []) {
 		if (excludeId && child.id === excludeId) continue;
+		if (child.risk) continue;
 		const own = forecastOf(child, key);
 		if (own) {
 			sum += own;
@@ -123,10 +129,11 @@ export function rollupDisplayPlan(rows, periodKeys) {
 		rollupDisplayPlan(children, periodKeys);
 		for (const key of periodKeys) {
 			const own = planOf(row, key);
+			const financial = children.filter((child) => !child.risk);
 			if (own > 0) {
 				row[`plan_${key}`] = own;
-			} else if (children.length) {
-				row[`plan_${key}`] = children.reduce(
+			} else if (financial.length) {
+				row[`plan_${key}`] = financial.reduce(
 					(sum, child) => sum + Number(child[`plan_${key}`] || 0),
 					0
 				);
@@ -145,10 +152,10 @@ export function findPlanEnvelopeError(rows, periodKeys) {
 		for (const key of periodKeys) {
 			const own = planOf(row, key);
 			if (!(own > 0)) continue;
-			const childSum = children.reduce(
-				(sum, child) => sum + Number(child[`plan_${key}`] || 0),
-				0
-			);
+			const childSum = children.reduce((sum, child) => {
+				if (child.risk) return sum;
+				return sum + Number(child[`plan_${key}`] || 0);
+			}, 0);
 			if (own < childSum) {
 				const label = row.account_label || row.account || "";
 				return __("{0}: value cannot be less than the sum of child items ({1})", [
