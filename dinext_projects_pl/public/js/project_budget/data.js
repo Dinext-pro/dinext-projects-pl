@@ -30,14 +30,15 @@ function applyRowTotals(row, periods) {
 	row.delta_total = calcDeltaPct(planTotal, actualTotal);
 }
 
-/** Report-style vertical: parent fact = own + descendants. Always on.
- *  Parent plan = own envelope if own_plan > 0, else sum of child display plans.
+/** Report analog: parent fact = own + descendants.
+ *  Plan/forecast = own if set, else sum of non-risk child display values.
  */
 function applyFactRollup(row, periods, viewMode) {
 	const children = row.children || [];
 	for (const child of children) {
 		applyFactRollup(child, periods, viewMode);
 	}
+	const financialChildren = children.filter((child) => !child.risk);
 	for (const period of periods || []) {
 		const key = period.key;
 		let fact = toNum(row[`own_fact_${key}`]);
@@ -51,13 +52,25 @@ function applyFactRollup(row, periods, viewMode) {
 				plan = ownPlan;
 			} else {
 				plan = 0;
-				for (const child of children) {
+				for (const child of financialChildren) {
 					plan += toNum(child[`plan_${key}`]);
 				}
 			}
 			row[`plan_${key}`] = plan;
 		}
-		const forecast = toNum(row[`forecast_${key}`]);
+		const ownForecast = toNum(row[`own_forecast_${key}`]);
+		let forecast = toNum(row[`forecast_${key}`]);
+		if (row[`own_forecast_${key}`] != null) {
+			if (ownForecast > 0) {
+				forecast = ownForecast;
+			} else {
+				forecast = 0;
+				for (const child of financialChildren) {
+					forecast += toNum(child[`forecast_${key}`]);
+				}
+			}
+			row[`forecast_${key}`] = forecast;
+		}
 		const actual = resolveActual(forecast, fact, period.is_past, viewMode);
 		row[`fact_${key}`] = fact;
 		row[`actual_${key}`] = actual;
@@ -209,7 +222,7 @@ function rowHasOwnValue(row, periods) {
 		const key = period.key;
 		if (
 			toNum(row[`own_plan_${key}`]) ||
-			toNum(row[`forecast_${key}`]) ||
+			toNum(row[`own_forecast_${key}`]) ||
 			toNum(row[`own_fact_${key}`])
 		) {
 			return true;

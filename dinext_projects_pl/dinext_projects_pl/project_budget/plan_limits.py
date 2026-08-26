@@ -97,7 +97,11 @@ def find_plan_envelope_error(rows: list[ProjectBudgetRow], period_keys: list[str
 			own = _to_float(row.get(f"own_plan_{key}"))
 			if own <= 0:
 				continue
-			child_sum = sum(_to_float(child.get(f"plan_{key}")) for child in children)
+			child_sum = sum(
+				_to_float(child.get(f"plan_{key}"))
+				for child in children
+				if not child.get("risk")
+			)
 			if own + 1e-9 < child_sum:
 				label = row.get("account_label") or row.get("account") or ""
 				return _(

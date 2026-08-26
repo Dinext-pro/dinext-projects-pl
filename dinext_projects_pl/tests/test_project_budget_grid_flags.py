@@ -20,9 +20,12 @@ class TestProjectBudgetGridFlags(FrappeTestCase):
 
 	def _row(self, **amounts):
 		row = {"id": amounts.pop("id", "r"), "children": amounts.pop("children", [])}
+		if "risk" in amounts:
+			row["risk"] = amounts.pop("risk")
 		for prefix in ("plan", "forecast", "own_fact", "fact", "actual"):
 			row[f"{prefix}_{self.KEY}"] = float(amounts.get(prefix, 0))
 		row[f"own_plan_{self.KEY}"] = float(amounts.get("own_plan", amounts.get("plan", 0)))
+		row[f"own_forecast_{self.KEY}"] = float(amounts.get("own_forecast", amounts.get("forecast", 0)))
 		return row
 
 	def test_row_has_value_uses_own_not_rolled_actual(self):
@@ -90,3 +93,26 @@ class TestProjectBudgetGridFlags(FrappeTestCase):
 		parent = self._row(id="parent", plan=0, own_plan=0)
 		_rollup_child_fact(parent, [child, grandchild_display], self.PERIODS, "forecast_and_fact")
 		self.assertEqual(parent[f"plan_{self.KEY}"], 140)
+
+	def test_forecast_rollup_sums_children_when_parent_has_no_own(self):
+		child_a = self._row(id="a", forecast=40)
+		child_b = self._row(id="b", forecast=30)
+		parent = self._row(id="parent", forecast=0)
+		_rollup_child_fact(parent, [child_a, child_b], self.PERIODS, "forecast_and_fact")
+		self.assertEqual(parent[f"forecast_{self.KEY}"], 70)
+		self.assertEqual(parent[f"own_forecast_{self.KEY}"], 0)
+
+	def test_forecast_rollup_keeps_own(self):
+		child = self._row(id="c", forecast=40)
+		parent = self._row(id="parent", forecast=100)
+		_rollup_child_fact(parent, [child], self.PERIODS, "forecast_and_fact")
+		self.assertEqual(parent[f"forecast_{self.KEY}"], 100)
+		self.assertEqual(parent[f"own_forecast_{self.KEY}"], 100)
+
+	def test_plan_and_forecast_rollup_skip_risk_children(self):
+		task = self._row(id="task", plan=40, forecast=25)
+		risk = self._row(id="risk", plan=80, forecast=90, risk="RISK-1")
+		parent = self._row(id="parent", plan=0, forecast=0)
+		_rollup_child_fact(parent, [task, risk], self.PERIODS, "forecast_and_fact")
+		self.assertEqual(parent[f"plan_{self.KEY}"], 40)
+		self.assertEqual(parent[f"forecast_{self.KEY}"], 25)
