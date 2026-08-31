@@ -3,7 +3,48 @@
 /* --- shell / controls (ex project_pl_style.js) --- */
 
 .budget-container {
-	max-width: 100% !important;
+	--pl-form-inset-x: var(--padding-md, 15px);
+	--pl-form-inset-y: 12px;
+
+	max-width: none !important;
+	width: 100% !important;
+	padding: 0 !important;
+	box-sizing: border-box;
+}
+
+/*
+ * Section «План / прогноз / факт»: form chrome off so grid full-bleed.
+ * Inset lives on chart. Toolbar stays glued to the grid.
+ * «Финансовый результат» and other PL sections keep Frappe padding.
+ */
+.form-section[data-fieldname="custom_план__прогноз__факт"],
+.form-section:has(.budget-container),
+.form-section:has(.pl-chart-wrapper) {
+	--pl-form-inset-x: var(--padding-md, 15px);
+	--pl-form-inset-y: 12px;
+	padding: 0 !important;
+	margin: 0;
+	border-bottom: none;
+}
+
+.form-section[data-fieldname="custom_план__прогноз__факт"] .section-body,
+.form-section[data-fieldname="custom_план__прогноз__факт"] .form-column,
+.form-section:has(.budget-container) .section-body,
+.form-section:has(.budget-container) .form-column,
+.form-section:has(.pl-chart-wrapper) .section-body,
+.form-section:has(.pl-chart-wrapper) .form-column {
+	padding: 0 !important;
+	margin: 0 !important;
+	width: 100%;
+	max-width: 100%;
+}
+
+.form-section:has(.budget-container) [data-fieldname="custom_pl_chart"],
+.pl-chart-wrapper {
+	width: 100%;
+	max-width: none !important;
+	box-sizing: border-box;
+	padding: var(--pl-form-inset-y, 12px) var(--pl-form-inset-x, 15px) 8px !important;
 }
 
 .budget-container .budget-table.dinext-table {
@@ -134,6 +175,49 @@
 	height: 100% !important;
 	max-height: none !important;
 	min-height: 0 !important;
+}
+
+#project-custom_pl [data-fieldname="custom_pl_summary"],
+#project-custom_pl [data-fieldname="custom_pl_summary"].report-summary {
+	margin: 0;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+}
+
+.form-section[data-fieldname="custom_финансовый_результат"] {
+	padding-bottom: 16px;
+}
+
+/* Button row under «Финансовый результат»: one line, space-around. */
+.form-section[data-fieldname="custom_section_break_q5h6f"] {
+	padding-top: 20px;
+}
+
+.form-section[data-fieldname="custom_section_break_q5h6f"] .section-body {
+	display: flex;
+	flex-wrap: nowrap;
+	justify-content: space-around;
+	align-items: center;
+	width: 100%;
+	margin: 0;
+}
+
+.form-section[data-fieldname="custom_section_break_q5h6f"] .form-column {
+	flex: 0 0 auto;
+	width: auto;
+	max-width: none;
+	padding-left: 0;
+	padding-right: 0;
+}
+
+.form-section[data-fieldname="custom_section_break_q5h6f"] .form-column:not(:has(.btn)) {
+	display: none;
+}
+
+.form-section[data-fieldname="custom_section_break_q5h6f"] .btn {
+	white-space: nowrap;
 }
 
 @media (min-width: 576px) {
