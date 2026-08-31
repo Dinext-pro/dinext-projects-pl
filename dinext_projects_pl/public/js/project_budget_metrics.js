@@ -254,10 +254,6 @@ function render_financial_metrics(frm) {
         return;
     }
 
-    if (frm.get_field?.("custom_financial_metrics")?.df?.hidden) {
-        return;
-    }
-
     init_financial_metrics_reporting_date(frm);
     const $wrapper = get_financial_metrics_wrapper(frm);
     if (!$wrapper || !$wrapper.length) {
