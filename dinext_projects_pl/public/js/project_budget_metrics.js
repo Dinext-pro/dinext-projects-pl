@@ -278,5 +278,24 @@ function build_financial_metrics(frm) {
     return fetch_financial_metrics(frm);
 }
 
+const METRICS_LAZY_FIELD = "custom_metrics";
+
+function schedule_financial_metrics_mount(frm) {
+    const bind = window.project_workload_assignment?.bindLazyTabMount;
+    if (typeof bind !== "function") {
+        console.error("[Project Metrics] bindLazyTabMount missing — refuse eager mount");
+        return;
+    }
+    bind(frm, METRICS_LAZY_FIELD, () => globalThis.render_financial_metrics(frm));
+}
+
+frappe.ui.form.on("Project", {
+    refresh(frm) {
+        if (frm.doc?.name && !frm.is_new()) {
+            schedule_financial_metrics_mount(frm);
+        }
+    },
+});
+
 globalThis.build_financial_metrics = build_financial_metrics;
 globalThis.render_financial_metrics = render_financial_metrics;
