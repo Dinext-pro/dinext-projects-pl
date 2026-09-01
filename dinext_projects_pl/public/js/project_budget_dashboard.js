@@ -1,7 +1,8 @@
 //https://erp.dinord.ru/app/issue/ISS-2025-01541
-// Heavy P&L dashboard (financial metrics + query_report) only when tab «P&L» is visible.
-// Use custom_metrics (not custom_planning): bindLazyTabMount allows one listener per fieldname.
-const PL_DASHBOARD_LAZY_FIELD = "custom_metrics";
+// P&L summary + report buttons only when tab «P&L» is visible.
+// Not custom_planning: that fieldname is already used by the budget grid lazy mount.
+// EVM cards live on tab «Метрики» (project_budget_metrics.js → custom_metrics).
+const PL_DASHBOARD_LAZY_FIELD = "custom_pl_summary";
 
 frappe.ui.form.on('Project', {
 	refresh: function(frm) {
@@ -12,14 +13,8 @@ frappe.ui.form.on('Project', {
 })
 
 function mount_pl_dashboard(frm) {
-	const tasks = [];
-	const renderFinancialMetrics = globalThis.render_financial_metrics;
-	if (typeof renderFinancialMetrics === "function") {
-		tasks.push(Promise.resolve(renderFinancialMetrics(frm)));
-	}
 	add_buttons(frm);
-	tasks.push(Promise.resolve(add_project_profit_loss_chart(frm)));
-	return Promise.all(tasks);
+	return Promise.resolve(add_project_profit_loss_chart(frm));
 }
 
 function schedule_pl_dashboard_mount(frm) {

@@ -1186,7 +1186,7 @@ function _render_pl_chart(frm, init = true, seq = null) {
                 return;
             }
             try {
-                // Financial metrics: owned by project_budget_dashboard (lazy tab mount).
+                // Financial metrics: owned by project_budget_metrics.js (lazy tab Метрики).
                 // Do not call render_financial_metrics here — avoids duplicate API on P&L open.
 
                 const chartData = get_pl_chart_data(frm);
