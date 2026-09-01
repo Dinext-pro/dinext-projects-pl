@@ -3,6 +3,7 @@ import { loadGridData, reloadTable } from "./data.js";
 import { applyPlanDeltaVisibility, getColumns, refreshColumns } from "./columns.js";
 import { attachTreePersistence, getExpandedIds, syncExpandedIds } from "./tree.js";
 import { onSaveCells, onValidateCells } from "./save.js";
+import { onCellDoubleClicked } from "./navigation.js";
 import { buildToolbarItems } from "./toolbar.js";
 import {
 	ensurePlDefaults,
@@ -104,6 +105,7 @@ function buildTableOptions(frm, state) {
 		},
 		onValidateCells: (ctx) => onValidateCells(frm, ctx),
 		onSaveCells: (ctx) => onSaveCells(frm, ctx),
+		onCellDoubleClicked: (params) => onCellDoubleClicked(frm, params),
 		treeColumnField: "account_label",
 		gridOptions: {
 			// Legacy: row ~29px, header block ~45px total.

@@ -22,6 +22,46 @@ def _is_monthly_period_key(suffix):
 	return len(parts) == 2 and parts[1].isdigit() and len(parts[1]) == 2
 
 
+def parse_monthly_period_key(period_key):
+	"""Return (year, month) for YYYY_MM keys, else None."""
+	parts = (period_key or "").split("_")
+	if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+		return None
+	year, month = int(parts[0]), int(parts[1])
+	if month < 1 or month > 12:
+		return None
+	return year, month
+
+
+def expand_period_key_to_monthly_keys(period_key):
+	"""Expand report period key to zero-padded YYYY_MM keys.
+
+	`2026_06` → `['2026_06']`
+	`2026_Q3` → `['2026_07', '2026_08', '2026_09']`
+	`2026` → twelve months of that year
+	"""
+	if not period_key:
+		return []
+
+	parsed = parse_monthly_period_key(period_key)
+	if parsed:
+		return ["{0}_{1:02d}".format(parsed[0], parsed[1])]
+
+	parts = str(period_key).split("_")
+	if len(parts) == 1 and parts[0].isdigit():
+		year = int(parts[0])
+		return ["{0}_{1:02d}".format(year, month) for month in range(1, 13)]
+
+	if len(parts) == 2 and parts[0].isdigit() and parts[1][:1] in ("Q", "q") and parts[1][1:].isdigit():
+		quarter = int(parts[1][1:])
+		if 1 <= quarter <= 4:
+			year = int(parts[0])
+			start_month = (quarter - 1) * 3 + 1
+			return ["{0}_{1:02d}".format(year, start_month + offset) for offset in range(3)]
+
+	return []
+
+
 def get_report_periods(filters):
 	"""Return ordered period definitions for the active granularity."""
 	granularity = get_period_granularity(filters)
