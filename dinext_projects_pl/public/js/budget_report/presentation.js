@@ -36,13 +36,73 @@ br.parseReportPeriodMeta = function (periodKey) {
 	}
 
 	var parts = String(periodKey).split("_");
-	if (parts.length === 2 && /^\d{2}$/.test(parts[1])) {
+	if (parts.length === 2 && /^\d{1,2}$/.test(parts[1])) {
 		return {
 			year: parseInt(parts[0], 10),
 			month: parseInt(parts[1], 10),
 		};
 	}
 	return {};
+};
+
+br.expandPeriodKeyToMonthlyKeys = function (periodKey) {
+	if (!periodKey || periodKey === "total") {
+		return [];
+	}
+
+	var parts = String(periodKey).split("_");
+	if (parts.length === 2 && /^\d{1,2}$/.test(parts[1])) {
+		var month = parseInt(parts[1], 10);
+		if (month < 1 || month > 12) {
+			return [];
+		}
+		return [parts[0] + "_" + (month < 10 ? "0" : "") + month];
+	}
+	if (parts.length === 1 && /^\d+$/.test(parts[0])) {
+		var yearKeys = [];
+		var year = parseInt(parts[0], 10);
+		for (var monthNo = 1; monthNo <= 12; monthNo++) {
+			yearKeys.push(year + "_" + (monthNo < 10 ? "0" : "") + monthNo);
+		}
+		return yearKeys;
+	}
+	if (parts.length === 2 && /^Q[1-4]$/i.test(parts[1])) {
+		var quarterYear = parseInt(parts[0], 10);
+		var quarter = parseInt(parts[1].slice(1), 10);
+		var startMonth = (quarter - 1) * 3 + 1;
+		return [0, 1, 2].map(function (offset) {
+			var monthValue = startMonth + offset;
+			return quarterYear + "_" + (monthValue < 10 ? "0" : "") + monthValue;
+		});
+	}
+	return [];
+};
+
+br.sumRiskTotalsForPeriod = function (riskTotals, periodKey, valueKey, includeMonth) {
+	if (!riskTotals || !periodKey) {
+		return 0;
+	}
+
+	var monthlyKeys = br.expandPeriodKeyToMonthlyKeys(periodKey);
+	if (!monthlyKeys.length) {
+		monthlyKeys = [periodKey];
+	}
+
+	var total = 0;
+	monthlyKeys.forEach(function (monthlyKey) {
+		var bucket = riskTotals[monthlyKey];
+		if (!bucket) {
+			return;
+		}
+		if (includeMonth) {
+			var meta = br.parseReportPeriodMeta(monthlyKey);
+			if (!includeMonth(meta.year, meta.month)) {
+				return;
+			}
+		}
+		total += flt(bucket[valueKey]);
+	});
+	return total;
 };
 
 br.isPastReportPeriod = function (year, month) {
@@ -68,21 +128,20 @@ br.shouldApplyRiskForecast = function (filters, year, month) {
 };
 
 br.getRiskAmountForSummaryGroup = function (riskTotals, group, filters) {
-	if (!riskTotals || !group || !group.key || !riskTotals[group.key]) {
+	if (!riskTotals || !group || !group.key) {
 		return { plan: 0, display: 0 };
 	}
 
-	var bucket = riskTotals[group.key];
-	var meta = br.parseReportPeriodMeta(group.key);
-	var display = 0;
-
-	if (br.shouldApplyRiskForecast(filters, meta.year, meta.month)) {
-		display = flt(bucket.forecast);
-	}
-
 	return {
-		plan: flt(bucket.plan),
-		display: display,
+		plan: br.sumRiskTotalsForPeriod(riskTotals, group.key, "plan"),
+		display: br.sumRiskTotalsForPeriod(
+			riskTotals,
+			group.key,
+			"forecast",
+			function (year, month) {
+				return br.shouldApplyRiskForecast(filters, year, month);
+			}
+		),
 	};
 };
 
@@ -103,7 +162,7 @@ br.applyRiskReservesToExpenseByColumn = function (
 	monthlyColumns.forEach(function (col) {
 		if (col.indexOf("plan_") === 0) {
 			var planPeriodKey = col.slice("plan_".length);
-			var planAmount = flt(riskTotals[planPeriodKey] && riskTotals[planPeriodKey].plan);
+			var planAmount = br.sumRiskTotalsForPeriod(riskTotals, planPeriodKey, "plan");
 			if (!planAmount) {
 				return;
 			}
@@ -121,13 +180,13 @@ br.applyRiskReservesToExpenseByColumn = function (
 		}
 
 		var forecastPeriodKey = col.slice("forecast_".length);
-		var meta = br.parseReportPeriodMeta(forecastPeriodKey);
-		if (!br.shouldApplyRiskForecast(filters, meta.year, meta.month)) {
-			return;
-		}
-
-		var forecastAmount = flt(
-			riskTotals[forecastPeriodKey] && riskTotals[forecastPeriodKey].forecast
+		var forecastAmount = br.sumRiskTotalsForPeriod(
+			riskTotals,
+			forecastPeriodKey,
+			"forecast",
+			function (year, month) {
+				return br.shouldApplyRiskForecast(filters, year, month);
+			}
 		);
 		if (!forecastAmount) {
 			return;

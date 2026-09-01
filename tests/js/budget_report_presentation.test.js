@@ -326,3 +326,55 @@ test("addProfitRow subtracts risk reserves from profit without changing CoA rows
 	assert.equal(profit[`forecast_${monthKey}`], -600_000);
 	assert.equal(profit.total_exp, -600_000);
 });
+
+test("expandPeriodKeyToMonthlyKeys covers month quarter year", () => {
+	const br = loadBudgetPresentationModule();
+	assert.equal(br.expandPeriodKeyToMonthlyKeys("2026_06").join(","), "2026_06");
+	assert.equal(
+		br.expandPeriodKeyToMonthlyKeys("2026_Q3").join(","),
+		"2026_07,2026_08,2026_09"
+	);
+	assert.equal(br.expandPeriodKeyToMonthlyKeys("2026").length, 12);
+	assert.equal(br.expandPeriodKeyToMonthlyKeys("2026")[0], "2026_01");
+	assert.equal(br.expandPeriodKeyToMonthlyKeys("2026")[11], "2026_12");
+});
+
+test("addProfitRow quarter column sums monthly risk reserves", () => {
+	const br = loadBudgetPresentationModule();
+	const quarterKey = "2026_Q2";
+	const columns = [
+		{
+			fieldname: `forecast_${quarterKey}`,
+			period_group: quarterKey,
+			period_role: "display",
+		},
+		{ fieldname: "total_exp", period_group: "total", period_role: "forecast" },
+	];
+	const rows = [
+		{
+			account: "Income Root",
+			indent: 0,
+			root_type: "Income",
+			[`forecast_${quarterKey}`]: 0,
+		},
+		{
+			account: "Expense Root",
+			indent: 0,
+			root_type: "Expense",
+			[`forecast_${quarterKey}`]: 100_000,
+		},
+	];
+	const riskTotals = {
+		"2026_04": { plan: 0, forecast: 100_000 },
+		"2026_05": { plan: 0, forecast: 200_000 },
+		"2026_06": { plan: 0, forecast: 200_000 },
+	};
+
+	br.addProfitRow(rows, columns, { view_type: "forecast_only" }, riskTotals);
+	const profit = profitRow(rows);
+	const expense = rows.find((row) => row.account === "Expense Root");
+
+	assert.equal(expense[`forecast_${quarterKey}`], 100_000);
+	assert.equal(profit[`forecast_${quarterKey}`], -600_000);
+	assert.equal(profit.total_exp, -600_000);
+});

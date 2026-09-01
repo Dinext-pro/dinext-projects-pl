@@ -5,6 +5,8 @@ from collections import defaultdict
 
 from frappe.utils import cint, flt, getdate, today
 
+from .periods import expand_period_key_to_monthly_keys, get_report_periods, parse_monthly_period_key
+
 DATA_TYPE_WITH_RISK = "with_risk"
 DATA_TYPE_WITH_TASK = "with_task"
 DATA_TYPE_WITHOUT_TASK = "without_task"
@@ -119,32 +121,74 @@ def is_past_report_period(year, month, as_of_date=None):
 	return year < current.year or (year == current.year and month < current.month)
 
 
+def _period_key_monthly_map(filters):
+	mapping = {}
+	if not filters or not cint(filters.get("from_year")) or not cint(filters.get("to_year")):
+		return mapping
+	for period in get_report_periods(filters):
+		key = period.get("key")
+		if key:
+			mapping[key] = list(period.get("monthly_keys") or [])
+	return mapping
+
+
+def _monthly_keys_for_period(period_key, period_map=None):
+	if period_map and period_key in period_map and period_map[period_key]:
+		return period_map[period_key]
+	return expand_period_key_to_monthly_keys(period_key)
+
+
+def _sum_risk_for_monthly_keys(risk_totals, monthly_keys, value_key, include_month=None):
+	total = 0.0
+	for monthly_key in monthly_keys or []:
+		if include_month:
+			parsed = parse_monthly_period_key(monthly_key)
+			if not parsed or not include_month(*parsed):
+				continue
+		total += flt((risk_totals.get(monthly_key) or {}).get(value_key))
+	return total
+
+
 def apply_risk_reserves_to_expense_by_column(expense_by_column, risk_totals, filters, monthly_columns):
 	"""
 	Add risk reserves to expense side for profit (not CoA rows).
 
 	Matches project P&L: reserves reduce profit via forecast/plan tracks only.
+	Risk totals stay on monthly keys; quarter/year columns sum those months.
 	"""
 	if not risk_totals:
 		return
 
 	view_type = (filters or {}).get("view_type", "forecast_actual")
+	period_map = _period_key_monthly_map(filters)
+
+	def include_forecast(year, month):
+		if view_type == "forecast_only":
+			return True
+		if view_type == "forecast_actual":
+			return not is_past_report_period(year, month)
+		return False
 
 	for col in monthly_columns or []:
 		if col.startswith("plan_"):
 			period_key = col[len("plan_") :]
-			amount = flt(risk_totals.get(period_key, {}).get("plan"))
+			amount = _sum_risk_for_monthly_keys(
+				risk_totals,
+				_monthly_keys_for_period(period_key, period_map),
+				"plan",
+			)
 			if amount:
 				expense_by_column[col] = expense_by_column.get(col, 0) + amount
 		elif col.startswith("forecast_"):
 			period_key = col[len("forecast_") :]
-			year, month = map(int, period_key.split("_"))
-			if view_type == "forecast_only" or (
-				view_type == "forecast_actual" and not is_past_report_period(year, month)
-			):
-				amount = flt(risk_totals.get(period_key, {}).get("forecast"))
-				if amount:
-					expense_by_column[col] = expense_by_column.get(col, 0) + amount
+			amount = _sum_risk_for_monthly_keys(
+				risk_totals,
+				_monthly_keys_for_period(period_key, period_map),
+				"forecast",
+				include_forecast,
+			)
+			if amount:
+				expense_by_column[col] = expense_by_column.get(col, 0) + amount
 
 
 def build_report_risk_meta_row(risk_totals):

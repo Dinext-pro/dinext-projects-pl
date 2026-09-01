@@ -124,6 +124,50 @@ class TestProjectBudgetPlanVsForecastRisk(FrappeTestCase):
 		)
 		self.assertEqual(expense_by_column["forecast_2026_06"], 600_000)
 
+	def test_apply_risk_reserves_quarter_sums_monthly_keys(self):
+		expense_by_column = {"forecast_2026_Q2": 100_000}
+		risk_totals = {
+			"2026_04": {"plan": 0, "forecast": 100_000},
+			"2026_05": {"plan": 0, "forecast": 200_000},
+			"2026_06": {"plan": 0, "forecast": 200_000},
+		}
+		apply_risk_reserves_to_expense_by_column(
+			expense_by_column,
+			risk_totals,
+			{"view_type": "forecast_only"},
+			["forecast_2026_Q2"],
+		)
+		self.assertEqual(expense_by_column["forecast_2026_Q2"], 600_000)
+
+	def test_apply_risk_reserves_year_key_sums_monthly_keys(self):
+		expense_by_column = {"forecast_2026": 0}
+		risk_totals = {"2026_06": {"plan": 0, "forecast": 500_000}}
+		apply_risk_reserves_to_expense_by_column(
+			expense_by_column,
+			risk_totals,
+			{"view_type": "forecast_only"},
+			["forecast_2026"],
+		)
+		self.assertEqual(expense_by_column["forecast_2026"], 500_000)
+
+	def test_execute_quarter_granularity_with_risk_does_not_crash(self):
+		filters = {
+			**self._base_filters(),
+			"project": self.project.name,
+			"view_type": "forecast_actual",
+			"period_granularity": "quarter",
+			"from_month": 1,
+			"to_month": 12,
+			"show_zero_rows": 1,
+			"show_zero_columns": 1,
+			"show_plan": 1,
+		}
+		_columns, data = execute(filters)
+		fieldnames = [col.get("fieldname") for col in _columns]
+		self.assertIn("forecast_2026_Q3", fieldnames)
+		profit_row = next(row for row in data if row.get("is_profit_row"))
+		self.assertIn("forecast_2026_Q3", profit_row)
+
 	def test_risk_on_leaf_does_not_roll_up_to_parent_account(self):
 		"""Risk reserves stay off the CoA rollup (unlike task aggregation)."""
 		child_account = self._get_leaf_expense_under_root()
