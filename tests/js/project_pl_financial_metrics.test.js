@@ -261,6 +261,7 @@ function loadFinancialMetricsModule() {
     const source = fs.readFileSync(modulePath, "utf8");
     const context = createContext();
     context.globalThis = context;
+    context.window = context;
     vm.createContext(context);
     vm.runInContext(source, context, { filename: modulePath });
     return context;
@@ -544,15 +545,13 @@ test("concurrent fetch_financial_metrics shares one API call", async () => {
     assert.equal(a, b);
 });
 
-test("dashboard refresh schedules lazy mount instead of eager metrics", () => {
-    const context = loadDashboardModule();
+test("metrics refresh schedules lazy mount on custom_metrics", () => {
+    const context = loadFinancialMetricsModule();
     let renderCount = 0;
     let bindCalls = [];
-    context.globalThis.render_financial_metrics = () => {
+    context.render_financial_metrics = () => {
         renderCount += 1;
     };
-    context.add_buttons = () => {};
-    context.add_project_profit_loss_chart = () => {};
     context.project_workload_assignment = {
         bindLazyTabMount(frm, fieldname, mountFn) {
             bindCalls.push({ fieldname, mountFn });
@@ -574,4 +573,40 @@ test("dashboard refresh schedules lazy mount instead of eager metrics", () => {
 
     bindCalls[0].mountFn();
     assert.equal(renderCount, 1);
+});
+
+test("dashboard refresh schedules lazy mount on P&L summary, not metrics", () => {
+    const context = loadDashboardModule();
+    let renderCount = 0;
+    let bindCalls = [];
+    context.globalThis.render_financial_metrics = () => {
+        renderCount += 1;
+    };
+    context.project_workload_assignment = {
+        bindLazyTabMount(frm, fieldname, mountFn) {
+            bindCalls.push({ fieldname, mountFn });
+        },
+    };
+
+    const frm = {
+        doc: {
+            name: "PROJ-0001",
+            company: "Test Company",
+            expected_start_date: "2026-01-01",
+            expected_end_date: "2026-12-31",
+        },
+        is_new() {
+            return false;
+        },
+    };
+
+    context.__formHandlers.Project.refresh(frm);
+
+    assert.equal(renderCount, 0);
+    assert.equal(bindCalls.length, 1);
+    assert.equal(bindCalls[0].fieldname, "custom_pl_summary");
+
+    bindCalls[0].mountFn();
+    assert.equal(renderCount, 0);
+    assert.ok(context.__controlCalls.length >= 4);
 });
