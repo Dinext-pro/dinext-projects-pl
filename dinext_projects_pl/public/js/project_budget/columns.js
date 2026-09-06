@@ -1,3 +1,8 @@
+import {
+	accountLabelTreeContentKey,
+	renderAccountLabel,
+} from "./risk-delete.js";
+
 /** Legacy period group width: 210 − 70 per hidden plan − 50 per hidden Δ. */
 const LEGACY_PERIOD_GROUP_WIDTH = 210;
 const LEGACY_PLAN_SUBCOL_WIDTH = 70;
@@ -327,6 +332,8 @@ export function getColumns(frm, periods) {
 			tree: true,
 			edit: false,
 			sortable: false,
+			render: (params) => renderAccountLabel(params, form),
+			treeContentKey: accountLabelTreeContentKey,
 		},
 	];
 
