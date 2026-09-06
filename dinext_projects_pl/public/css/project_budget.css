@@ -534,6 +534,22 @@
 	color: #e03636 !important;
 }
 
+.budget-table.dinext-table .project-budget-account-label {
+	display: inline-flex;
+	align-items: center;
+	min-width: 0;
+	gap: 0;
+}
+
+.budget-table.dinext-table .delete-risk-reserve-btn {
+	padding: 0 !important;
+	border-radius: 50%;
+	box-sizing: border-box;
+	line-height: 0;
+	margin-left: 0.5rem;
+	flex: 0 0 auto;
+}
+
 .budget-container:fullscreen,
 .budget-container.budget-container--fullscreen {
 	height: 100%;
