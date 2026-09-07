@@ -1,0 +1,38 @@
+{
+ "based_on": "",
+ "chart_name": "\u0412\u044b\u0440\u0443\u0447\u043a\u0430 \u043f\u043e \u043a\u043b\u0438\u0435\u043d\u0442\u0430\u043c",
+ "chart_type": "Report",
+ "creation": "2025-08-07 00:48:16.865125",
+ "docstatus": 0,
+ "doctype": "Dashboard Chart",
+ "document_type": "",
+ "dynamic_filters_json": "{}",
+ "filters_json": "{\"tree_type\":\"Customer\",\"doc_type\":\"Sales Invoice\",\"value_quantity\":\"Value\",\"from_date\":\"2026-01-01\",\"to_date\":\"2026-12-31\",\"company\":\"Dinord\",\"range\":\"Monthly\"}",
+ "group_by_type": "Count",
+ "idx": 45,
+ "is_public": 0,
+ "is_standard": 1,
+ "modified": "2026-08-06 02:58:06.805967",
+ "modified_by": "Administrator",
+ "module": "Dinext Projects Pl",
+ "name": "\u0412\u044b\u0440\u0443\u0447\u043a\u0430 \u043f\u043e \u043a\u043b\u0438\u0435\u043d\u0442\u0430\u043c",
+ "number_of_groups": 0,
+ "owner": "Administrator",
+ "parent_document_type": "",
+ "report_name": "Sales Analytics",
+ "roles": [],
+ "show_values_over_chart": 0,
+ "source": "",
+ "time_interval": "Yearly",
+ "timeseries": 0,
+ "timespan": "Last Year",
+ "type": "Donut",
+ "use_report_chart": 0,
+ "value_based_on": "",
+ "x_field": "entity_name",
+ "y_axis": [
+  {
+   "y_field": "total"
+  }
+ ]
+}

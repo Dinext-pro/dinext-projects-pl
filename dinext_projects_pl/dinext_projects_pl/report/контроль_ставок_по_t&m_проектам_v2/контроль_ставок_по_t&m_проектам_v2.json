@@ -1,0 +1,35 @@
+{
+ "add_total_row": 0,
+ "add_translate_data": 0,
+ "columns": [],
+ "creation": "2026-01-09 12:40:32.596423",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "letter_head": null,
+ "modified": "2026-08-06 02:57:46.088290",
+ "modified_by": "Administrator",
+ "module": "Dinext Projects Pl",
+ "name": "\u041a\u043e\u043d\u0442\u0440\u043e\u043b\u044c \u0441\u0442\u0430\u0432\u043e\u043a \u043f\u043e T&M \u043f\u0440\u043e\u0435\u043a\u0442\u0430\u043c_V2",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "query": "SELECT\r\n    u.full_name AS '\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c',\r\n    COALESCE(w.wuser_group, 'Not Worker') AS '\u0424\u0443\u043d\u043a\u0446\u0438\u043e\u043d\u0430\u043b\u044c\u043d\u0430\u044f \u0433\u0440\u0443\u043f\u043f\u0430',\r\n    p.project_name AS '\u041f\u0440\u043e\u0435\u043a\u0442',\r\n    CASE \r\n        WHEN ptd.pt_cost_level IS NULL OR TRIM(ptd.pt_cost_level) = '' THEN\r\n            (SELECT wl.wl_cosl_level\r\n             FROM `tabWorker Level` wl\r\n             JOIN `tabWorker` ww ON ww.name = wl.parent\r\n             WHERE ww.wuser = ptd.pt_participant\r\n               AND wl.wl_valid_from <= CURDATE()\r\n             ORDER BY wl.wl_valid_from DESC\r\n             LIMIT 1)\r\n        ELSE ptd.pt_cost_level\r\n    END AS '\u0413\u0440\u0435\u0439\u0434',\r\n    (SELECT rt.rt_rate\r\n     FROM `tabRate Table` rt\r\n     JOIN `tabCost Level` rc ON rc.name = rt.parent\r\n     WHERE rt.parenttype = 'Cost Level'\r\n       AND rc.name = CASE \r\n                        WHEN ptd.pt_cost_level IS NULL OR TRIM(ptd.pt_cost_level) = '' THEN\r\n                            (SELECT wl.wl_cosl_level\r\n                             FROM `tabWorker Level` wl\r\n                             JOIN `tabWorker` ww ON ww.name = wl.parent\r\n                             WHERE ww.wuser = ptd.pt_participant\r\n                               AND wl.wl_valid_from <= CURDATE()\r\n                             ORDER BY wl.wl_valid_from DESC\r\n                             LIMIT 1)\r\n                        ELSE ptd.pt_cost_level\r\n                     END\r\n       AND rt.rt_valid_from <= CURDATE()\r\n     ORDER BY rt.rt_valid_from DESC\r\n     LIMIT 1) AS '\u0421\u0442\u0430\u0432\u043a\u0430 \u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u0438',\r\n    ptd.pt_category AS '\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f',\r\n    (SELECT rt.rt_rate\r\n     FROM `tabRate Table` rt\r\n     JOIN `tabRate Category` rc ON rc.name = rt.parent\r\n     WHERE rt.parenttype = 'Rate Category'\r\n       AND rc.name = ptd.pt_category\r\n       AND rt.rt_valid_from <= CURDATE()\r\n     ORDER BY rt.rt_valid_from DESC\r\n     LIMIT 1) AS '\u0421\u0442\u0430\u0432\u043a\u0430 \u0440\u0435\u0430\u043b\u0438\u0437\u0430\u0446\u0438\u0438',\r\n    CASE \r\n        WHEN (SELECT rt.rt_rate FROM `tabRate Table` rt JOIN `tabCost Level` rc ON rc.name = rt.parent\r\n              WHERE rt.parenttype = 'Cost Level' AND rc.name = CASE \r\n                  WHEN ptd.pt_cost_level IS NULL OR TRIM(ptd.pt_cost_level) = '' THEN\r\n                      (SELECT wl.wl_cosl_level FROM `tabWorker Level` wl JOIN `tabWorker` ww ON ww.name = wl.parent\r\n                       WHERE ww.wuser = ptd.pt_participant AND wl.wl_valid_from <= CURDATE()\r\n                       ORDER BY wl.wl_valid_from DESC LIMIT 1)\r\n                  ELSE ptd.pt_cost_level\r\n              END AND rt.rt_valid_from <= CURDATE()\r\n              ORDER BY rt.rt_valid_from DESC LIMIT 1) > 0\r\n        THEN ROUND(\r\n            (((SELECT rt.rt_rate FROM `tabRate Table` rt JOIN `tabRate Category` rc ON rc.name = rt.parent\r\n               WHERE rt.parenttype = 'Rate Category' AND rc.name = ptd.pt_category AND rt.rt_valid_from <= CURDATE()\r\n               ORDER BY rt.rt_valid_from DESC LIMIT 1) - \r\n             (SELECT rt.rt_rate FROM `tabRate Table` rt JOIN `tabCost Level` rc ON rc.name = rt.parent\r\n              WHERE rt.parenttype = 'Cost Level' AND rc.name = CASE \r\n                  WHEN ptd.pt_cost_level IS NULL OR TRIM(ptd.pt_cost_level) = '' THEN\r\n                      (SELECT wl.wl_cosl_level FROM `tabWorker Level` wl JOIN `tabWorker` ww ON ww.name = wl.parent\r\n                       WHERE ww.wuser = ptd.pt_participant AND wl.wl_valid_from <= CURDATE()\r\n                       ORDER BY wl.wl_valid_from DESC LIMIT 1)\r\n                  ELSE ptd.pt_cost_level\r\n              END AND rt.rt_valid_from <= CURDATE()\r\n              ORDER BY rt.rt_valid_from DESC LIMIT 1)) / \r\n             (SELECT rt.rt_rate FROM `tabRate Table` rt JOIN `tabCost Level` rc ON rc.name = rt.parent\r\n              WHERE rt.parenttype = 'Cost Level' AND rc.name = CASE \r\n                  WHEN ptd.pt_cost_level IS NULL OR TRIM(ptd.pt_cost_level) = '' THEN\r\n                      (SELECT wl.wl_cosl_level FROM `tabWorker Level` wl JOIN `tabWorker` ww ON ww.name = wl.parent\r\n                       WHERE ww.wuser = ptd.pt_participant AND wl.wl_valid_from <= CURDATE()\r\n                       ORDER BY wl.wl_valid_from DESC LIMIT 1)\r\n                  ELSE ptd.pt_cost_level\r\n              END AND rt.rt_valid_from <= CURDATE()\r\n              ORDER BY rt.rt_valid_from DESC LIMIT 1)) * 100, 2)\r\n        ELSE 0\r\n    END AS '\u0420\u0435\u043d\u0442\u0430\u0431\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c'\r\nFROM \r\n    `tabProject Team Details` ptd\r\nJOIN \r\n    `tabProject` p ON p.name = ptd.parent\r\nJOIN \r\n    `tabUser` u ON u.name = ptd.pt_participant\r\nLEFT JOIN \r\n    `tabWorker` w ON w.wuser = ptd.pt_participant\r\nWHERE \r\n    p.project_type = '\u041a\u043e\u043c\u043c\u0435\u0440\u0447\u0435\u0441\u043a\u0438\u0439' \r\n    AND p.status = 'Open' \r\n    AND p.custom_payment_scheme = '\u0412\u0440\u0435\u043c\u044f \u0438 \u0437\u0430\u0442\u0440\u0430\u0442\u044b (T&M)'\r\n    AND (CURDATE() BETWEEN ptd.pt_valid_from AND ptd.pt_valid_for OR ptd.pt_valid_from > CURDATE())\r\n    ",
+ "ref_doctype": "Project",
+ "report_name": "\u041a\u043e\u043d\u0442\u0440\u043e\u043b\u044c \u0441\u0442\u0430\u0432\u043e\u043a \u043f\u043e T&M \u043f\u0440\u043e\u0435\u043a\u0442\u0430\u043c_V2",
+ "report_type": "Query Report",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Dinext_Financier"
+  },
+  {
+   "role": "Dinext_Projects_Admin"
+  }
+ ],
+ "timeout": 0
+}

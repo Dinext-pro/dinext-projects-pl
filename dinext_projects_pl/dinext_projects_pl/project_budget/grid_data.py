@@ -1,0 +1,693 @@
+# Copyright (c) 2026, Dinext
+"""Сборка scalar Project Budget grid: дерево CoA + Task WBS в Статье."""
+
+from __future__ import annotations
+
+import frappe
+from frappe import _
+from frappe.utils import cint
+
+from dinext_projects_pl.dinext_projects_pl.project_budget.amounts import (
+	load_budget_buckets,
+	load_gl_fact_buckets,
+	merge_bucket_stores,
+	period_date_bounds,
+)
+from dinext_projects_pl.dinext_projects_pl.project_budget.dimensions import (
+	dimension_fingerprint,
+	normalize_dimensions,
+)
+from dinext_projects_pl.models import (
+	ProjectBudgetDisplayPeriod,
+	ProjectBudgetGridFormInput,
+	ProjectBudgetGridResponse,
+	ProjectBudgetRow,
+	ViewMode,
+)
+from dinext_projects_pl.dinext_projects_pl.project_budget.periods import (
+	get_display_periods,
+	normalize_period_type,
+	normalize_view_mode,
+	period_month_keys,
+)
+from dinext_projects_pl.dinext_projects_pl.project_budget.summary import build_project_budget_summary_rows
+
+RISK_KEY_SEP = "|risk|"
+EXCLUDED_DIMENSIONS = ("Project", "Cost Center", "Project Portfolio")
+
+
+def _as_bool(value: object) -> bool:
+	if isinstance(value, bool):
+		return value
+	return bool(cint(value))
+
+
+def _to_float(value: object) -> float:
+	try:
+		return float(value or 0)
+	except (TypeError, ValueError):
+		return 0.0
+
+
+def _calc_delta_pct(plan: float, actual: float) -> float:
+	if not plan:
+		return 0.0
+	return round(((actual - plan) / plan) * 100, 1)
+
+
+def _resolve_actual(
+	forecast: float,
+	fact: float,
+	is_past: bool,
+	view_mode: ViewMode,
+) -> float:
+	if view_mode == "forecast_only":
+		return forecast
+	if view_mode == "fact_only":
+		return fact
+	return fact if is_past else forecast
+
+
+def _load_pl_accounts(company: str) -> list[dict]:
+	# Same order as legacy Project P&L roots: root_type desc.
+	return frappe.get_all(
+		"Account",
+		filters={
+			"disabled": 0,
+			"report_type": "Profit and Loss",
+			"company": company,
+		},
+		fields=[
+			"name",
+			"account_name",
+			"is_group",
+			"parent_account",
+			"root_type",
+		],
+		order_by="root_type desc",
+		limit_page_length=0,
+	)
+
+
+def _load_project_tasks(project: str) -> list[dict]:
+	"""Task tree for P&L expansion — same filters/order as WE consolidated."""
+	Task = frappe.qb.DocType("Task")
+	tasks = (
+		frappe.qb.from_(Task)
+		.select(
+			Task.name.as_("value"),
+			Task.subject,
+			Task.is_group.as_("expandable"),
+			Task.parent_task,
+		)
+		.where(Task.project == project)
+		.where(Task.docstatus < 2)
+		.where(Task.is_milestone == 0)
+		.orderby(Task.parent_task)
+		.orderby(Task.exp_start_date)
+		.orderby(Task.exp_end_date)
+		.run(as_dict=True)
+	)
+	if not tasks:
+		return []
+
+	task_dict = {t["value"]: t for t in tasks}
+	child_map: dict[str, list[str]] = {}
+	for task in tasks:
+		parent = task.get("parent_task") or ""
+		child_map.setdefault(parent, []).append(task["value"])
+
+	ordered: list[dict] = []
+
+	def walk(parent_id: str, level: int) -> None:
+		for child_id in child_map.get(parent_id, []):
+			task = task_dict.get(child_id)
+			if not task:
+				continue
+			task["indent"] = level
+			ordered.append(task)
+			walk(child_id, level + 1)
+
+	for root_id in child_map.get("", []):
+		task = task_dict.get(root_id)
+		if not task:
+			continue
+		task["indent"] = 0
+		ordered.append(task)
+		walk(root_id, 1)
+
+	return ordered
+
+
+def _load_accounts_allowing_task(company: str) -> set[str]:
+	"""Accounts where Accounting Dimension Filter applies to Task.
+
+	ADF.accounting_dimension stores document_type (e.g. \"Task\"), same as
+	forecast_utils.get_income_accounts_with_task_dimension.
+	"""
+	filters = frappe.get_all(
+		"Accounting Dimension Filter",
+		filters={"company": company, "disabled": 0},
+		fields=["name", "accounting_dimension"],
+		limit_page_length=0,
+	)
+	allowed: set[str] = set()
+	for filt in filters:
+		dim_name = (filt.get("accounting_dimension") or "").strip()
+		if not dim_name or dim_name in EXCLUDED_DIMENSIONS:
+			continue
+		# Prefer document_type match; field itself is often already \"Task\".
+		doc_type = frappe.db.get_value(
+			"Accounting Dimension", {"document_type": dim_name}, "document_type"
+		) or frappe.db.get_value("Accounting Dimension", dim_name, "document_type")
+		if dim_name != "Task" and doc_type != "Task":
+			continue
+		for acct in frappe.get_all(
+			"Applicable On Account",
+			filters={"parent": filt.name},
+			pluck="applicable_on_account",
+			limit_page_length=0,
+		):
+			if acct:
+				allowed.add(acct)
+	return allowed
+
+
+def _load_risk_titles(project_doc) -> dict[str, str]:
+	titles: dict[str, str] = {}
+	for row in project_doc.get("custom_project_risks") or []:
+		name = row.get("name")
+		if not name:
+			continue
+		titles[str(name)] = str(row.get("subject") or name)
+	return titles
+
+
+def _bucket_has_doc(bucket: dict, doc: str) -> bool:
+	for dim in bucket.get("dimensions") or []:
+		if dim.get("doc") == doc:
+			return True
+	return False
+
+
+def _risk_docname(bucket: dict) -> str | None:
+	for dim in bucket.get("dimensions") or []:
+		if dim.get("doc") == "Project Risk":
+			return dim.get("docname")
+	return None
+
+
+def _strip_dims(dimensions: list[dict], drop_docs: set[str]) -> list[dict]:
+	return normalize_dimensions(
+		[d for d in (dimensions or []) if d.get("doc") not in drop_docs]
+	)
+
+
+def _sum_bucket_amounts(target: dict, bucket: dict) -> None:
+	for key, value in bucket.items():
+		if key in ("dimensions", "pb_docname"):
+			continue
+		if key.startswith(("plan_", "forecast_", "fact_")):
+			target[key] = _to_float(target.get(key)) + _to_float(value)
+
+
+def _collapse_task_buckets(buckets: list[dict]) -> list[dict]:
+	"""Legacy: when Task not allowed, fold Task buckets into non-Task dims."""
+	merged: dict[str, dict] = {}
+	order: list[str] = []
+	for bucket in buckets:
+		dims = _strip_dims(bucket.get("dimensions") or [], {"Task"})
+		key = dimension_fingerprint(dims)
+		if key not in merged:
+			merged[key] = {"dimensions": dims, "pb_docname": bucket.get("pb_docname")}
+			order.append(key)
+		elif bucket.get("pb_docname") and not merged[key].get("pb_docname"):
+			merged[key]["pb_docname"] = bucket.get("pb_docname")
+		_sum_bucket_amounts(merged[key], bucket)
+	return [merged[k] for k in order]
+
+
+def _apply_amounts_from_buckets(
+	row: ProjectBudgetRow,
+	buckets: list[dict],
+	periods: list[ProjectBudgetDisplayPeriod],
+	view_mode: ViewMode,
+) -> None:
+	combined: dict = {}
+	pb_docname = None
+	for bucket in buckets:
+		_sum_bucket_amounts(combined, bucket)
+		if not pb_docname and bucket.get("pb_docname"):
+			pb_docname = bucket.get("pb_docname")
+	if pb_docname:
+		row["pb_docname"] = pb_docname
+
+	for period in periods:
+		key = period["key"]
+		month_keys = period_month_keys(period)
+		plan = sum(_to_float(combined.get(f"plan_{mk}")) for mk in month_keys)
+		forecast = sum(_to_float(combined.get(f"forecast_{mk}")) for mk in month_keys)
+		fact = sum(_to_float(combined.get(f"fact_{mk}")) for mk in month_keys)
+		actual = _resolve_actual(forecast, fact, period["is_past"], view_mode)
+		row[f"plan_{key}"] = plan  # type: ignore[literal-required]
+		row[f"forecast_{key}"] = forecast  # type: ignore[literal-required]
+		row[f"fact_{key}"] = fact  # type: ignore[literal-required]
+		# Own bucket amounts (before tree rollup) — save must not use rolled head totals.
+		row[f"own_plan_{key}"] = plan  # type: ignore[literal-required]
+		row[f"own_forecast_{key}"] = forecast  # type: ignore[literal-required]
+		row[f"own_fact_{key}"] = fact  # type: ignore[literal-required]
+		row[f"actual_{key}"] = actual  # type: ignore[literal-required]
+		row[f"delta_{key}"] = _calc_delta_pct(plan, actual)  # type: ignore[literal-required]
+	_apply_row_totals(row, periods)
+
+
+def _apply_row_totals(row: ProjectBudgetRow, periods: list[ProjectBudgetDisplayPeriod]) -> None:
+	plan_total = 0.0
+	actual_total = 0.0
+	for period in periods:
+		key = period["key"]
+		plan_total += _to_float(row.get(f"plan_{key}"))
+		actual_total += _to_float(row.get(f"actual_{key}"))
+	row["plan_total"] = plan_total  # type: ignore[literal-required]
+	row["actual_total"] = actual_total  # type: ignore[literal-required]
+	row["delta_total"] = _calc_delta_pct(plan_total, actual_total)  # type: ignore[literal-required]
+
+
+def _has_own_amount(value: object) -> bool:
+	"""Explicit 0 = absent: display falls back to children sum (report analog)."""
+	return _to_float(value) > 0
+
+
+def _financial_children(children: list[ProjectBudgetRow]) -> list[ProjectBudgetRow]:
+	"""Risk reserves stay off CoA plan/forecast rollup (report analog)."""
+	return [child for child in children if not child.get("risk")]
+
+
+def _rollup_parent_metric(
+	parent: ProjectBudgetRow,
+	children: list[ProjectBudgetRow],
+	period_keys: list[str],
+	own_prefix: str,
+	display_prefix: str,
+) -> None:
+	financial = _financial_children(children)
+	for key in period_keys:
+		own = _to_float(parent.get(f"{own_prefix}_{key}"))
+		if _has_own_amount(own):
+			parent[f"{display_prefix}_{key}"] = own  # type: ignore[literal-required]
+			continue
+		total = 0.0
+		for child in financial:
+			total += _to_float(child.get(f"{display_prefix}_{key}"))
+		parent[f"{display_prefix}_{key}"] = total  # type: ignore[literal-required]
+
+
+def _rollup_parent_plan(
+	parent: ProjectBudgetRow,
+	children: list[ProjectBudgetRow],
+	period_keys: list[str],
+) -> None:
+	"""Parent plan = own if set, else sum of non-risk child display plans."""
+	_rollup_parent_metric(parent, children, period_keys, "own_plan", "plan")
+
+
+def _rollup_parent_forecast(
+	parent: ProjectBudgetRow,
+	children: list[ProjectBudgetRow],
+	period_keys: list[str],
+) -> None:
+	"""Parent forecast = own if set, else sum of non-risk child display forecasts."""
+	_rollup_parent_metric(parent, children, period_keys, "own_forecast", "forecast")
+
+
+def _rollup_child_fact(
+	parent: ProjectBudgetRow,
+	children: list[ProjectBudgetRow],
+	periods: list[ProjectBudgetDisplayPeriod],
+	view_mode: ViewMode,
+) -> None:
+	"""Parent fact = own + descendants. Plan/forecast = own or non-risk children sum."""
+	period_keys = [period["key"] for period in periods]
+	_rollup_parent_plan(parent, children, period_keys)
+	_rollup_parent_forecast(parent, children, period_keys)
+	for period in periods:
+		key = period["key"]
+		fact = _to_float(parent.get(f"own_fact_{key}"))
+		for child in children:
+			fact += _to_float(child.get(f"fact_{key}"))
+		plan = _to_float(parent.get(f"plan_{key}"))
+		forecast = _to_float(parent.get(f"forecast_{key}"))
+		actual = _resolve_actual(forecast, fact, period["is_past"], view_mode)
+		parent[f"fact_{key}"] = fact  # type: ignore[literal-required]
+		parent[f"actual_{key}"] = actual  # type: ignore[literal-required]
+		parent[f"delta_{key}"] = _calc_delta_pct(plan, actual)  # type: ignore[literal-required]
+	_apply_row_totals(parent, periods)
+
+
+def _split_risk_buckets(
+	buckets: list[dict],
+) -> tuple[list[dict], list[tuple[str, dict]]]:
+	"""Return (kept_buckets, [(risk_docname, bucket), ...])."""
+	kept: list[dict] = []
+	risks: list[tuple[str, dict]] = []
+	seen_risk: set[str] = set()
+	for bucket in buckets:
+		risk_name = _risk_docname(bucket)
+		if not risk_name:
+			kept.append(bucket)
+			continue
+		if risk_name not in seen_risk:
+			seen_risk.add(risk_name)
+			risks.append((risk_name, bucket))
+	return kept, risks
+
+
+def _make_base_row(
+	*,
+	row_id: str,
+	account: str,
+	account_label: str,
+	parent_account: str | None,
+	dimensions: list[dict],
+	indent: int,
+	root_type: str | None,
+	task: str | None = None,
+	risk: str | None = None,
+) -> ProjectBudgetRow:
+	row: ProjectBudgetRow = {
+		"id": row_id,
+		"account": account,
+		"account_label": account_label,
+		"parent_account": parent_account,
+		"dimensions": dimensions,
+		"has_children": False,
+		"indent": indent,
+		"expandable": 0,
+	}
+	if root_type:
+		row["root_type"] = root_type
+	if task:
+		row["task"] = task
+	if risk:
+		row["risk"] = risk
+	return row
+
+
+def _build_risk_rows(
+	*,
+	parent_id: str,
+	account: str,
+	root_type: str | None,
+	indent: int,
+	risk_buckets: list[tuple[str, dict]],
+	periods: list[ProjectBudgetDisplayPeriod],
+	view_mode: ViewMode,
+	risk_titles: dict[str, str],
+) -> list[ProjectBudgetRow]:
+	rows: list[ProjectBudgetRow] = []
+	for risk_name, bucket in risk_buckets:
+		label = f"⚠ {risk_titles.get(risk_name) or risk_name}"
+		row = _make_base_row(
+			row_id=f"{parent_id}{RISK_KEY_SEP}{risk_name}",
+			account=account,
+			account_label=label,
+			parent_account=None,
+			dimensions=bucket.get("dimensions") or [],
+			indent=indent,
+			root_type=root_type,
+			risk=risk_name,
+		)
+		_apply_amounts_from_buckets(row, [bucket], periods, view_mode)
+		rows.append(row)
+	return rows
+
+
+def _build_tree_rows(
+	accounts: list[dict],
+	tasks: list[dict],
+	task_allowed_accounts: set[str],
+	periods: list[ProjectBudgetDisplayPeriod],
+	view_mode: ViewMode,
+	buckets_by_account: dict[str, dict[str, dict]],
+	risk_titles: dict[str, str],
+) -> list[ProjectBudgetRow]:
+	by_parent: dict[str | None, list[dict]] = {}
+	for acc in accounts:
+		parent = acc.get("parent_account") or None
+		by_parent.setdefault(parent, []).append(acc)
+
+	account_names = {a["name"] for a in accounts}
+	roots = [
+		a
+		for a in accounts
+		if not a.get("parent_account") or a["parent_account"] not in account_names
+	]
+
+	def children_of(parent_name: str | None) -> list[dict]:
+		if parent_name is None:
+			return roots
+		return by_parent.get(parent_name, [])
+
+	def account_buckets_list(account_name: str) -> list[dict]:
+		raw = list((buckets_by_account.get(account_name) or {}).values())
+		if not raw:
+			return [{"dimensions": []}]
+		return raw
+
+	def rollup_fact(parent: ProjectBudgetRow, children: list[ProjectBudgetRow]) -> None:
+		if children:
+			_rollup_child_fact(parent, children, periods, view_mode)
+
+	def walk_tasks(
+		account_name: str,
+		root_type: str | None,
+		parent_task: str | None,
+		indent: int,
+		account_task_buckets: dict[str, list[dict]],
+	) -> list[ProjectBudgetRow]:
+		rows: list[ProjectBudgetRow] = []
+		for task in tasks:
+			task_parent = task.get("parent_task") or None
+			if (task_parent or None) != parent_task:
+				continue
+			task_name = task["value"]
+			buckets = list(account_task_buckets.get(task_name) or [])
+			if not buckets:
+				buckets = [{"dimensions": [{"doc": "Task", "docname": task_name}]}]
+
+			kept, risk_parts = _split_risk_buckets(buckets)
+			if not kept:
+				kept = [{"dimensions": [{"doc": "Task", "docname": task_name}]}]
+
+			base_id = f"{account_name}{task_name}"
+			label = task.get("subject") or task_name
+			nested_tasks = walk_tasks(
+				account_name,
+				root_type,
+				task_name,
+				indent + 1,
+				account_task_buckets,
+			)
+			risk_rows = _build_risk_rows(
+				parent_id=base_id,
+				account=account_name,
+				root_type=root_type,
+				indent=indent + 1,
+				risk_buckets=risk_parts,
+				periods=periods,
+				view_mode=view_mode,
+				risk_titles=risk_titles,
+			)
+			# Legacy sibling order under task: child tasks, then risks.
+			tree_children = nested_tasks + risk_rows
+
+			row = _make_base_row(
+				row_id=base_id,
+				account=account_name,
+				account_label=label,
+				parent_account=None,
+				dimensions=kept[0].get("dimensions")
+				or [{"doc": "Task", "docname": task_name}],
+				indent=indent,
+				root_type=root_type,
+				task=task_name,
+			)
+			_apply_amounts_from_buckets(row, kept, periods, view_mode)
+			rollup_fact(row, tree_children)
+			if tree_children:
+				row["children"] = tree_children
+				row["has_children"] = True
+				row["expandable"] = 1
+			rows.append(row)
+		return rows
+
+	def walk_accounts(parent_name: str | None, indent: int) -> list[ProjectBudgetRow]:
+		rows: list[ProjectBudgetRow] = []
+		for acc in children_of(parent_name):
+			name = acc["name"]
+			raw_buckets = account_buckets_list(name)
+			allows_task = name in task_allowed_accounts
+			label = acc.get("account_name") or name
+			nested_accounts = walk_accounts(name, indent + 1)
+
+			task_bucket_map: dict[str, list[dict]] = {}
+			non_task: list[dict] = []
+
+			if allows_task:
+				for bucket in raw_buckets:
+					if _bucket_has_doc(bucket, "Task"):
+						for dim in bucket.get("dimensions") or []:
+							if dim.get("doc") == "Task" and dim.get("docname"):
+								task_bucket_map.setdefault(dim["docname"], []).append(bucket)
+								break
+					else:
+						non_task.append(bucket)
+				if not non_task:
+					non_task = [{"dimensions": []}]
+			else:
+				non_task = _collapse_task_buckets(raw_buckets)
+				if not non_task:
+					non_task = [{"dimensions": []}]
+
+			kept, risk_parts = _split_risk_buckets(non_task)
+			if not kept:
+				kept = [{"dimensions": []}]
+
+			task_rows: list[ProjectBudgetRow] = []
+			if allows_task and tasks:
+				task_rows = walk_tasks(
+					name,
+					acc.get("root_type"),
+					None,
+					indent + 1,
+					task_bucket_map,
+				)
+
+			risk_rows = _build_risk_rows(
+				parent_id=name,
+				account=name,
+				root_type=acc.get("root_type"),
+				indent=indent + 1,
+				risk_buckets=risk_parts,
+				periods=periods,
+				view_mode=view_mode,
+				risk_titles=risk_titles,
+			)
+			tree_children = task_rows + nested_accounts + risk_rows
+			row = _make_base_row(
+				row_id=name,
+				account=name,
+				account_label=label,
+				parent_account=acc.get("parent_account"),
+				dimensions=kept[0].get("dimensions") or [],
+				indent=indent,
+				root_type=acc.get("root_type"),
+			)
+			_apply_amounts_from_buckets(row, kept, periods, view_mode)
+			rollup_fact(row, tree_children)
+			if tree_children:
+				row["children"] = tree_children
+				row["has_children"] = True
+				row["expandable"] = 1
+			rows.append(row)
+		return rows
+
+	return walk_accounts(None, 0)
+
+
+def _row_has_value(row: ProjectBudgetRow, periods: list[ProjectBudgetDisplayPeriod]) -> bool:
+	"""Own plan / forecast / fact. Rolled plan_/actual_* would keep every ancestor (filter no-op)."""
+	for period in periods:
+		key = period["key"]
+		if (
+			_to_float(row.get(f"own_plan_{key}"))
+			or _to_float(row.get(f"own_forecast_{key}"))
+			or _to_float(row.get(f"own_fact_{key}"))
+		):
+			return True
+	return False
+
+
+def _filter_zero_value_rows(
+	rows: list[ProjectBudgetRow],
+	periods: list[ProjectBudgetDisplayPeriod],
+) -> list[ProjectBudgetRow]:
+	"""Drop empty nodes; keep ancestors of valued rows and Task WBS stubs.
+
+	Legacy P&L always expanded full Task tree under Task-allowed accounts so
+	users can enter plan/forecast on empty stubs. Zero-row filter must not
+	strip those stubs (only empty CoA/risk leaves without Task).
+	"""
+	kept: list[ProjectBudgetRow] = []
+	for row in rows:
+		children = _filter_zero_value_rows(list(row.get("children") or []), periods)
+		if children:
+			row["children"] = children
+			row["has_children"] = True
+			row["expandable"] = 1
+			kept.append(row)
+		elif row.get("task") or _row_has_value(row, periods):
+			row.pop("children", None)
+			row["has_children"] = False
+			row["expandable"] = 0
+			kept.append(row)
+	return kept
+
+
+def run_get_project_budget_grid(form_input: ProjectBudgetGridFormInput) -> ProjectBudgetGridResponse:
+	project = form_input.get("project")
+	if not project:
+		frappe.throw(_("Project is required"))
+
+	if not frappe.has_permission("Project", "read", project):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	project_doc = frappe.get_cached_doc("Project", project)
+	company = project_doc.company
+	if not company:
+		frappe.throw(_("Project company is required"))
+
+	period_type = normalize_period_type(form_input.get("period_type") or "month")
+	view_mode = normalize_view_mode(
+		form_input.get("view_options"),
+		form_input.get("view_mode"),
+	)
+	# Default off — same as Project Budget Plan vs Forecast show_zero_rows.
+	show_zero_rows = _as_bool(form_input.get("show_zero_rows"))
+	periods = get_display_periods(project, period_type, view_mode)
+	accounts = _load_pl_accounts(company)
+	root_types = {a["name"]: a.get("root_type") or "" for a in accounts}
+
+	start_date, end_date = period_date_bounds(periods)
+	budget_buckets = load_budget_buckets(project)
+	gl_buckets = load_gl_fact_buckets(
+		project, company, start_date, end_date, root_types
+	)
+	buckets_by_account = merge_bucket_stores(budget_buckets, gl_buckets)
+
+	tasks = _load_project_tasks(project)
+	task_allowed = _load_accounts_allowing_task(company)
+	risk_titles = _load_risk_titles(project_doc)
+
+	rows = _build_tree_rows(
+		accounts,
+		tasks,
+		task_allowed,
+		periods,
+		view_mode,
+		buckets_by_account,
+		risk_titles,
+	)
+	if not show_zero_rows:
+		rows = _filter_zero_value_rows(rows, periods)
+	summary_rows = build_project_budget_summary_rows(rows, periods)
+
+	return {
+		"project": project,
+		"period_type": period_type,
+		"view_mode": view_mode,
+		"show_zero_rows": show_zero_rows,
+		"periods": periods,
+		"rows": rows,
+		"summary_rows": summary_rows,
+	}
