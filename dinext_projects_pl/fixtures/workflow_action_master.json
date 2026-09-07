@@ -2,6 +2,41 @@
  {
   "docstatus": 0,
   "doctype": "Workflow Action Master",
+  "modified": "2025-06-17 05:46:58.524855",
+  "name": "Согласовать",
+  "workflow_action_name": "Согласовать"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow Action Master",
+  "modified": "2023-09-13 13:39:44.489479",
+  "name": "Не согласовано",
+  "workflow_action_name": "Не согласовано"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow Action Master",
+  "modified": "2025-01-18 17:52:41.265176",
+  "name": "Передать на согласование",
+  "workflow_action_name": "Передать на согласование"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow Action Master",
+  "modified": "2023-09-13 13:40:04.884016",
+  "name": "Согласовано",
+  "workflow_action_name": "Согласовано"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow Action Master",
+  "modified": "2026-05-28 02:44:21.021316",
+  "name": "Submit for Approval",
+  "workflow_action_name": "Submit for Approval"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow Action Master",
   "modified": "2023-02-21 18:24:43.347957",
   "name": "Approve",
   "workflow_action_name": "Approve"
@@ -12,12 +47,5 @@
   "modified": "2026-04-13 02:47:26.903370",
   "name": "Cancel",
   "workflow_action_name": "Cancel"
- },
- {
-  "docstatus": 0,
-  "doctype": "Workflow Action Master",
-  "modified": "2026-05-28 02:44:21.021316",
-  "name": "Submit for Approval",
-  "workflow_action_name": "Submit for Approval"
  }
 ]
