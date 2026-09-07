@@ -81,6 +81,7 @@ Hide empty rows,Скрыть пустые строки,
 Loading data..,Идет загрузка данных..,
 "Loading financial metrics...","Загрузка финансовых метрик...",""
 Loading...,Загрузка...,
+"Manual value","Ручное значение",""
 "Metrics are calculated as of report date {0}. Plan and actuals for the current month are prorated by days of the month.","Метрики рассчитываются на отчетную дату {0}. План и факт текущего месяца учитываются пропорционально дням месяца.",""
 "Metrics are calculated as of the selected report date.","Метрики рассчитываются на выбранную отчетную дату.",""
 "Metrics Report Date","Отчетная дата метрик",""

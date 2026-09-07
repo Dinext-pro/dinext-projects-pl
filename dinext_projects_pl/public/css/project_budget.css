@@ -534,6 +534,24 @@
 	color: #e03636 !important;
 }
 
+.budget-table.dinext-table .ag-cell.project-budget-cell--own::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: 0;
+	height: 0;
+	border-style: solid;
+	border-width: 0 7px 7px 0;
+	border-color: transparent #000 transparent transparent;
+	pointer-events: none;
+}
+
+html[data-theme="dark"] .budget-table.dinext-table .ag-cell.project-budget-cell--own::after,
+html[data-theme-mode="dark"] .budget-table.dinext-table .ag-cell.project-budget-cell--own::after {
+	border-color: transparent #fff transparent transparent;
+}
+
 .budget-table.dinext-table .project-budget-account-label {
 	display: inline-flex;
 	align-items: center;
