@@ -19,50 +19,93 @@ fixtures = [
         ]
     },
     {
-        "doctype": "Client Script",
+        "doctype": "Report",
         "filters": [
             ["module", "in", ["Dinext Projects Pl"]],
-            ["enabled", "=", 1]
+            ["name", "in", [
+                "Контроль ставок по проектам",
+                "Контроль ставок по T&M проектам_V2",
+            ]],
         ]
     },
     {
-        "doctype": "Server Script",
+        "doctype": "Number Card",
         "filters": [
-            ["module", "in", ["Dinext Projects Pl"]],
-            ["disabled", "=", 0]
+            ["module", "in", ["Dinext Projects Pl"]]
         ]
     },
     {
         "doctype": "Role",
         "filters": [
-            ["name", "in", ["Dinext_Budget_Approver"]],
+            ["name", "in", [
+                "Dinext_Budget_Approver",
+                "Dinext_Financier",
+                "Dinext_Fin_Dir",
+            ]],
             ["disabled", "=", 0],
         ]
     },
     {
         "doctype": "Workflow",
         "filters": [
-            ["name", "in", ["Dinext Budget Approval"]],
+            ["document_type", "in", [
+                "Budget",
+                "Purchase Invoice",
+                "Sales Invoice",
+            ]],
+            ["is_active", "=", 1],
         ]
     },
     {
         "doctype": "Workflow State",
         "filters": [
-            ["workflow_state_name", "in", ["Draft", "Pending Approval", "Approved", "Cancelled Draft", "Cancelled Approved"]],
+            ["workflow_state_name", "in", [
+                "Draft",
+                "Pending Approval",
+                "Approved",
+                "Cancelled Draft",
+                "Cancelled Approved",
+                "Черновик",
+                "На согласовании",
+                "Согласовано",
+                "Отклонено",
+            ]],
         ]
     },
     {
         "doctype": "Workflow Action Master",
         "filters": [
-            ["workflow_action_name", "in", ["Submit for Approval", "Approve", "Cancel"]],
+            ["workflow_action_name", "in", [
+                "Submit for Approval",
+                "Approve",
+                "Cancel",
+                "Передать на согласование",
+                "Согласовано",
+                "Не согласовано",
+                "Согласовать",
+            ]],
         ]
-    }
+    },
+    {
+        "doctype": "DocType Permission",
+        "filters": [
+            ["ref_doctype", "in", [
+                "Sales Invoice",
+                "Purchase Invoice",
+                "GL Entry",
+            ]],
+            ["docstatus", "!=", 2],
+        ]
+    },
 ]
 
 # Apps
 # ------------------
 
-# required_apps = []
+required_apps = ["dinext_common", "doctype_permission", "dinext_projects"]
+
+after_install = "dinext_projects_pl.install.after_install"
+after_migrate = "dinext_projects_pl.install.sync_accounting_dimensions"
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -80,7 +123,8 @@ fixtures = [
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/dinext_projects_pl/css/dinext_projects_pl.css"
-# app_include_js = "/assets/dinext_projects_pl/js/dinext_projects_pl.js"
+# app_include_js: budget_report JS files are loaded lazily in the report JS
+# via frappe.require() — only when the user opens the report, not on every page.
 
 # include js, css files in header of web template
 # web_include_css = "/assets/dinext_projects_pl/css/dinext_projects_pl.css"
@@ -97,13 +141,21 @@ fixtures = [
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-doctype_js = {"Project": 
+doctype_js = {"Project":
     [
-        "public/js/project_pl_style.js",
-        "public/js/project_pl.js",
-        "public/js/project_pl_calc.js",
-        "public/js/project_pl_dashboard.js"
+        "public/js/project_budget_navigation.js",
+        "public/js/project_budget/boot.js",
+        "public/js/project_budget_tab.js",
+        "public/js/project_budget_chart.js",
+        "public/js/project_budget_metrics.js",
+        "public/js/project_budget_dashboard.js",
     ]
+}
+
+doctype_css = {
+	"Project": [
+		"public/css/project_budget.css",
+	],
 }
 # doctype_js = {"doctype" : "public/js/doctype.js"}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
