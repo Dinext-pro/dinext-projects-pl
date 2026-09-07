@@ -113,6 +113,8 @@ function buildTableOptions(frm, state) {
 			headerHeight: 22,
 			groupHeaderHeight: 22,
 			suppressMovableColumns: true,
+			enableBrowserTooltips: true,
+			tooltipShowDelay: 400,
 		},
 		// Fullscreen: core default (target: container). Domain controls live in toolbar.
 	};

@@ -2,6 +2,12 @@ import {
 	accountLabelTreeContentKey,
 	renderAccountLabel,
 } from "./risk-delete.js";
+import {
+	OWN_CELL_CLASS,
+	isOwnForecastCell,
+	isOwnPlanCell,
+	ownValueTooltip,
+} from "./own-marker.js";
 
 /** Legacy period group width: 210 − 70 per hidden plan − 50 per hidden Δ. */
 const LEGACY_PERIOD_GROUP_WIDTH = 210;
@@ -168,7 +174,8 @@ function serialValueGetter(params) {
 }
 
 function buildPeriodLeaf(opts) {
-	const { field, colId, headerName, width, hide, valueFormatter, edit, pinned } = opts;
+	const { field, colId, headerName, width, hide, valueFormatter, edit, pinned, isOwnCell } =
+		opts;
 	const col = withoutColumnFilter(
 		withCenterAlign({
 			field,
@@ -181,7 +188,18 @@ function buildPeriodLeaf(opts) {
 			type: "number",
 			hide: !!hide,
 			valueFormatter,
-			cellClassRules: { ...AMOUNT_CELL_CLASS_RULES },
+			cellClassRules: {
+				...AMOUNT_CELL_CLASS_RULES,
+				...(isOwnCell
+					? { [OWN_CELL_CLASS]: (params) => isOwnCell(params.data) }
+					: {}),
+			},
+			tooltipValueGetter: isOwnCell
+				? (params) => {
+						const text = ownValueTooltip(isOwnCell(params.data));
+						return text ? __(text) : undefined;
+					}
+				: undefined,
 		})
 	);
 	if (edit !== undefined) {
@@ -234,6 +252,7 @@ function buildPeriodColumns(frm, periods) {
 					width: leafWidth,
 					hide: hidePlan,
 					valueFormatter: formatAmount,
+					isOwnCell: (row) => isOwnPlanCell(row, key),
 				}),
 				buildPeriodLeaf({
 					field: `actual_${key}`,
@@ -243,6 +262,7 @@ function buildPeriodColumns(frm, periods) {
 					edit: (row) =>
 						canEditForecast && !period.is_past && !row?.summary_kind,
 					valueFormatter: formatAmount,
+					isOwnCell: (row) => isOwnForecastCell(row, period),
 				}),
 				buildPeriodLeaf({
 					field: `delta_${key}`,
