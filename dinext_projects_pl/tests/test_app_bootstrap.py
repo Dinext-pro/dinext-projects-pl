@@ -5,7 +5,14 @@ class TestAppBootstrap(unittest.TestCase):
     def test_hooks_register_budget_approval_contract(self):
         from dinext_projects_pl import hooks
 
-        self.assertFalse(hasattr(hooks, "after_install"))
+        self.assertEqual(
+            hooks.after_install,
+            "dinext_projects_pl.install.after_install",
+        )
+        self.assertEqual(
+            hooks.after_migrate,
+            "dinext_projects_pl.install.sync_accounting_dimensions",
+        )
         fixture_doctypes = {
             entry.get("doctype")
             for entry in hooks.fixtures
