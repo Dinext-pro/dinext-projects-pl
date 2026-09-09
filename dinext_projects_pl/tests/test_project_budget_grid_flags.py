@@ -46,14 +46,27 @@ class TestProjectBudgetGridFlags(FrappeTestCase):
 		self.assertEqual(len(kept), 1)
 		self.assertEqual([c["id"] for c in kept[0]["children"]], ["plan"])
 
-	def test_filter_keeps_empty_task_stubs(self):
-		"""Legacy: full Task WBS under account even without amounts."""
+	def test_filter_drops_empty_task_stubs(self):
+		"""Empty Task / dimension rows hide with empty accounts when show_zero_rows is off."""
 		task_stub = self._row(id="acct-task")
 		task_stub["task"] = "TASK-1"
 		parent = self._row(id="acct", children=[task_stub])
 		kept = _filter_zero_value_rows([parent], self.PERIODS)
+		self.assertEqual(kept, [])
+
+	def test_filter_drops_empty_risk_leaves(self):
+		risk_stub = self._row(id="acct-risk")
+		risk_stub["risk"] = "RISK-1"
+		parent = self._row(id="acct", children=[risk_stub])
+		kept = _filter_zero_value_rows([parent], self.PERIODS)
+		self.assertEqual(kept, [])
+
+	def test_filter_keeps_valued_task_row(self):
+		task_row = self._row(id="acct-task", plan=20)
+		task_row["task"] = "TASK-1"
+		parent = self._row(id="acct", children=[task_row])
+		kept = _filter_zero_value_rows([parent], self.PERIODS)
 		self.assertEqual(len(kept), 1)
-		self.assertEqual(len(kept[0]["children"]), 1)
 		self.assertEqual(kept[0]["children"][0]["task"], "TASK-1")
 
 	def test_rollup_on_is_own_plus_descendants(self):
