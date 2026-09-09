@@ -1,10 +1,13 @@
 /**
- * Legacy P&L: dblclick on fact (readonly actual) → General Ledger.
- * Cell: month/quarter/year range. Total column: project expected dates.
- * Empty/summary account → all tree accounts. ISS-2025-01237.
+ * P&L navigation (legacy ticket + ISS-2025-01237):
+ * - account / task row → List Budget
+ * - plan cell → approved Budget form
+ * - fact (readonly actual) → General Ledger
  */
 
 import { flattenTree } from "./budget-tree.js";
+import { FIND_APPROVED_BUDGET_API } from "./constants.js";
+import { isOwnForecastCell } from "./own-marker.js";
 
 function pad2(value) {
 	return String(value).padStart(2, "0");
@@ -40,6 +43,77 @@ export function parseActualField(field) {
 		return null;
 	}
 	return { kind: "period", key: match[1] };
+}
+
+export function parsePlanField(field) {
+	if (field === "plan_total") {
+		return { kind: "total" };
+	}
+	const match = /^plan_(.+)$/.exec(field || "");
+	if (!match) {
+		return null;
+	}
+	return { kind: "period", key: match[1] };
+}
+
+function resolvePeriodYearMonth(periods, periodKey) {
+	const period = (periods || []).find((item) => item.key === periodKey);
+	if (!period) {
+		return null;
+	}
+	const firstKey = period.monthly_keys?.[0];
+	const parsed = parseMonthlyKey(firstKey) || parseMonthlyKey(`${period.year}_${period.month}`);
+	if (!parsed) {
+		return null;
+	}
+	return parsed;
+}
+
+function openBudgetList(frm) {
+	const nav = globalThis.dinext_projects_pl;
+	if (typeof nav?.navigate_to_active_budgets === "function") {
+		nav.navigate_to_active_budgets(frm);
+		return;
+	}
+	const desk = globalThis.frappe;
+	if (!desk?.set_route || !frm?.doc?.name) {
+		return;
+	}
+	desk.route_options = {
+		project: frm.doc.name,
+		docstatus: ["!=", 2],
+	};
+	if (frm.doc.company) {
+		desk.route_options.company = frm.doc.company;
+	}
+	desk.set_route("List", "Budget");
+}
+
+async function openApprovedBudget(frm, row, periodKey) {
+	if (row?.summary_kind || isPlaceholderAccount(row?.account)) {
+		return;
+	}
+	const ym = resolvePeriodYearMonth(frm.project_budget?.periods, periodKey);
+	if (!ym) {
+		return;
+	}
+	const desk = globalThis.frappe;
+	if (typeof desk?.xcall !== "function" || typeof desk?.set_route !== "function") {
+		return;
+	}
+	const name = await desk.xcall(FIND_APPROVED_BUDGET_API, {
+		project: frm.doc.name,
+		account: row.account,
+		year: ym.year,
+		month: ym.month,
+		dimensions: row.dimensions || [],
+	});
+	if (!name) {
+		const translate = desk.__ || globalThis.__ || ((text) => text);
+		desk.show_alert?.(translate("No approved Budget for this cell"), 5);
+		return;
+	}
+	desk.set_route("Form", "Budget", name);
 }
 
 export function collectGlAccounts(rows) {
@@ -139,10 +213,29 @@ export function buildGlRouteOptions(frm, row, field, periods) {
 	};
 }
 
-export function onCellDoubleClicked(frm, params) {
+export async function onCellDoubleClicked(frm, params) {
 	const field = params?.colDef?.field || params?.column?.getColDef?.()?.field || "";
 	const row = params?.data;
 	if (!frm?.doc || !row) {
+		return;
+	}
+
+	if (field === "account_label" && !row.summary_kind) {
+		params?.event?.preventDefault?.();
+		params?.event?.stopPropagation?.();
+		openBudgetList(frm);
+		return;
+	}
+
+	const plan = parsePlanField(field);
+	if (plan) {
+		params?.event?.preventDefault?.();
+		params?.event?.stopPropagation?.();
+		if (plan.kind === "total") {
+			openBudgetList(frm);
+			return;
+		}
+		await openApprovedBudget(frm, row, plan.key);
 		return;
 	}
 
@@ -159,4 +252,42 @@ export function onCellDoubleClicked(frm, params) {
 	}
 	desk.route_options = options;
 	desk.set_route("query-report", "General Ledger");
+}
+
+/** AG 33+ CellEditingStartedEvent has no eGridCell. Number editor exposes agSetEditValue. */
+function clearForecastEditor(params) {
+	const instances = params?.api?.getCellEditorInstances?.() || [];
+	for (const editor of instances) {
+		if (typeof editor?.agSetEditValue === "function") {
+			editor.agSetEditValue(null);
+			return;
+		}
+		const input = editor.getGui?.()?.querySelector?.("input");
+		if (input) {
+			input.value = "";
+			return;
+		}
+	}
+	const fallback = params?.eGridCell?.querySelector?.("input");
+	if (fallback) {
+		fallback.value = "";
+	}
+}
+
+/** Calculated forecast (no own_*) → empty editor. Escape keeps previous display. */
+export function onCellEditingStarted(frm, params) {
+	const field = params?.colDef?.field || "";
+	if (!field.startsWith("actual_")) {
+		return;
+	}
+	const periodKey = field.slice("actual_".length);
+	const period = (frm?.project_budget?.periods || []).find((item) => item.key === periodKey);
+	if (!period || period.is_past) {
+		return;
+	}
+	if (isOwnForecastCell(params.data, period)) {
+		return;
+	}
+
+	clearForecastEditor(params);
 }

@@ -1,12 +1,14 @@
+import { TABLE_HEIGHT, TABLE_MIN_HEIGHT } from "./constants.js";
 import { initState } from "./state.js";
 import { loadGridData, reloadTable } from "./data.js";
 import { applyPlanDeltaVisibility, getColumns, refreshColumns } from "./columns.js";
 import { attachTreePersistence, getExpandedIds, syncExpandedIds } from "./tree.js";
 import { onSaveCells, onValidateCells } from "./save.js";
-import { onCellDoubleClicked } from "./navigation.js";
+import { onCellDoubleClicked, onCellEditingStarted } from "./navigation.js";
 import { buildToolbarItems } from "./toolbar.js";
 import {
 	ensurePlDefaults,
+	isMutationLocked,
 	start_fullscreen_overlay_watch,
 	stop_fullscreen_overlay_watch,
 	bring_overlays_into_fullscreen,
@@ -44,8 +46,8 @@ function resolveFullscreenOpts(container) {
 		onExit: ({ element }) => {
 			element?.classList.remove(FS_SHELL_CLASS);
 			if (container) {
-				container.style.height = container.dataset.plV2PrevHeight || "min(50vh, 560px)";
-				container.style.minHeight = container.dataset.plV2PrevMinHeight || "280px";
+				container.style.height = container.dataset.plV2PrevHeight || TABLE_HEIGHT;
+				container.style.minHeight = container.dataset.plV2PrevMinHeight || TABLE_MIN_HEIGHT;
 				container.style.flex = "";
 				delete container.dataset.plV2PrevHeight;
 				delete container.dataset.plV2PrevMinHeight;
@@ -78,11 +80,11 @@ function buildTableOptions(frm, state) {
 		summaryRows: state.summaryRows || [],
 		summary: { pin: "bottom", edit: false, clipboard: false, selection: false },
 		expandedIds: getExpandedIds(frm),
-		edit: true,
+		edit: !isMutationLocked(frm),
 		selection: { enabled: true },
 		// Excel UX: TSV copy/paste + fill-handle (same as WE v2).
-		clipboard: { enabled: true },
-		fillHandle: { enabled: true },
+		clipboard: { enabled: !isMutationLocked(frm) },
+		fillHandle: { enabled: !isMutationLocked(frm) },
 		// Excel-like Average | Count | Sum under grid (min 2 cells).
 		selectionStatus: { enabled: true },
 		// Checkbox select for «Сохранить план»; each bucket row independently.
@@ -115,6 +117,7 @@ function buildTableOptions(frm, state) {
 			suppressMovableColumns: true,
 			enableBrowserTooltips: true,
 			tooltipShowDelay: 400,
+			onCellEditingStarted: (params) => onCellEditingStarted(frm, params),
 		},
 		// Fullscreen: core default (target: container). Domain controls live in toolbar.
 	};
@@ -178,7 +181,13 @@ export async function refreshRuntime(frm) {
 
 	syncExpandedIds(frm);
 
+	const locked = isMutationLocked(frm);
+	if (state.table.options) {
+		state.table.options.clipboard = { enabled: !locked };
+		state.table.options.fillHandle = { enabled: !locked };
+	}
 	if (state.table.setOption) {
+		state.table.setOption("edit", !locked);
 		state.table.setOption("columns", getColumns(frm, state.periods));
 	}
 	if (state.table.setSummaryRows) {

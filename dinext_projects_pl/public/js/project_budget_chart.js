@@ -548,7 +548,8 @@ function get_pl_chart_dataset_color(dataset, index, palette, frm) {
         return hidePlan ? palette[1] : palette[dataset.plIsPlan ? 2 : 3];
     }
     if (kind === "period_profit" || kind === "cumulative_profit") {
-        return hidePlan ? palette[3] : palette[dataset.plIsPlan ? 4 : 5];
+        // hidePlan palette: income, expense, actual-profit yellow. Keep yellow shades.
+        return hidePlan ? palette[2] : palette[dataset.plIsPlan ? 4 : 5];
     }
 
     return palette[index] || palette[palette.length - 1];

@@ -4,6 +4,7 @@ import {
 	flattenTree,
 	parentForecastLimit,
 } from "./budget-tree.js";
+import { isMutationLocked } from "./controls.js";
 
 function validateForecastChange(frm, change) {
 	const field = change.field;
@@ -81,6 +82,9 @@ function patchLocalForecast(frm, changes) {
 }
 
 export async function onSaveCells(frm, { changes }) {
+	if (isMutationLocked(frm)) {
+		return false;
+	}
 	const payload = buildSavePayload(changes);
 	if (!payload.length) return true;
 

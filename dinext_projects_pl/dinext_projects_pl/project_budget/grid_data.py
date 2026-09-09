@@ -612,12 +612,7 @@ def _filter_zero_value_rows(
 	rows: list[ProjectBudgetRow],
 	periods: list[ProjectBudgetDisplayPeriod],
 ) -> list[ProjectBudgetRow]:
-	"""Drop empty nodes; keep ancestors of valued rows and Task WBS stubs.
-
-	Legacy P&L always expanded full Task tree under Task-allowed accounts so
-	users can enter plan/forecast on empty stubs. Zero-row filter must not
-	strip those stubs (only empty CoA/risk leaves without Task).
-	"""
+	"""Drop empty nodes including Task/risk dimension stubs; keep ancestors of valued rows."""
 	kept: list[ProjectBudgetRow] = []
 	for row in rows:
 		children = _filter_zero_value_rows(list(row.get("children") or []), periods)
@@ -626,7 +621,7 @@ def _filter_zero_value_rows(
 			row["has_children"] = True
 			row["expandable"] = 1
 			kept.append(row)
-		elif row.get("task") or _row_has_value(row, periods):
+		elif _row_has_value(row, periods):
 			row.pop("children", None)
 			row["has_children"] = False
 			row["expandable"] = 0
