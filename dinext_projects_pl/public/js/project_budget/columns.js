@@ -8,6 +8,7 @@ import {
 	isOwnPlanCell,
 	ownValueTooltip,
 } from "./own-marker.js";
+import { normalizeDeltaMode, resolveDeltaValue } from "./delta-mode.js";
 
 /** Legacy period group width: 210 − 70 per hidden plan − 50 per hidden Δ. */
 const LEGACY_PERIOD_GROUP_WIDTH = 210;
@@ -60,6 +61,24 @@ function formatDelta(params) {
 	if (n == null) return "";
 	if (n === 0) return "0%";
 	return `${n.toFixed(1)}%`;
+}
+
+function isDeltaAbs(frm) {
+	return normalizeDeltaMode(frm?.bg_delta_mode) === "abs";
+}
+
+function deltaFormatter(frm) {
+	return isDeltaAbs(frm) ? formatAmount : formatDelta;
+}
+
+function deltaLeafGetter(frm, planField, actualField, deltaField) {
+	return (params) =>
+		resolveDeltaValue({
+			plan: params.data?.[planField],
+			actual: params.data?.[actualField],
+			storedPct: params.data?.[deltaField],
+			mode: frm?.bg_delta_mode,
+		});
 }
 
 function isZeroValue(params) {
@@ -174,8 +193,18 @@ function serialValueGetter(params) {
 }
 
 function buildPeriodLeaf(opts) {
-	const { field, colId, headerName, width, hide, valueFormatter, edit, pinned, isOwnCell } =
-		opts;
+	const {
+		field,
+		colId,
+		headerName,
+		width,
+		hide,
+		valueFormatter,
+		valueGetter,
+		edit,
+		pinned,
+		isOwnCell,
+	} = opts;
 	const col = withoutColumnFilter(
 		withCenterAlign({
 			field,
@@ -213,6 +242,9 @@ function buildPeriodLeaf(opts) {
 	} else {
 		col.edit = false;
 	}
+	if (valueGetter) {
+		col.valueGetter = valueGetter;
+	}
 	if (pinned) {
 		col.pinned = pinned;
 	}
@@ -226,7 +258,7 @@ function buildPeriodColumns(frm, periods) {
 	const leafWidth = periodLeafWidth(hidePlan, hideDelta);
 
 	const periodType = form._pl_period_type || "month";
-	const canEditForecast = periodType === "month";
+	const canEditForecast = periodType === "month" && !form.bg_accumulated_values;
 
 	return (periods || []).map((period) => {
 		const key = period.key;
@@ -270,7 +302,8 @@ function buildPeriodColumns(frm, periods) {
 					headerName: "Δ",
 					width: leafWidth,
 					hide: hideDelta,
-					valueFormatter: formatDelta,
+					valueGetter: deltaLeafGetter(form, `plan_${key}`, `actual_${key}`, `delta_${key}`),
+					valueFormatter: deltaFormatter(form),
 				}),
 			],
 		};
@@ -315,7 +348,8 @@ function buildTotalColumn(frm, periods) {
 				width: leafWidth,
 				hide: hideDelta,
 				pinned: "right",
-				valueFormatter: formatDelta,
+				valueGetter: deltaLeafGetter(frm, "plan_total", "actual_total", "delta_total"),
+				valueFormatter: deltaFormatter(frm),
 			}),
 		],
 	};

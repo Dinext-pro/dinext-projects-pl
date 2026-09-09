@@ -1,3 +1,4 @@
+import { TABLE_HEIGHT, TABLE_MIN_HEIGHT } from "./constants.js";
 import { initState } from "./state.js";
 import { reloadTable } from "./data.js";
 import { initTable, refreshRuntime } from "./table.js";
@@ -13,8 +14,8 @@ function resolveTableContainer(wrapper) {
 
 	const el = $table[0];
 	if (el) {
-		el.style.height = "min(50vh, 560px)";
-		el.style.minHeight = "280px";
+		el.style.height = TABLE_HEIGHT;
+		el.style.minHeight = TABLE_MIN_HEIGHT;
 		el.style.width = "100%";
 	}
 	return el || null;

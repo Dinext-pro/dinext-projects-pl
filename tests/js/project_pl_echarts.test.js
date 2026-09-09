@@ -581,6 +581,20 @@ test("get_pl_echarts_option aligns series colors with tooltip palette", () => {
     assert.equal(actualProfit.itemStyle.color, "#ff9933");
 });
 
+test("get_pl_echarts_option uses yellow profit when plan is hidden", () => {
+    const context = loadEchartsModule();
+    const frm = createChartFrm({ bg_hide_plan: true });
+    const option = context.get_pl_echarts_option(frm, context.get_pl_chart_data(frm));
+
+    const actualProfit = option.series.find(
+        (series) => series.type === "custom" && series.stackGroup === "actual"
+    );
+
+    assert.equal(actualProfit.color, "#ff9933");
+    assert.equal(actualProfit.itemStyle.color, "#ff9933");
+    assert.notEqual(actualProfit.color, "#00509e");
+});
+
 test("get_pl_echarts_option keeps period bar colors when cumulative series precede bars", () => {
     const context = loadEchartsModule();
     const frm = createChartFrm({ bg_hide_plan: false, budget_accumulated_values: true });
