@@ -3,6 +3,8 @@
  * Pattern mirrors WE work_efforts/table/controls.js.
  */
 
+import { normalizeDeltaMode } from "./delta-mode.js";
+
 const PERIOD_TYPES = ["month", "quarter", "year"];
 
 function viewLabelByKey(key) {
@@ -63,6 +65,7 @@ function persistToolbarPrefs(frm) {
 				view: viewKeyByLabel(frm.budget_view_options),
 				hide_plan: !!frm.bg_hide_plan,
 				hide_delta: !!frm.bg_hide_delta,
+				delta_mode: frm.bg_delta_mode === "abs" ? "abs" : "pct",
 				accumulated_values: !!frm.bg_accumulated_values,
 				show_zero_rows: !!frm.bg_show_zero_rows,
 			})
@@ -89,6 +92,9 @@ function applyToolbarPrefs(frm) {
 	if (typeof prefs.hide_delta === "boolean") {
 		frm.bg_hide_delta = prefs.hide_delta;
 	}
+	if (prefs.delta_mode === "abs" || prefs.delta_mode === "pct") {
+		frm.bg_delta_mode = prefs.delta_mode;
+	}
 	if (typeof prefs.accumulated_values === "boolean") {
 		frm.bg_accumulated_values = prefs.accumulated_values;
 	}
@@ -107,6 +113,9 @@ function ensurePlDefaults(frm) {
 	}
 	if (frm.bg_hide_delta === undefined) {
 		frm.bg_hide_delta = true;
+	}
+	if (frm.bg_delta_mode !== "abs") {
+		frm.bg_delta_mode = "pct";
 	}
 	if (frm.bg_accumulated_values === undefined) {
 		frm.bg_accumulated_values = false;
@@ -181,6 +190,55 @@ function addViewOptionsControl(frm, host) {
 	});
 }
 
+function syncDeltaModeSegment(host, frm) {
+	const hidden = !!frm.bg_hide_delta;
+	const mode = normalizeDeltaMode(frm.bg_delta_mode);
+	const $slot = host.find(".pl-delta-mode-slot");
+	const $mode = host.find(".pl-delta-mode");
+	if (!$slot.data("ready")) {
+		$slot.addClass("no-anim");
+	}
+	$slot.toggleClass("is-open", !hidden);
+	$slot.attr("aria-hidden", hidden ? "true" : "false");
+	$mode.find(".pl-delta-mode-btn").each(function () {
+		const btn = $(this);
+		const active = btn.attr("data-mode") === mode;
+		btn.prop("disabled", hidden);
+		btn.toggleClass("is-active", active);
+		btn.attr("aria-pressed", active ? "true" : "false");
+	});
+	if (!$slot.data("ready")) {
+		requestAnimationFrame(() => {
+			$slot.removeClass("no-anim");
+			$slot.data("ready", true);
+		});
+	}
+}
+
+function addDeltaModeSegment($parent, frm, $syncRoot) {
+	const $slot = $(`
+		<div class="pl-delta-mode-slot" aria-hidden="true">
+			<div class="pl-delta-mode-slot-inner">
+				<div class="pl-delta-mode" role="group" aria-label="${__("Delta format")}">
+					<button type="button" class="pl-delta-mode-btn" data-mode="pct" aria-pressed="false">%</button>
+					<button type="button" class="pl-delta-mode-btn" data-mode="abs" aria-pressed="false">${__("abs")}</button>
+				</div>
+			</div>
+		</div>
+	`);
+	$slot.on("click", ".pl-delta-mode-btn", function () {
+		if (!$slot.hasClass("is-open") || this.disabled) {
+			return;
+		}
+		frm.bg_delta_mode = normalizeDeltaMode(this.getAttribute("data-mode"));
+		persistToolbarPrefs(frm);
+		syncDeltaModeSegment($syncRoot, frm);
+		window.ProjectBudget?.onTogglePlanOrDelta(frm);
+	});
+	$slot.appendTo($parent);
+	return $slot;
+}
+
 function addToolbarCheckbox(host, opts) {
 	const wrapper = $('<div class="pl-toolbar-checkbox-wrapper"></div>').appendTo(host);
 	const control = frappe.ui.form.make_control({
@@ -213,6 +271,33 @@ function refreshChart(frm) {
 		return;
 	}
 	window.ProjectBudget?.refreshChart?.(frm);
+}
+
+/** Accumulated view is derived display — no writes that persist to server. */
+export function isMutationLocked(frm) {
+	return !!frm?.bg_accumulated_values;
+}
+
+function mutationLockTitle() {
+	return __("Not available in accumulated values mode");
+}
+
+function applyMutationLock(frm, host) {
+	if (!host?.length) {
+		return;
+	}
+	const locked = isMutationLocked(frm);
+	const $forecastBtn = host.find(".pl-forecast-dropdown-wrapper .btn");
+	const $saveBtn = host.find("#bg-save_plan");
+	$forecastBtn.prop("disabled", locked);
+	$saveBtn.prop("disabled", locked);
+	if (locked) {
+		$forecastBtn.attr("title", mutationLockTitle());
+		$saveBtn.attr("title", mutationLockTitle());
+	} else {
+		$forecastBtn.attr("title", __("Add forecast"));
+		$saveBtn.attr("title", __("Save plan"));
+	}
 }
 
 function ensureForecastMenuAliasSync() {
@@ -324,8 +409,10 @@ function addForecastDropdown(frm, host) {
 
 	const $wrapper = $('<div class="pl-forecast-dropdown-wrapper dropdown"></div>');
 	const $btn = $(`
-		<button class="btn btn-default dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
-			<span>${__("Add forecast")}</span>
+		<button class="btn btn-default dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false"
+			title="${__("Add forecast")}" aria-label="${__("Add forecast")}">
+			<span class="pl-forecast-plus" aria-hidden="true">+</span>
+			<span>${__("Forecast")}</span>
 		</button>
 	`);
 	const $menu = $('<ul class="dropdown-menu dropdown-menu-right" role="menu"></ul>');
@@ -335,6 +422,9 @@ function addForecastDropdown(frm, host) {
 		const $a = $(`<a class="dropdown-item" href="#" role="menuitem">${item.label}</a>`);
 		$a.on("click", function (e) {
 			e.preventDefault();
+			if (isMutationLocked(frm)) {
+				return;
+			}
 			item.action(frm);
 			closeForecastMenu($wrapper, $btn, $menu);
 		});
@@ -345,6 +435,7 @@ function addForecastDropdown(frm, host) {
 	$wrapper.append($btn).append($menu);
 	placeForecastDropdown(host, $wrapper);
 	bindDropdownPortal($wrapper, $btn, $menu);
+	applyMutationLock(frm, host);
 }
 
 function closeForecastMenu($wrapper, $btn, $menu) {
@@ -427,11 +518,12 @@ function bindDropdownPortal($wrapper, $btn, $menu) {
 /**
  * Mount domain controls into DinextTable toolbar custom host (once).
  * Order: view → period → Add forecast → Save plan →
- * Plan → Δ → Empty rows → Accumulated Values.
+ * Plan → Δ [%|абс] → Empty rows → Accumulated Values.
  */
 export function mount_toolbar_controls(frm, host) {
 	if (host.data("pl-controls-mounted")) {
 		addForecastDropdown(frm, host);
+		syncDeltaModeSegment(host, frm);
 		return;
 	}
 	host.data("pl-controls-mounted", true);
@@ -462,16 +554,20 @@ export function mount_toolbar_controls(frm, host) {
 		},
 	});
 
-	addToolbarCheckbox(host, {
+	const $delta = $('<div class="pl-delta-group"></div>').appendTo(host);
+	addToolbarCheckbox($delta, {
 		fieldname: "show_delta",
 		label: __("Δ"),
 		value: !frm.bg_hide_delta,
 		onchange: function () {
 			frm.bg_hide_delta = !checkboxOn(this);
 			persistToolbarPrefs(frm);
+			syncDeltaModeSegment(host, frm);
 			window.ProjectBudget?.onTogglePlanOrDelta(frm);
 		},
 	});
+	addDeltaModeSegment($delta, frm, host);
+	syncDeltaModeSegment(host, frm);
 
 	addToolbarCheckbox(host, {
 		fieldname: "show_zero_rows",
@@ -491,13 +587,19 @@ export function mount_toolbar_controls(frm, host) {
 		onchange: function () {
 			frm.bg_accumulated_values = checkboxOn(this);
 			persistToolbarPrefs(frm);
+			applyMutationLock(frm, host);
 			window.ProjectBudget?.onPeriodOrAggregateChange(frm);
 		},
 	});
 
 	host.find("#bg-save_plan").on("click", function () {
+		if (isMutationLocked(frm)) {
+			return;
+		}
 		window.ProjectBudget?.saveForecastAsPlan(frm);
 	});
+
+	applyMutationLock(frm, host);
 
 	// PWA/risk register menu on Project.refresh — may land after first paint.
 	setTimeout(() => addForecastDropdown(frm, host), 0);
@@ -513,6 +615,7 @@ export function refreshForecastDropdown(frm) {
 		return;
 	}
 	addForecastDropdown(frm, $host);
+	applyMutationLock(frm, $host);
 }
 
 function get_portal_host() {

@@ -2,10 +2,12 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
 	parseActualField,
+	parsePlanField,
 	collectGlAccounts,
 	resolveGlDateRange,
 	buildGlRouteOptions,
 	onCellDoubleClicked,
+	onCellEditingStarted,
 } from "../../dinext_projects_pl/public/js/project_budget/navigation.js";
 
 const periods = [
@@ -75,6 +77,18 @@ describe("parseActualField", () => {
 	});
 	it("ignores plan", () => {
 		assert.equal(parseActualField("plan_2026_7"), null);
+	});
+});
+
+describe("parsePlanField", () => {
+	it("detects total column", () => {
+		assert.deepEqual(parsePlanField("plan_total"), { kind: "total" });
+	});
+	it("detects period plan", () => {
+		assert.deepEqual(parsePlanField("plan_2026_7"), { kind: "period", key: "2026_7" });
+	});
+	it("ignores actual", () => {
+		assert.equal(parsePlanField("actual_2026_7"), null);
 	});
 });
 
@@ -201,5 +215,105 @@ describe("onCellDoubleClicked", () => {
 		assert.equal(frappe.route_options.from_date, "2026-07-01");
 		assert.deepEqual(calls[0], ["query-report", "General Ledger"]);
 		delete globalThis.frappe;
+	});
+
+	it("opens Budget list on account / task row", () => {
+		const calls = [];
+		globalThis.dinext_projects_pl = {
+			navigate_to_active_budgets(frm) {
+				calls.push(frm.doc.name);
+			},
+		};
+		onCellDoubleClicked(makeFrm(), {
+			colDef: { field: "account_label" },
+			data: { account: "Services - TC", account_label: "Services" },
+		});
+		assert.deepEqual(calls, ["HEAVY-SEED-PROJ"]);
+		delete globalThis.dinext_projects_pl;
+	});
+
+	it("opens approved Budget on plan cell", async () => {
+		const calls = [];
+		globalThis.frappe = {
+			async xcall() {
+				return "BUDGET-OK";
+			},
+			set_route(...args) {
+				calls.push(args);
+			},
+			show_alert() {},
+			__: (text) => text,
+		};
+		await onCellDoubleClicked(makeFrm(), {
+			colDef: { field: "plan_2026_7" },
+			data: { account: "Services - TC", dimensions: [] },
+		});
+		assert.deepEqual(calls[0], ["Form", "Budget", "BUDGET-OK"]);
+		delete globalThis.frappe;
+	});
+
+	it("alerts when approved Budget is missing", async () => {
+		const alerts = [];
+		globalThis.frappe = {
+			async xcall() {
+				return null;
+			},
+			set_route() {
+				throw new Error("should not route");
+			},
+			show_alert(msg) {
+				alerts.push(msg);
+			},
+			__: (text) => text,
+		};
+		await onCellDoubleClicked(makeFrm(), {
+			colDef: { field: "plan_2026_7" },
+			data: { account: "Services - TC", dimensions: [] },
+		});
+		assert.equal(alerts.length, 1);
+		delete globalThis.frappe;
+	});
+});
+
+describe("onCellEditingStarted", () => {
+	it("clears calculated forecast editor, keeps own value", () => {
+		const frm = makeFrm();
+		frm.project_budget.periods = periods;
+
+		const calculatedInput = { value: "1500" };
+		onCellEditingStarted(frm, {
+			eGridCell: { querySelector: () => calculatedInput },
+			colDef: { field: "actual_2026_12" },
+			data: { account: "Services - TC", own_forecast_2026_12: 0 },
+		});
+		assert.equal(calculatedInput.value, "");
+
+		const ownInput = { value: "400" };
+		onCellEditingStarted(frm, {
+			eGridCell: { querySelector: () => ownInput },
+			colDef: { field: "actual_2026_12" },
+			data: { account: "Services - TC", own_forecast_2026_12: 400 },
+		});
+		assert.equal(ownInput.value, "400");
+	});
+
+	it("clears via agSetEditValue when eGridCell is missing", () => {
+		const frm = makeFrm();
+		frm.project_budget.periods = periods;
+		let setTo;
+		onCellEditingStarted(frm, {
+			colDef: { field: "actual_2026_12" },
+			data: { account: "Services - TC", own_forecast_2026_12: 0 },
+			api: {
+				getCellEditorInstances: () => [
+					{
+						agSetEditValue: (value) => {
+							setTo = value;
+						},
+					},
+				],
+			},
+		});
+		assert.equal(setTo, null);
 	});
 });

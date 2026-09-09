@@ -59,7 +59,7 @@ export function renderAccountLabel(params, frm) {
 	text.textContent = String(params?.value ?? row.account_label ?? "");
 	wrap.appendChild(text);
 
-	if (!canDeleteRiskReserve(row)) {
+	if (!canDeleteRiskReserve(row) || frm?.bg_accumulated_values) {
 		return wrap;
 	}
 
