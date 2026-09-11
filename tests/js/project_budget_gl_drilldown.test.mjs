@@ -217,7 +217,7 @@ describe("onCellDoubleClicked", () => {
 		delete globalThis.frappe;
 	});
 
-	it("opens Project Budget list on account / task row", () => {
+	it("opens Budget list on account / task row", () => {
 		const calls = [];
 		globalThis.frappe = {
 			route_options: null,
@@ -229,37 +229,16 @@ describe("onCellDoubleClicked", () => {
 			colDef: { field: "account_label" },
 			data: { account: "Services - TC", account_label: "Services" },
 		});
-		assert.deepEqual(calls[0], ["List", "Project Budget"]);
+		assert.deepEqual(calls[0], ["List", "Budget"]);
 		assert.deepEqual(frappe.route_options, {
-			pb_project: "HEAVY-SEED-PROJ",
-			pb_account: "Services - TC",
+			project: "HEAVY-SEED-PROJ",
+			dinext_budget_account: "Services - TC",
+			budget_against: "Project",
 		});
 		delete globalThis.frappe;
 	});
 
-	it("opens Project Budget form on plan cell when pb_docname is set", async () => {
-		const calls = [];
-		globalThis.frappe = {
-			async xcall() {
-				throw new Error("should not xcall");
-			},
-			set_route(...args) {
-				calls.push(args);
-			},
-		};
-		await onCellDoubleClicked(makeFrm(), {
-			colDef: { field: "plan_2026_7" },
-			data: {
-				account: "Services - TC",
-				dimensions: [],
-				pb_docname: "PRBU-2026-00144",
-			},
-		});
-		assert.deepEqual(calls[0], ["Form", "Project Budget", "PRBU-2026-00144"]);
-		delete globalThis.frappe;
-	});
-
-	it("falls back to approved Budget on plan cell without pb_docname", async () => {
+	it("opens approved Budget on plan cell even if pb_docname is set", async () => {
 		const calls = [];
 		globalThis.frappe = {
 			async xcall() {
@@ -273,13 +252,18 @@ describe("onCellDoubleClicked", () => {
 		};
 		await onCellDoubleClicked(makeFrm(), {
 			colDef: { field: "plan_2026_7" },
-			data: { account: "Services - TC", dimensions: [] },
+			data: {
+				account: "Services - TC",
+				dimensions: [],
+				pb_docname: "PRBU-2026-00144",
+				plan_2026_7: 220000,
+			},
 		});
 		assert.deepEqual(calls[0], ["Form", "Budget", "BUDGET-OK"]);
 		delete globalThis.frappe;
 	});
 
-	it("alerts when plan target is missing", async () => {
+	it("alerts when approved Budget is missing", async () => {
 		const alerts = [];
 		globalThis.frappe = {
 			async xcall() {
@@ -295,9 +279,31 @@ describe("onCellDoubleClicked", () => {
 		};
 		await onCellDoubleClicked(makeFrm(), {
 			colDef: { field: "plan_2026_7" },
-			data: { account: "Services - TC", dimensions: [] },
+			data: { account: "Services - TC", dimensions: [], plan_2026_7: 100 },
 		});
 		assert.equal(alerts.length, 1);
+		delete globalThis.frappe;
+	});
+
+	it("skips zero plan and plan_total", async () => {
+		const calls = [];
+		globalThis.frappe = {
+			async xcall() {
+				calls.push("xcall");
+			},
+			set_route(...args) {
+				calls.push(args);
+			},
+		};
+		await onCellDoubleClicked(makeFrm(), {
+			colDef: { field: "plan_2026_7" },
+			data: { account: "Services - TC", plan_2026_7: 0 },
+		});
+		await onCellDoubleClicked(makeFrm(), {
+			colDef: { field: "plan_total" },
+			data: { account: "Services - TC", plan_total: 900 },
+		});
+		assert.deepEqual(calls, []);
 		delete globalThis.frappe;
 	});
 });
