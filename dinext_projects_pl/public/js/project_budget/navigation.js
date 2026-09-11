@@ -1,7 +1,7 @@
 /**
  * P&L navigation (legacy ticket + ISS-2025-01237):
- * - account / task row → List Budget
- * - plan cell → approved Budget form
+ * - account / task row → List Project Budget (pb_project + pb_account)
+ * - plan cell → Form Project Budget (pb_docname); else approved Budget
  * - fact (readonly actual) → General Ledger
  */
 
@@ -69,36 +69,38 @@ function resolvePeriodYearMonth(periods, periodKey) {
 	return parsed;
 }
 
-function openBudgetList(frm) {
-	const nav = globalThis.dinext_projects_pl;
-	if (typeof nav?.navigate_to_active_budgets === "function") {
-		nav.navigate_to_active_budgets(frm);
-		return;
-	}
+function openProjectBudgetList(frm, row) {
 	const desk = globalThis.frappe;
 	if (!desk?.set_route || !frm?.doc?.name) {
 		return;
 	}
-	desk.route_options = {
-		project: frm.doc.name,
-		docstatus: ["!=", 2],
-	};
-	if (frm.doc.company) {
-		desk.route_options.company = frm.doc.company;
+	const options = { pb_project: frm.doc.name };
+	if (row?.account && !isPlaceholderAccount(row.account)) {
+		options.pb_account = row.account;
 	}
-	desk.set_route("List", "Budget");
+	desk.route_options = options;
+	desk.set_route("List", "Project Budget");
 }
 
-async function openApprovedBudget(frm, row, periodKey) {
+async function openPlanDocument(frm, row, periodKey) {
 	if (row?.summary_kind || isPlaceholderAccount(row?.account)) {
 		return;
 	}
-	const ym = resolvePeriodYearMonth(frm.project_budget?.periods, periodKey);
-	if (!ym) {
+	const desk = globalThis.frappe;
+	if (!desk?.set_route) {
 		return;
 	}
-	const desk = globalThis.frappe;
-	if (typeof desk?.xcall !== "function" || typeof desk?.set_route !== "function") {
+	if (row.pb_docname) {
+		desk.set_route("Form", "Project Budget", row.pb_docname);
+		return;
+	}
+	if (!periodKey) {
+		openProjectBudgetList(frm, row);
+		return;
+	}
+	const ym = resolvePeriodYearMonth(frm.project_budget?.periods, periodKey);
+	if (!ym || typeof desk.xcall !== "function") {
+		desk.show_alert?.((desk.__ || globalThis.__ || ((text) => text))("No Project Budget for this cell"), 5);
 		return;
 	}
 	const name = await desk.xcall(FIND_APPROVED_BUDGET_API, {
@@ -110,7 +112,7 @@ async function openApprovedBudget(frm, row, periodKey) {
 	});
 	if (!name) {
 		const translate = desk.__ || globalThis.__ || ((text) => text);
-		desk.show_alert?.(translate("No approved Budget for this cell"), 5);
+		desk.show_alert?.(translate("No Project Budget for this cell"), 5);
 		return;
 	}
 	desk.set_route("Form", "Budget", name);
@@ -223,7 +225,7 @@ export async function onCellDoubleClicked(frm, params) {
 	if (field === "account_label" && !row.summary_kind) {
 		params?.event?.preventDefault?.();
 		params?.event?.stopPropagation?.();
-		openBudgetList(frm);
+		openProjectBudgetList(frm, row);
 		return;
 	}
 
@@ -231,11 +233,7 @@ export async function onCellDoubleClicked(frm, params) {
 	if (plan) {
 		params?.event?.preventDefault?.();
 		params?.event?.stopPropagation?.();
-		if (plan.kind === "total") {
-			openBudgetList(frm);
-			return;
-		}
-		await openApprovedBudget(frm, row, plan.key);
+		await openPlanDocument(frm, row, plan.kind === "total" ? null : plan.key);
 		return;
 	}
 

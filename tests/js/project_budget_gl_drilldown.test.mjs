@@ -217,22 +217,49 @@ describe("onCellDoubleClicked", () => {
 		delete globalThis.frappe;
 	});
 
-	it("opens Budget list on account / task row", () => {
+	it("opens Project Budget list on account / task row", () => {
 		const calls = [];
-		globalThis.dinext_projects_pl = {
-			navigate_to_active_budgets(frm) {
-				calls.push(frm.doc.name);
+		globalThis.frappe = {
+			route_options: null,
+			set_route(...args) {
+				calls.push(args);
 			},
 		};
 		onCellDoubleClicked(makeFrm(), {
 			colDef: { field: "account_label" },
 			data: { account: "Services - TC", account_label: "Services" },
 		});
-		assert.deepEqual(calls, ["HEAVY-SEED-PROJ"]);
-		delete globalThis.dinext_projects_pl;
+		assert.deepEqual(calls[0], ["List", "Project Budget"]);
+		assert.deepEqual(frappe.route_options, {
+			pb_project: "HEAVY-SEED-PROJ",
+			pb_account: "Services - TC",
+		});
+		delete globalThis.frappe;
 	});
 
-	it("opens approved Budget on plan cell", async () => {
+	it("opens Project Budget form on plan cell when pb_docname is set", async () => {
+		const calls = [];
+		globalThis.frappe = {
+			async xcall() {
+				throw new Error("should not xcall");
+			},
+			set_route(...args) {
+				calls.push(args);
+			},
+		};
+		await onCellDoubleClicked(makeFrm(), {
+			colDef: { field: "plan_2026_7" },
+			data: {
+				account: "Services - TC",
+				dimensions: [],
+				pb_docname: "PRBU-2026-00144",
+			},
+		});
+		assert.deepEqual(calls[0], ["Form", "Project Budget", "PRBU-2026-00144"]);
+		delete globalThis.frappe;
+	});
+
+	it("falls back to approved Budget on plan cell without pb_docname", async () => {
 		const calls = [];
 		globalThis.frappe = {
 			async xcall() {
@@ -252,7 +279,7 @@ describe("onCellDoubleClicked", () => {
 		delete globalThis.frappe;
 	});
 
-	it("alerts when approved Budget is missing", async () => {
+	it("alerts when plan target is missing", async () => {
 		const alerts = [];
 		globalThis.frappe = {
 			async xcall() {
