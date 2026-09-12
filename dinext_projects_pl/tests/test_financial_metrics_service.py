@@ -3,6 +3,7 @@
 
 import unittest
 from datetime import date
+from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -13,7 +14,19 @@ from dinext_projects_pl.dinext_projects_pl.financial_metrics.calculations import
 	get_actual_factor,
 	get_plan_factor,
 )
+from dinext_projects_pl.dinext_projects_pl.financial_metrics.data import get_track_period_totals
 from dinext_projects_pl.dinext_projects_pl.financial_metrics.service import get_project_financial_metrics
+from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.actual_loader import (
+	get_actual_data_simple,
+)
+from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.budget_loader import (
+	get_raw_budget_data_for_project,
+	process_project_data,
+)
+from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.query_builder import (
+	build_budget_raw_query,
+	build_gl_actual_query,
+)
 
 
 class TestFinancialMetricsCalculations(unittest.TestCase):
@@ -146,6 +159,146 @@ class TestFinancialMetricsService(FrappeTestCase):
 
 		expense_track = next(track for track in payload["tracks"] if track["key"] == "expense")
 		self.assertEqual(expense_track["values"]["BAC"], 100)
+
+	def test_service_returns_zero_money_without_pb_or_gl_read(self):
+		project = frappe.get_doc("Project", self.project.name)
+		project.db_set(
+			{
+				"expected_start_date": "2026-01-01",
+				"expected_end_date": "2026-03-31",
+				"percent_complete": 50,
+			},
+			update_modified=False,
+		)
+		self._seed_project_budget(
+			self.expense_account,
+			[],
+			{(2026, 1): {"plan": 400, "expected": 0}},
+		)
+
+		real_has_permission = frappe.has_permission
+
+		def _perm(doctype, ptype="read", *args, **kwargs):
+			if doctype in ("Project Budget", "GL Entry"):
+				return False
+			return real_has_permission(doctype, ptype, *args, **kwargs)
+
+		with patch("frappe.has_permission", side_effect=_perm):
+			payload = get_project_financial_metrics(self.project.name, "2026-01-15")
+
+		self.assertTrue(payload["ready"])
+		expense_track = next(track for track in payload["tracks"] if track["key"] == "expense")
+		self.assertEqual(expense_track["values"]["BAC"], 0)
+		self.assertEqual(expense_track["values"]["AC"], 0)
+
+	def test_track_totals_skip_bvf_when_no_pb_gl_read(self):
+		project = frappe.get_doc("Project", self.project.name)
+		with (
+			patch(
+				"dinext_projects_pl.dinext_projects_pl.financial_metrics.data.can_read_doctype",
+				return_value=False,
+			),
+			patch(
+				"dinext_projects_pl.dinext_projects_pl.financial_metrics.data._collect_project_plan_rows"
+			) as collect_plan,
+			patch(
+				"dinext_projects_pl.dinext_projects_pl.financial_metrics.data._collect_actual_values"
+			) as collect_actual,
+		):
+			periods, totals = get_track_period_totals(project)
+
+		self.assertTrue(periods)
+		self.assertEqual(totals["Income"], {})
+		self.assertEqual(totals["Expense"], {})
+		collect_plan.assert_not_called()
+		collect_actual.assert_not_called()
+
+	def test_track_totals_use_only_list_readable_names(self):
+		project = frappe.get_doc("Project", self.project.name)
+		visible_pb = self._seed_project_budget(
+			self.expense_account,
+			[],
+			{(2026, 1): {"plan": 400, "expected": 0}},
+		)
+		self._seed_project_budget(
+			self.expense_account,
+			[],
+			{(2026, 1): {"plan": 100, "expected": 0}},
+		)
+
+		_, full_totals = get_track_period_totals(project)
+		full_plan = full_totals["Expense"][(2026, 1)]["plan"]
+		self.assertEqual(full_plan, 500)
+
+		filters = {
+			"project": self.project.name,
+			"company": self.company,
+			"from_year": 2026,
+			"to_year": 2026,
+			"from_month": 1,
+			"to_month": 3,
+		}
+		unfiltered_rows = get_raw_budget_data_for_project(self.project.name, filters)
+		self.assertGreaterEqual(len(unfiltered_rows), 2)
+
+		def _subset_list_readable(doctype, filters=None, fields=None):
+			if doctype == "Project Budget":
+				return [visible_pb.name]
+			return []
+
+		with (
+			patch(
+				"dinext_projects_pl.dinext_projects_pl.project_budget.amounts.list_readable",
+				side_effect=_subset_list_readable,
+			),
+			patch(
+				"dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.budget_loader.get_raw_budget_data_for_project",
+				wraps=get_raw_budget_data_for_project,
+			) as raw_spy,
+			patch(
+				"dinext_projects_pl.dinext_projects_pl.financial_metrics.data.get_actual_data_simple",
+				wraps=get_actual_data_simple,
+			) as actual_spy,
+		):
+			_, subset_totals = get_track_period_totals(project)
+
+		subset_plan = subset_totals["Expense"][(2026, 1)]["plan"]
+		self.assertEqual(subset_plan, 400)
+		self.assertNotEqual(subset_plan, full_plan)
+		raw_spy.assert_called()
+		self.assertEqual(raw_spy.call_args.kwargs.get("pb_names"), [visible_pb.name])
+		actual_spy.assert_called()
+		self.assertEqual(actual_spy.call_args.kwargs.get("gle_names"), [])
+
+	def test_unfiltered_bvf_queries_omit_name_filters(self):
+		filters = {
+			"company": self.company,
+			"project": self.project.name,
+			"from_year": 2026,
+			"to_year": 2026,
+			"from_month": 1,
+			"to_month": 3,
+		}
+		budget_sql = str(build_budget_raw_query(filters, project=self.project.name))
+		self.assertNotIn("__no_readable_doc__", budget_sql)
+		self.assertNotIn("PB-VISIBLE-ONLY", budget_sql)
+
+		named_budget_sql = str(
+			build_budget_raw_query(filters, project=self.project.name, pb_names=["PB-VISIBLE-ONLY"])
+		)
+		self.assertIn("PB-VISIBLE-ONLY", named_budget_sql)
+
+		gl_sql = str(build_gl_actual_query(filters, "2026-01-01", "2026-03-31"))
+		self.assertNotIn("__no_readable_doc__", gl_sql)
+		self.assertNotIn("GLE-VISIBLE-ONLY", gl_sql)
+
+		named_gl_sql = str(
+			build_gl_actual_query(filters, "2026-01-01", "2026-03-31", gle_names=["GLE-VISIBLE-ONLY"])
+		)
+		self.assertIn("GLE-VISIBLE-ONLY", named_gl_sql)
+
+		self.assertEqual(get_actual_data_simple(filters, gle_names=[]), [])
+		self.assertEqual(process_project_data(self.project.name, filters, pb_names=[]), [])
 
 	@classmethod
 	def _get_expense_account(cls, company):

@@ -48,9 +48,15 @@ export function onValidateCells(frm, { changes }) {
 	return true;
 }
 
-function buildSavePayload(changes) {
+function toSaveAmount(value) {
+	return Number(value || 0);
+}
+
+/** Diff only (skip 0→0 / empty). Zero is a valid new forecast value. */
+export function buildSavePayload(changes) {
 	return changes
 		.filter((change) => change.field?.startsWith("actual_") && !change.row?.summary_kind)
+		.filter((change) => toSaveAmount(change.newValue) !== toSaveAmount(change.oldValue))
 		.map((change) => {
 			const periodKey = change.field.slice("actual_".length);
 			const [year, month] = periodKey.split("_");
@@ -61,7 +67,7 @@ function buildSavePayload(changes) {
 				period_key: periodKey,
 				year: Number(year),
 				month: Number(month),
-				value: Number(change.newValue || 0),
+				value: toSaveAmount(change.newValue),
 			};
 		})
 		.filter((item) => item.account);

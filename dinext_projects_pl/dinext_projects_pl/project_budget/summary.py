@@ -31,11 +31,58 @@ def _root_type(row: ProjectBudgetRow) -> str:
 	return str(row.get("root_type") or "")
 
 
+def _is_risk_row(row: ProjectBudgetRow) -> bool:
+	return bool(row.get("risk"))
+
+
+def _is_own_track(row: ProjectBudgetRow, key: str, track: str) -> bool:
+	return _to_float(row.get(f"own_{track}_{key}")) > 0
+
+
+def _risk_track_amount(row: ProjectBudgetRow, key: str, track: str) -> float:
+	own = row.get(f"own_{track}_{key}")
+	if own is not None:
+		return _to_float(own)
+	return _to_float(row.get(f"{track}_{key}"))
+
+
+def _sum_risk_descendants(row: ProjectBudgetRow, key: str, track: str) -> float:
+	total = 0.0
+	for child in row.get("children") or []:
+		if _is_risk_row(child):
+			total += _risk_track_amount(child, key, track)
+		else:
+			total += _sum_risk_descendants(child, key, track)
+	return total
+
+
+def _risk_not_in_displayed(row: ProjectBudgetRow, key: str, track: str) -> float:
+	"""Risk cut off by an own ancestor — not in that ancestor's displayed track."""
+	if _is_risk_row(row):
+		return 0.0
+	if _is_own_track(row, key, track):
+		return _sum_risk_descendants(row, key, track)
+	total = 0.0
+	for child in row.get("children") or []:
+		if not _is_risk_row(child):
+			total += _risk_not_in_displayed(child, key, track)
+	return total
+
+
+def _actual_uses_forecast(period: ProjectBudgetDisplayPeriod, view_mode: str) -> bool:
+	if view_mode == "forecast_only":
+		return True
+	if view_mode == "fact_only":
+		return False
+	return not period.get("is_past")
+
+
 def calc_period_income_expense(
 	root_rows: list[ProjectBudgetRow],
 	period: ProjectBudgetDisplayPeriod,
+	view_mode: str = "forecast_and_fact",
 ) -> tuple[float, float, float, float]:
-	"""Report addProfitRow: sum displayed plan_/actual_ on Income/Expense roots."""
+	"""Report addProfitRow: displayed Income/Expense + risk not already in display."""
 	period_key = period["key"]
 	plan_income = 0.0
 	plan_expenses = 0.0
@@ -47,8 +94,10 @@ def calc_period_income_expense(
 		actual = _to_float(row.get(f"actual_{period_key}"))
 		rtype = _root_type(row)
 		if rtype == "Expense":
-			plan_expenses += plan
+			plan_expenses += plan + _risk_not_in_displayed(row, period_key, "plan")
 			actual_expenses += actual
+			if _actual_uses_forecast(period, view_mode):
+				actual_expenses += _risk_not_in_displayed(row, period_key, "forecast")
 		elif rtype == "Income":
 			plan_income += plan
 			actual_income += actual
@@ -59,6 +108,7 @@ def calc_period_income_expense(
 def build_project_budget_summary_rows(
 	root_rows: list[ProjectBudgetRow],
 	periods: list[ProjectBudgetDisplayPeriod],
+	view_mode: str = "forecast_and_fact",
 ) -> list[ProjectBudgetRow]:
 	profit: ProjectBudgetRow = {
 		"id": PL_V2_SUMMARY_PROFIT_ID,
@@ -91,7 +141,7 @@ def build_project_budget_summary_rows(
 	for period in periods:
 		key = period["key"]
 		plan_income, plan_expenses, actual_income, actual_expenses = calc_period_income_expense(
-			root_rows, period
+			root_rows, period, view_mode
 		)
 		plan_income_total += plan_income
 		plan_expenses_total += plan_expenses
