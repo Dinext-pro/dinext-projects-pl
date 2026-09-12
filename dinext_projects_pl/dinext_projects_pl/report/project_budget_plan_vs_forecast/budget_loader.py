@@ -198,8 +198,8 @@ def aggregate_tasks_for_account_and_period(account_rows, task_hierarchy, period_
         _report_debug(f"Error in aggregate_tasks_for_account_and_period for period {period_key}, type {data_type}: {str(e)}")
         return 0
 
-def _build_raw_budget_query(filters, *, project=None, projects=None):
-    return build_budget_raw_query(filters, project=project, projects=projects)
+def _build_raw_budget_query(filters, *, project=None, projects=None, pb_names=None):
+    return build_budget_raw_query(filters, project=project, projects=projects, pb_names=pb_names)
 
 
 def get_raw_budget_data_for_projects(projects, filters):
@@ -218,19 +218,21 @@ def get_raw_budget_data_for_projects(projects, filters):
         return []
 
 
-def get_raw_budget_data_for_project(project, filters):
+def get_raw_budget_data_for_project(project, filters, pb_names=None):
     """
     Получает сырые бюджетные данные для конкретного проекта с РАЗДЕЛЕНИЕМ по Task
     """
     try:
-        return _build_raw_budget_query(filters, project=project).run(as_dict=True)
+        if pb_names is not None and not pb_names:
+            return []
+        return _build_raw_budget_query(filters, project=project, pb_names=pb_names).run(as_dict=True)
 
     except Exception as e:
         _report_debug(f"Error in get_raw_budget_data_for_project for project {project}: {str(e)}", filters)
         frappe.log_error(f"Error in get_raw_budget_data_for_project: {traceback.format_exc()}")
         return []
 
-def process_project_data(project, filters, raw_budget_data=None, task_hierarchy=None):
+def process_project_data(project, filters, raw_budget_data=None, task_hierarchy=None, pb_names=None):
     """
     Обрабатывает данные для одного проекта
     Возвращает данные по статьям для этого проекта с флагом has_own_data
@@ -239,7 +241,7 @@ def process_project_data(project, filters, raw_budget_data=None, task_hierarchy=
     to_month = cint(filters.get("to_month", 12))
 
     if raw_budget_data is None:
-        raw_budget_data = get_raw_budget_data_for_project(project, filters)
+        raw_budget_data = get_raw_budget_data_for_project(project, filters, pb_names=pb_names)
 
     if not raw_budget_data:
         return []
