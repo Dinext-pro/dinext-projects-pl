@@ -278,11 +278,6 @@ def _has_own_amount(value: object) -> bool:
 	return _to_float(value) > 0
 
 
-def _financial_children(children: list[ProjectBudgetRow]) -> list[ProjectBudgetRow]:
-	"""Risk reserves stay off CoA plan/forecast rollup (report analog)."""
-	return [child for child in children if not child.get("risk")]
-
-
 def _rollup_parent_metric(
 	parent: ProjectBudgetRow,
 	children: list[ProjectBudgetRow],
@@ -290,14 +285,13 @@ def _rollup_parent_metric(
 	own_prefix: str,
 	display_prefix: str,
 ) -> None:
-	financial = _financial_children(children)
 	for key in period_keys:
 		own = _to_float(parent.get(f"{own_prefix}_{key}"))
 		if _has_own_amount(own):
 			parent[f"{display_prefix}_{key}"] = own  # type: ignore[literal-required]
 			continue
 		total = 0.0
-		for child in financial:
+		for child in children:
 			total += _to_float(child.get(f"{display_prefix}_{key}"))
 		parent[f"{display_prefix}_{key}"] = total  # type: ignore[literal-required]
 
@@ -307,7 +301,7 @@ def _rollup_parent_plan(
 	children: list[ProjectBudgetRow],
 	period_keys: list[str],
 ) -> None:
-	"""Parent plan = own if set, else sum of non-risk child display plans."""
+	"""Parent plan = own if set, else sum of child display plans (incl. risk)."""
 	_rollup_parent_metric(parent, children, period_keys, "own_plan", "plan")
 
 
@@ -316,7 +310,7 @@ def _rollup_parent_forecast(
 	children: list[ProjectBudgetRow],
 	period_keys: list[str],
 ) -> None:
-	"""Parent forecast = own if set, else sum of non-risk child display forecasts."""
+	"""Parent forecast = own if set, else sum of child display forecasts (incl. risk)."""
 	_rollup_parent_metric(parent, children, period_keys, "own_forecast", "forecast")
 
 
@@ -326,7 +320,7 @@ def _rollup_child_fact(
 	periods: list[ProjectBudgetDisplayPeriod],
 	view_mode: ViewMode,
 ) -> None:
-	"""Parent fact = own + descendants. Plan/forecast = own or non-risk children sum."""
+	"""Parent fact = own + descendants. Plan/forecast = own or children sum (incl. risk)."""
 	period_keys = [period["key"] for period in periods]
 	_rollup_parent_plan(parent, children, period_keys)
 	_rollup_parent_forecast(parent, children, period_keys)
@@ -403,6 +397,7 @@ def _build_risk_rows(
 	periods: list[ProjectBudgetDisplayPeriod],
 	view_mode: ViewMode,
 	risk_titles: dict[str, str],
+	task: str | None = None,
 ) -> list[ProjectBudgetRow]:
 	rows: list[ProjectBudgetRow] = []
 	for risk_name, bucket in risk_buckets:
@@ -415,6 +410,7 @@ def _build_risk_rows(
 			dimensions=bucket.get("dimensions") or [],
 			indent=indent,
 			root_type=root_type,
+			task=task,
 			risk=risk_name,
 		)
 		_apply_amounts_from_buckets(row, [bucket], periods, view_mode)
@@ -497,6 +493,7 @@ def _build_tree_rows(
 				periods=periods,
 				view_mode=view_mode,
 				risk_titles=risk_titles,
+				task=task_name,
 			)
 			# Legacy sibling order under task: child tasks, then risks.
 			tree_children = nested_tasks + risk_rows
@@ -675,7 +672,7 @@ def run_get_project_budget_grid(form_input: ProjectBudgetGridFormInput) -> Proje
 	)
 	if not show_zero_rows:
 		rows = _filter_zero_value_rows(rows, periods)
-	summary_rows = build_project_budget_summary_rows(rows, periods)
+	summary_rows = build_project_budget_summary_rows(rows, periods, view_mode)
 
 	return {
 		"project": project,

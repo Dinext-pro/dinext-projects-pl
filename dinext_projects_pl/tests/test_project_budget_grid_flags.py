@@ -122,10 +122,18 @@ class TestProjectBudgetGridFlags(FrappeTestCase):
 		self.assertEqual(parent[f"forecast_{self.KEY}"], 100)
 		self.assertEqual(parent[f"own_forecast_{self.KEY}"], 100)
 
-	def test_plan_and_forecast_rollup_skip_risk_children(self):
+	def test_plan_and_forecast_rollup_includes_risk_children(self):
 		task = self._row(id="task", plan=40, forecast=25)
 		risk = self._row(id="risk", plan=80, forecast=90, risk="RISK-1")
 		parent = self._row(id="parent", plan=0, forecast=0)
 		_rollup_child_fact(parent, [task, risk], self.PERIODS, "forecast_and_fact")
-		self.assertEqual(parent[f"plan_{self.KEY}"], 40)
-		self.assertEqual(parent[f"forecast_{self.KEY}"], 25)
+		self.assertEqual(parent[f"plan_{self.KEY}"], 120)
+		self.assertEqual(parent[f"forecast_{self.KEY}"], 115)
+
+	def test_own_plan_forecast_still_ignore_risk_children(self):
+		task = self._row(id="task", plan=40, forecast=25)
+		risk = self._row(id="risk", plan=80, forecast=90, risk="RISK-1")
+		parent = self._row(id="parent", plan=200, forecast=150)
+		_rollup_child_fact(parent, [task, risk], self.PERIODS, "forecast_and_fact")
+		self.assertEqual(parent[f"plan_{self.KEY}"], 200)
+		self.assertEqual(parent[f"forecast_{self.KEY}"], 150)
