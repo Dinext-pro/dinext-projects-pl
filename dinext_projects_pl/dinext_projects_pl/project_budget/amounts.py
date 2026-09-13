@@ -15,11 +15,65 @@ from dinext_projects_pl.dinext_projects_pl.project_budget.dimensions import (
 )
 
 
+PROJECT_BUDGET = "Project Budget"
+GL_ENTRY = "GL Entry"
+
+
 def _to_float(value: object) -> float:
 	try:
 		return float(value or 0)
 	except (TypeError, ValueError):
 		return 0.0
+
+
+def can_read_doctype(doctype: str) -> bool:
+	"""DocType read (roles). Same first gate as list_readable. No query conditions."""
+	return bool(frappe.has_permission(doctype, "read"))
+
+
+def list_readable(
+	doctype: str,
+	filters: dict | None = None,
+	fields: list[str] | None = None,
+) -> list:
+	"""get_list names/rows (roles + permission_query_conditions). No doctype read → []."""
+	if not can_read_doctype(doctype):
+		return []
+	kwargs: dict = {"filters": filters, "limit_page_length": 0}
+	if fields:
+		kwargs["fields"] = fields
+	else:
+		kwargs["pluck"] = "name"
+	return frappe.get_list(doctype, **kwargs) or []
+
+
+def list_readable_pb_names(project: str) -> list[str]:
+	"""Project Budget names visible via get_list (roles + query conditions)."""
+	if not project:
+		return []
+	return list(list_readable(PROJECT_BUDGET, filters={"pb_project": project}))
+
+
+def list_readable_gle_names(
+	project: str,
+	company: str,
+	start_date: str | None,
+	end_date: str | None,
+) -> list[str]:
+	"""GL Entry names visible via get_list for project + posting_date bounds."""
+	if not project or not start_date or not end_date:
+		return []
+	return list(
+		list_readable(
+			GL_ENTRY,
+			filters={
+				"project": project,
+				"company": company,
+				"is_cancelled": 0,
+				"posting_date": ["between", [getdate(start_date), getdate(end_date)]],
+			},
+		)
+	)
 
 
 def signed_gl_pl_amount(root_type: str | None, debit: object, credit: object) -> float:
@@ -108,18 +162,19 @@ def _load_pb_dimensions_by_parent(pb_names: list[str]) -> dict[str, list[dict[st
 
 
 def load_budget_buckets(project: str) -> dict[str, dict[str, BucketAmounts]]:
-	"""account -> dim_key -> bucket with plan_/forecast_ fields (SQL, no N+1 get_doc)."""
-	pb = DocType("Project Budget")
-	pba = DocType("Project Budget Amount")
+	"""account -> dim_key -> bucket with plan_/forecast_ fields (SQL, no N+1 get_doc).
 
-	pb_rows = (
-		frappe.qb.from_(pb)
-		.select(pb.name, pb.pb_account)
-		.where(pb.pb_project == project)
-		.run(as_dict=True)
+	Only Project Budget the user can get_list. No PB read → empty buckets, no throw.
+	"""
+	pb_rows = list_readable(
+		PROJECT_BUDGET,
+		filters={"pb_project": project},
+		fields=["name", "pb_account"],
 	)
 	if not pb_rows:
 		return {}
+
+	pba = DocType("Project Budget Amount")
 
 	pb_account = {r.name: r.pb_account for r in pb_rows if r.pb_account}
 	pb_names = list(pb_account.keys())
@@ -168,27 +223,26 @@ def load_gl_fact_buckets(
 	end_date: str | None,
 	account_root_types: dict[str, str],
 ) -> dict[str, dict[str, BucketAmounts]]:
-	"""account -> dim_key -> bucket with fact_ fields (Task dimension when set)."""
+	"""account -> dim_key -> bucket with fact_ fields (Task dimension when set).
+
+	Only GL Entry the user can get_list (role + Custom Query). No GL read → empty facts.
+	"""
 	store: dict[str, dict[str, BucketAmounts]] = {}
 	if not start_date or not end_date:
 		return store
 
-	gle = DocType("GL Entry")
-	select_fields = [gle.account, gle.posting_date, gle.debit, gle.credit]
-	has_task = frappe.db.has_column("GL Entry", "task")
+	gle_filters = {
+		"project": project,
+		"company": company,
+		"is_cancelled": 0,
+		"posting_date": ["between", [getdate(start_date), getdate(end_date)]],
+	}
+	fields = ["account", "posting_date", "debit", "credit"]
+	has_task = frappe.db.has_column(GL_ENTRY, "task")
 	if has_task:
-		select_fields.append(gle.task)
+		fields.append("task")
 
-	rows = (
-		frappe.qb.from_(gle)
-		.select(*select_fields)
-		.where(gle.project == project)
-		.where(gle.company == company)
-		.where(gle.is_cancelled == 0)
-		.where(gle.posting_date >= getdate(start_date))
-		.where(gle.posting_date <= getdate(end_date))
-		.run(as_dict=True)
-	)
+	rows = list_readable(GL_ENTRY, filters=gle_filters, fields=fields)
 
 	for row in rows:
 		account = row.account

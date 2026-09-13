@@ -2,12 +2,14 @@
  * Chart data from displayed grid rows (same roots as Gross Profit summary).
  */
 
+import { accumulateRiskExtras, collectRiskExpenseExtras } from "./data.js";
+
 function toFloat(value) {
 	const n = Number(value);
 	return Number.isFinite(n) ? n : 0;
 }
 
-function calcPeriodIncomeExpense(rootRows, period) {
+function calcPeriodIncomeExpense(rootRows, period, extra) {
 	const key = period.key || `${period.year}_${period.month}`;
 	let plan_income = 0;
 	let plan_expenses = 0;
@@ -26,6 +28,10 @@ function calcPeriodIncomeExpense(rootRows, period) {
 			actual_income += actual;
 		}
 	}
+
+	// Same extras as buildSummaryFromRoots: own ancestor cuts risk from display.
+	plan_expenses += toFloat(extra?.plan);
+	actual_expenses += toFloat(extra?.actual);
 
 	return { plan_income, plan_expenses, actual_income, actual_expenses };
 }
@@ -57,8 +63,14 @@ export function buildChartData(frm) {
 	const profit_plan = [];
 	const profit_actual = [];
 
+	const accumulated = !!frm.bg_accumulated_values;
+	const viewMode = frm.project_budget?.view_mode || "forecast_and_fact";
+	const extras = collectRiskExpenseExtras(rows, periods, viewMode);
+	const adj = accumulated ? accumulateRiskExtras(extras, periods) : extras;
+
 	for (const period of periods) {
-		const r = calcPeriodIncomeExpense(rows, period);
+		const extra = adj[period.key] || { plan: 0, actual: 0 };
+		const r = calcPeriodIncomeExpense(rows, period, extra);
 		plan_income.push(parseFloat(r.plan_income.toFixed(2)));
 		actual_income.push(parseFloat(r.actual_income.toFixed(2)));
 		// Legacy chart: expenses as negative bars.
@@ -68,7 +80,6 @@ export function buildChartData(frm) {
 		profit_actual.push(parseFloat((r.actual_income - r.actual_expenses).toFixed(2)));
 	}
 
-	const accumulated = !!frm.bg_accumulated_values;
 	const cumulative_profit_plan = [];
 	const cumulative_profit_actual = [];
 	const cumulative_income_plan = [];
