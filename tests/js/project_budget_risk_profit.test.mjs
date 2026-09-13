@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { buildChartData } from "../../dinext_projects_pl/public/js/project_budget/chart-adapter.js";
 import {
 	applyAccumulatedValues,
 	applyFactRollup,
@@ -59,6 +60,13 @@ function profitRow(summary) {
 
 function profitabilityRow(summary) {
 	return summary.find((item) => item.summary_kind === "profitability");
+}
+
+function chartFrom(rows, periods, accumulated = false, viewMode = VIEW) {
+	return buildChartData({
+		bg_accumulated_values: accumulated,
+		project_budget: { periods, rows, view_mode: viewMode },
+	});
 }
 
 test("agg expense root + risk child: profit uses expense+risk once", () => {
@@ -137,4 +145,79 @@ test("no-income → profitability null", () => {
 	assert.equal(profitability[`plan_${KEY}`], null);
 	assert.equal(profitability[`actual_${KEY}`], null);
 	assert.equal(profitability.plan_total, null);
+});
+
+test("own expense + risk: chart period expense/profit match summary extras", () => {
+	const periods = [period(KEY)];
+	const income = row("inc", { root_type: "Income", own_plan: 1000, own_forecast: 1000 });
+	const risk = row("risk-1", { risk: "RISK-1", own_plan: 50, own_forecast: 50 });
+	const expense = row("exp", {
+		root_type: "Expense",
+		own_plan: 200,
+		own_forecast: 200,
+		children: [risk],
+	});
+
+	const summary = summarize([income, expense], periods);
+	const profit = profitRow(summary);
+	const profitability = profitabilityRow(summary);
+	const chart = chartFrom([income, expense], periods);
+
+	assert.equal(expense[`plan_${KEY}`], 200);
+	assert.equal(chart.plan_expenses[0], -250);
+	assert.equal(chart.actual_expenses[0], -250);
+	assert.equal(chart.profit_plan[0], profit[`plan_${KEY}`]);
+	assert.equal(chart.profit_actual[0], profit[`actual_${KEY}`]);
+	assert.equal(chart.profit_plan[0], 750);
+	assert.equal(
+		calcProfitabilityPct(chart.profit_plan[0], chart.plan_income[0]),
+		profitability[`plan_${KEY}`]
+	);
+});
+
+test("agg expense + risk: chart does not double-count risk", () => {
+	const periods = [period(KEY)];
+	const income = row("inc", { root_type: "Income", own_plan: 1000, own_forecast: 1000 });
+	const leaf = row("leaf", { own_plan: 200, own_forecast: 200 });
+	const risk = row("risk-1", { risk: "RISK-1", own_plan: 50, own_forecast: 50 });
+	const expense = row("exp", {
+		root_type: "Expense",
+		own_plan: 0,
+		own_forecast: 0,
+		children: [leaf, risk],
+	});
+
+	const summary = summarize([income, expense], periods);
+	const profit = profitRow(summary);
+	const chart = chartFrom([income, expense], periods);
+
+	assert.equal(expense[`plan_${KEY}`], 250);
+	assert.equal(chart.plan_expenses[0], -250);
+	assert.equal(chart.profit_plan[0], profit[`plan_${KEY}`]);
+	assert.equal(chart.profit_plan[0], 750);
+});
+
+test("accumulated own expense + risk: chart last period matches summary extras", () => {
+	const periods = [period(KEY), period(KEY2)];
+	const income = {
+		...row("inc", { root_type: "Income", own_plan: 100, own_forecast: 100 }, KEY),
+		...amt({ own_plan: 100, own_forecast: 100 }, KEY2),
+	};
+	const risk = {
+		...row("risk-1", { risk: "RISK-1", own_plan: 10, own_forecast: 10 }, KEY),
+		...amt({ own_plan: 10, own_forecast: 10 }, KEY2),
+	};
+	const expense = {
+		...row("exp", { root_type: "Expense", own_plan: 40, own_forecast: 40, children: [risk] }, KEY),
+		...amt({ own_plan: 40, own_forecast: 40 }, KEY2),
+	};
+
+	const summary = summarize([income, expense], periods, true);
+	const profit = profitRow(summary);
+	const chart = chartFrom([income, expense], periods, true);
+
+	assert.equal(expense[`plan_${KEY2}`], 80);
+	assert.equal(chart.plan_expenses[1], -100);
+	assert.equal(chart.profit_plan[1], profit[`plan_${KEY2}`]);
+	assert.equal(chart.profit_plan[1], 100);
 });

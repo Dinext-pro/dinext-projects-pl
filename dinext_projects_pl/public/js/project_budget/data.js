@@ -351,6 +351,7 @@ function applyGridResponse(frm, message) {
 		}
 	}
 	state.rows = frm.bg_show_zero_rows ? rows : filterZeroValueRows(rows, state.periods);
+	state.view_mode = viewMode;
 	state.summaryRows = buildSummaryFromRoots(state.rows, state.periods, accumulated, viewMode);
 	return message;
 }
@@ -391,4 +392,11 @@ export async function reloadTable(frm, initTable, refreshRuntime) {
 	return initTable(frm);
 }
 
-export { applyAccumulatedValues, applyFactRollup, buildSummaryFromRoots, calcProfitabilityPct };
+export {
+	applyAccumulatedValues,
+	applyFactRollup,
+	accumulateRiskExtras,
+	buildSummaryFromRoots,
+	calcProfitabilityPct,
+	collectRiskExpenseExtras,
+};
