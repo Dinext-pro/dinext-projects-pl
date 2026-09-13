@@ -156,3 +156,40 @@ test("risk on Task: agg task grows via rollup, own account is raised", () => {
 	assert.equal(displayedForecast(taskRow), 50);
 	assert.equal(taskRow[`own_forecast_${KEY}`], 0);
 });
+
+test("server-shaped Task risk (no row.task, Task in dims) still raises parents", () => {
+	const risk = row("Acc-1TASK-1|risk|RISK-1", {
+		account: "Acc-1",
+		risk: "RISK-1",
+		dimensions: [
+			{ doc: "Task", docname: "TASK-1" },
+			{ doc: "Project Risk", docname: "RISK-1" },
+		],
+		own_forecast: 10,
+		forecast: 10,
+	});
+	delete risk.task;
+	const task = row("Acc-1TASK-1", {
+		account: "Acc-1",
+		task: "TASK-1",
+		dimensions: [{ doc: "Task", docname: "TASK-1" }],
+		own_forecast: 20,
+		forecast: 20,
+		children: [risk],
+	});
+	const account = row("Acc-1", {
+		own_forecast: 30,
+		forecast: 30,
+		children: [task],
+	});
+	const { parent_adjustments } = buildParentAdjustmentsFromUpdates(
+		{ project_budget: { rows: [account] } },
+		[riskUpdate({ account: "Acc-1", riskId: "RISK-1", amount: 50, taskId: "TASK-1" })]
+	);
+	assert.equal(parent_adjustments.length, 2);
+	const byKey = Object.fromEntries(
+		parent_adjustments.map((item) => [item.account + "|" + (item.dimensions[0]?.docname || ""), item])
+	);
+	assert.equal(byKey["Acc-1|TASK-1"].period_amount_map[KEY], 60);
+	assert.equal(byKey["Acc-1|"].period_amount_map[KEY], 60);
+});

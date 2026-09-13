@@ -248,6 +248,11 @@ function ownForecastOf(row, key) {
 	return Number(row?.[`own_forecast_${key}`] || 0);
 }
 
+function rowTaskId(row) {
+	if (row?.task) return row.task;
+	return (row?.dimensions || []).find((d) => d?.doc === "Task")?.docname || "";
+}
+
 function findRiskRow(rows, account, riskId, taskId) {
 	if (!account || !riskId) return null;
 	const wantTask = taskId || "";
@@ -256,7 +261,7 @@ function findRiskRow(rows, account, riskId, taskId) {
 			(row) =>
 				row.account === account &&
 				row.risk === riskId &&
-				(row.task || "") === wantTask
+				rowTaskId(row) === wantTask
 		) || null
 	);
 }

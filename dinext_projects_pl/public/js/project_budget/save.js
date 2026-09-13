@@ -14,7 +14,10 @@ function validateForecastChange(frm, change) {
 	const row = change.row;
 	if (!row || row.summary_kind) return true;
 
-	const value = Number(change.newValue || 0);
+	const value = toSaveAmount(change.newValue);
+	const previous = toSaveAmount(previousForecastAmount(change));
+	if (value === previous) return true;
+
 	const rows = frm.project_budget?.rows || [];
 
 	const childrenSum = childForecastSum(row, periodKey);
@@ -25,10 +28,17 @@ function validateForecastChange(frm, change) {
 	}
 
 	const parentLimit = parentForecastLimit(rows, row, periodKey);
-	if (parentLimit !== null && value > parentLimit.maxAllowed) {
+	// Negative maxAllowed = parent own already < other children. Do not
+	// block no-op / decrease (empty edit on 0 used to throw "-150000").
+	if (
+		parentLimit !== null
+		&& value > parentLimit.maxAllowed
+		&& value > previous
+	) {
+		const shownLimit = parentLimit.maxAllowed < 0 ? 0 : parentLimit.maxAllowed;
 		return __("Value cannot exceed {0} (parent account '{1}' limit)",
 			[
-				Math.round(parentLimit.maxAllowed).toLocaleString("ru-RU"),
+				Math.round(shownLimit).toLocaleString("ru-RU"),
 				parentLimit.parentLabel,
 			]
 		);
@@ -52,11 +62,22 @@ function toSaveAmount(value) {
 	return Number(value || 0);
 }
 
+/** Editable forecast, not displayed rollup (`actual_*` / DinextTable oldValue). */
+function previousForecastAmount(change) {
+	const field = change.field || "";
+	const periodKey = field.startsWith("actual_") ? field.slice("actual_".length) : "";
+	const own = periodKey ? change.row?.[`own_forecast_${periodKey}`] : undefined;
+	if (own != null) {
+		return own;
+	}
+	return change.oldValue;
+}
+
 /** Diff only (skip 0→0 / empty). Zero is a valid new forecast value. */
 export function buildSavePayload(changes) {
 	return changes
 		.filter((change) => change.field?.startsWith("actual_") && !change.row?.summary_kind)
-		.filter((change) => toSaveAmount(change.newValue) !== toSaveAmount(change.oldValue))
+		.filter((change) => toSaveAmount(change.newValue) !== toSaveAmount(previousForecastAmount(change)))
 		.map((change) => {
 			const periodKey = change.field.slice("actual_".length);
 			const [year, month] = periodKey.split("_");
@@ -73,6 +94,43 @@ export function buildSavePayload(changes) {
 		.filter((item) => item.account);
 }
 
+/** Pre-edit display. Empty editor after 0 / rollup must not stay blank. */
+export function resolveNoOpDisplayValue(change) {
+	if (change.oldValue != null && change.oldValue !== "") {
+		const n = Number(change.oldValue);
+		if (Number.isFinite(n)) return n;
+	}
+	return 0;
+}
+
+/** Restore `actual_*` only. Do not write `own_forecast_*` (parent rollup #6). */
+export function restoreNoOpDisplay(frm, changes, table) {
+	const restores = [];
+	for (const change of changes || []) {
+		if (!change.field?.startsWith("actual_") || change.row?.summary_kind) continue;
+		restores.push({
+			field: change.field,
+			value: resolveNoOpDisplayValue(change),
+			rowId: change.rowId,
+			id: change.row?.id,
+			row: change.row,
+		});
+	}
+
+	if (typeof table?.applyExternalCellValues === "function") {
+		table.applyExternalCellValues(
+			restores.map(({ field, value, rowId, id }) => ({ field, value, rowId, id }))
+		);
+	}
+
+	const flat = flattenTree(frm?.project_budget?.rows || []);
+	for (const item of restores) {
+		const row = (item.id != null && flat.find((r) => r.id === item.id)) || item.row;
+		if (!row) continue;
+		row[item.field] = item.value;
+	}
+}
+
 function patchLocalForecast(frm, changes) {
 	const flat = flattenTree(frm.project_budget?.rows || []);
 	for (const change of changes) {
@@ -87,12 +145,15 @@ function patchLocalForecast(frm, changes) {
 	}
 }
 
-export async function onSaveCells(frm, { changes }) {
+export async function onSaveCells(frm, { changes, table }) {
 	if (isMutationLocked(frm)) {
 		return false;
 	}
 	const payload = buildSavePayload(changes);
-	if (!payload.length) return true;
+	if (!payload.length) {
+		restoreNoOpDisplay(frm, changes, table);
+		return true;
+	}
 
 	const res = await frappe.xcall(SAVE_FORECAST_API, {
 		project: frm.doc.name,

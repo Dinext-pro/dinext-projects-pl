@@ -397,6 +397,7 @@ def _build_risk_rows(
 	periods: list[ProjectBudgetDisplayPeriod],
 	view_mode: ViewMode,
 	risk_titles: dict[str, str],
+	task: str | None = None,
 ) -> list[ProjectBudgetRow]:
 	rows: list[ProjectBudgetRow] = []
 	for risk_name, bucket in risk_buckets:
@@ -409,6 +410,7 @@ def _build_risk_rows(
 			dimensions=bucket.get("dimensions") or [],
 			indent=indent,
 			root_type=root_type,
+			task=task,
 			risk=risk_name,
 		)
 		_apply_amounts_from_buckets(row, [bucket], periods, view_mode)
@@ -491,6 +493,7 @@ def _build_tree_rows(
 				periods=periods,
 				view_mode=view_mode,
 				risk_titles=risk_titles,
+				task=task_name,
 			)
 			# Legacy sibling order under task: child tasks, then risks.
 			tree_children = nested_tasks + risk_rows

@@ -74,6 +74,74 @@ function createTranslationStub() {
     return (text) => text;
 }
 
+/** VM stand-in: production chart goes through ProjectBudget.buildChartData. */
+function buildChartDataFromColumnTotal(context, frm) {
+    const periods = context.get_budget_display_periods(frm, "month");
+    const roots = context.getFinancialRootRows(frm.aggregatedBudget);
+    const labels = periods.map((p) => `${p.year}-${String(p.month).padStart(2, "0")}`);
+    const plan_income = [];
+    const actual_income = [];
+    const plan_expenses = [];
+    const actual_expenses = [];
+    const profit_plan = [];
+    const profit_actual = [];
+
+    for (const period of periods) {
+        const r = context.calc_column_total(frm, period, roots);
+        plan_income.push(r.plan_income);
+        actual_income.push(r.actual_income);
+        plan_expenses.push(-r.plan_expenses);
+        actual_expenses.push(-r.actual_expenses);
+        profit_plan.push(r.plan_income - r.plan_expenses);
+        profit_actual.push(r.actual_income - r.actual_expenses);
+    }
+
+    const cumulative_profit_plan = [];
+    const cumulative_profit_actual = [];
+    const cumulative_income_plan = [];
+    const cumulative_income_actual = [];
+    const cumulative_expenses_plan = [];
+    const cumulative_expenses_actual = [];
+    let cumP = 0;
+    let cumA = 0;
+    let cumIncomePlan = 0;
+    let cumIncomeActual = 0;
+    let cumExpensesPlan = 0;
+    let cumExpensesActual = 0;
+    for (let i = 0; i < profit_plan.length; i++) {
+        cumP += profit_plan[i];
+        cumA += profit_actual[i];
+        cumIncomePlan += plan_income[i];
+        cumIncomeActual += actual_income[i];
+        cumExpensesPlan += plan_expenses[i];
+        cumExpensesActual += actual_expenses[i];
+        cumulative_profit_plan.push(cumP);
+        cumulative_profit_actual.push(cumA);
+        cumulative_income_plan.push(cumIncomePlan);
+        cumulative_income_actual.push(cumIncomeActual);
+        cumulative_expenses_plan.push(cumExpensesPlan);
+        cumulative_expenses_actual.push(cumExpensesActual);
+    }
+
+    return {
+        labels,
+        plan_income,
+        actual_income,
+        plan_expenses,
+        actual_expenses,
+        profit_plan,
+        profit_actual,
+        cumulative_profit_plan,
+        cumulative_profit_actual,
+        cumulative_income_plan,
+        cumulative_income_actual,
+        cumulative_expenses_plan,
+        cumulative_expenses_actual,
+        periods,
+        source: "project_budget",
+    };
+}
+
 function createEchartsContext() {
     const echartsCalls = {
         init: [],
@@ -155,6 +223,11 @@ function createEchartsContext() {
             },
             matchMedia() {
                 return { matches: false };
+            },
+            ProjectBudget: {
+                buildChartData(frm) {
+                    return buildChartDataFromColumnTotal(context, frm);
+                },
             },
         },
         document: {
