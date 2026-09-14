@@ -120,14 +120,12 @@ def _persist_doc(doc) -> None:
 		doc.save()
 
 
-def _save_one_change(project: str, change: ProjectBudgetSaveForecastChange, docs_by_identity: dict) -> None:
+def _apply_one_change(project: str, change: ProjectBudgetSaveForecastChange, docs_by_identity: dict) -> None:
 	account, year, month, value, dimensions = _parse_change(change)
 	identity = (account, dimension_fingerprint(dimensions))
 	if identity not in docs_by_identity:
 		docs_by_identity[identity] = _get_or_create_project_budget(project, account, dimensions)
-	doc = docs_by_identity[identity]
-	_apply_period_value(doc, year, month, value)
-	_persist_doc(doc)
+	_apply_period_value(docs_by_identity[identity], year, month, value)
 
 
 def run_save_project_budget_forecast(form_dict: ProjectBudgetSaveForecastFormInput) -> dict:
@@ -155,7 +153,11 @@ def run_save_project_budget_forecast(form_dict: ProjectBudgetSaveForecastFormInp
 	frappe.db.savepoint(SAVEPOINT_NAME)
 	try:
 		for change in changes:
-			_save_one_change(project, change, docs_by_identity)
+			_apply_one_change(project, change, docs_by_identity)
+		# One save per Project Budget. Per-cell save hits TimestampMismatchError
+		# when Delete clears several months on the same document.
+		for doc in docs_by_identity.values():
+			_persist_doc(doc)
 	except Exception:
 		frappe.db.rollback(save_point=SAVEPOINT_NAME)
 		raise
