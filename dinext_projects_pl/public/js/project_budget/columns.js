@@ -43,7 +43,7 @@ function isProfitRow(data) {
 }
 
 /** Legacy numberformat: integer + thin space; profitability = one decimal + %. */
-function formatAmount(params) {
+export function formatAmount(params) {
 	const n = toNumber(params.value);
 	if (n == null) return "";
 	if (isProfitabilityRow(params.data)) {
@@ -53,6 +53,18 @@ function formatAmount(params) {
 		.toFixed(0)
 		.toString()
 		.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
+/** Empty / zero forecast stays blank. Do not paint 0 on unused cells. */
+export function formatForecastAmount(params) {
+	if (isProfitabilityRow(params.data)) {
+		return formatAmount(params);
+	}
+	const n = toNumber(params.value);
+	if (n == null || n === 0) {
+		return "";
+	}
+	return formatAmount(params);
 }
 
 /** Legacy delta: one decimal + %. */
@@ -293,7 +305,7 @@ function buildPeriodColumns(frm, periods) {
 					width: leafWidth,
 					edit: (row) =>
 						canEditForecast && !period.is_past && !row?.summary_kind,
-					valueFormatter: formatAmount,
+					valueFormatter: period.is_past ? formatAmount : formatForecastAmount,
 					isOwnCell: (row) => isOwnForecastCell(row, period),
 				}),
 				buildPeriodLeaf({

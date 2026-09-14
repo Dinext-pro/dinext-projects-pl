@@ -145,7 +145,27 @@ function patchLocalForecast(frm, changes) {
 	}
 }
 
-export async function onSaveCells(frm, { changes, table }) {
+function changeDedupeKey(change) {
+	return `${change.row?.id || change.rowId || change.row?.account || ""}::${change.field || ""}`;
+}
+
+function mergeSaveChanges(existing, incoming) {
+	const byKey = new Map();
+	for (const change of existing) {
+		byKey.set(changeDedupeKey(change), change);
+	}
+	for (const change of incoming) {
+		const key = changeDedupeKey(change);
+		const prev = byKey.get(key);
+		byKey.set(key, prev ? { ...prev, ...change, oldValue: prev.oldValue } : change);
+	}
+	return [...byKey.values()];
+}
+
+const SAVE_COALESCE_MS = 40;
+const pendingSaves = new WeakMap();
+
+async function persistForecastChanges(frm, changes, table) {
 	if (isMutationLocked(frm)) {
 		return false;
 	}
@@ -168,10 +188,52 @@ export async function onSaveCells(frm, { changes, table }) {
 	patchLocalForecast(frm, changes);
 
 	// Refresh DinextTable + chart after forecast save.
-	if (window.ProjectBudget?.refresh) {
-		await window.ProjectBudget.refresh(frm);
-	} else if (window.ProjectBudget?.refreshChart) {
-		window.ProjectBudget.refreshChart(frm);
+	const projectBudget = globalThis.ProjectBudget;
+	if (projectBudget?.refresh) {
+		await projectBudget.refresh(frm);
+	} else if (projectBudget?.refreshChart) {
+		projectBudget.refreshChart(frm);
 	}
 	return true;
+}
+
+async function flushPendingSave(frm) {
+	const bucket = pendingSaves.get(frm);
+	if (!bucket) {
+		return;
+	}
+	pendingSaves.delete(frm);
+	if (bucket.timer) {
+		clearTimeout(bucket.timer);
+	}
+	try {
+		const ok = await persistForecastChanges(frm, bucket.changes, bucket.table);
+		for (const waiter of bucket.waiters) {
+			waiter.resolve(ok);
+		}
+	} catch (err) {
+		for (const waiter of bucket.waiters) {
+			waiter.reject(err);
+		}
+	}
+}
+
+/** Coalesce rapid Delete/edit commits so one Project Budget is not saved twice. */
+export function onSaveCells(frm, { changes, table }) {
+	return new Promise((resolve, reject) => {
+		let bucket = pendingSaves.get(frm);
+		if (!bucket) {
+			bucket = { changes: [], table, waiters: [], timer: null };
+			pendingSaves.set(frm, bucket);
+		}
+		bucket.changes = mergeSaveChanges(bucket.changes, changes || []);
+		bucket.table = table || bucket.table;
+		bucket.waiters.push({ resolve, reject });
+		if (bucket.timer) {
+			clearTimeout(bucket.timer);
+		}
+		bucket.timer = setTimeout(() => {
+			void flushPendingSave(frm);
+		}, SAVE_COALESCE_MS);
+	});
 }
