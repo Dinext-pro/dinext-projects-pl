@@ -8,6 +8,5 @@ include:
 variables:
   DINEXT_CONTROL_CENTER_REF: "main"
 
-# Temporary: docs-agent blocked by dinext-docs token Access denied; keep MR mergeable.
 docs-agent:mr-analyze:
-  allow_failure: true
+  allow_failure: false
