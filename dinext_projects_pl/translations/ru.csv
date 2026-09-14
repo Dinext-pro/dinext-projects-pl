@@ -77,6 +77,7 @@ Hide empty rows,Скрыть пустые строки,
 "Income","Доходы",""
 "Income - plan","Доходы - план",""
 "Indices","Индексы",""
+"Insufficient permissions","Недостаточно прав",""
 "Loading data for period {0}-{1} to {2}-{3}...","Загрузка данных за период {0}-{1} - {2}-{3}...",""
 Loading data..,Идет загрузка данных..,
 "Loading financial metrics...","Загрузка финансовых метрик...",""

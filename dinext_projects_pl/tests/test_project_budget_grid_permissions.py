@@ -114,6 +114,10 @@ class TestProjectBudgetGridPermissions(FrappeTestCase):
 				"show_zero_rows": 1,
 			}
 		)
+		self.assertEqual(grid.get("rows"), [])
+		self.assertEqual(grid.get("periods"), [])
+		self.assertFalse(grid.get("can_read_project_budget"))
+		self.assertFalse(grid.get("can_read_gl_entry"))
 		self.assertEqual(self._own_amount_sum(grid.get("rows") or []), 0.0)
 
 		metrics = get_project_financial_metrics(self.project.name, "2026-06-15")
@@ -139,6 +143,8 @@ class TestProjectBudgetGridPermissions(FrappeTestCase):
 				"show_zero_rows": 1,
 			}
 		)
+		self.assertTrue(grid.get("can_read_project_budget"))
+		self.assertTrue(grid.get("can_read_gl_entry"))
 		self.assertGreater(self._own_amount_sum(grid.get("rows") or []), 0.0)
 
 	def test_save_requires_project_budget_write(self):

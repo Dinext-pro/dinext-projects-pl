@@ -1,6 +1,7 @@
-import { TABLE_HEIGHT, TABLE_MIN_HEIGHT } from "./constants.js";
+import { TABLE_MAX_HEIGHT } from "./constants.js";
 import { initState } from "./state.js";
 import { loadGridData, reloadTable } from "./data.js";
+import { hasPlAmountAccess, syncPlAccessBanner } from "./access.js";
 import { applyPlanDeltaVisibility, getColumns, refreshColumns } from "./columns.js";
 import { attachTreePersistence, getExpandedIds, syncExpandedIds } from "./tree.js";
 import { onSaveCells, onValidateCells } from "./save.js";
@@ -35,10 +36,6 @@ function resolveFullscreenOpts(container) {
 		onEnter: ({ element }) => {
 			element?.classList.add(FS_SHELL_CLASS);
 			if (container) {
-				container.dataset.plV2PrevHeight = container.style.height || "";
-				container.dataset.plV2PrevMinHeight = container.style.minHeight || "";
-				container.style.height = "auto";
-				container.style.minHeight = "0";
 				container.style.flex = "1 1 auto";
 			}
 			afterLayout();
@@ -46,11 +43,7 @@ function resolveFullscreenOpts(container) {
 		onExit: ({ element }) => {
 			element?.classList.remove(FS_SHELL_CLASS);
 			if (container) {
-				container.style.height = container.dataset.plV2PrevHeight || TABLE_HEIGHT;
-				container.style.minHeight = container.dataset.plV2PrevMinHeight || TABLE_MIN_HEIGHT;
 				container.style.flex = "";
-				delete container.dataset.plV2PrevHeight;
-				delete container.dataset.plV2PrevMinHeight;
 			}
 			afterLayout();
 		},
@@ -79,6 +72,7 @@ function buildTableOptions(frm, state) {
 		columns: getColumns(frm, state.periods),
 		summaryRows: state.summaryRows || [],
 		summary: { pin: "bottom", edit: false, clipboard: false, selection: false },
+		layout: { height: "auto", maxHeight: TABLE_MAX_HEIGHT },
 		expandedIds: getExpandedIds(frm),
 		edit: !isMutationLocked(frm),
 		selection: { enabled: true },
@@ -156,6 +150,10 @@ export async function initTable(frm) {
 				"/assets/dinext_projects_pl/css/project_budget.css",
 			]);
 			await loadGridData(frm);
+			syncPlAccessBanner(frm);
+			if (!hasPlAmountAccess(state)) {
+				return null;
+			}
 
 			if (state.table) {
 				return state.table;

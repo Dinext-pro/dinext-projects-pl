@@ -268,7 +268,14 @@ function clearForecastEditor(params) {
 	}
 }
 
-/** Calculated forecast (no own_*) → empty editor. Escape keeps previous display. */
+/** Type-to-edit already put a digit in the editor — do not wipe it. */
+export function startedByTypingDigit(params) {
+	const ev = params?.event;
+	const key = ev?.key ?? ev?.data ?? ev?.event?.key;
+	return typeof key === "string" && /^\d$/.test(key);
+}
+
+/** Calculated forecast (no own_*) → empty editor. Keep a just-typed digit. */
 export function onCellEditingStarted(frm, params) {
 	const field = params?.colDef?.field || "";
 	if (!field.startsWith("actual_")) {
@@ -280,6 +287,9 @@ export function onCellEditingStarted(frm, params) {
 		return;
 	}
 	if (isOwnForecastCell(params.data, period)) {
+		return;
+	}
+	if (startedByTypingDigit(params)) {
 		return;
 	}
 

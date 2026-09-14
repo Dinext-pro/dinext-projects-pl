@@ -207,6 +207,12 @@ if (
 }
 
 function render_pl_chart(frm, init = true) {
+    if (
+        window.ProjectBudget?.hasPlAmountAccess &&
+        !window.ProjectBudget.hasPlAmountAccess(frm?.project_budget)
+    ) {
+        return;
+    }
     const renderChart = globalThis.render_pl_chart_impl;
     if (typeof renderChart !== "function") {
         return;

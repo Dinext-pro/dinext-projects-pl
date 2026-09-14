@@ -155,6 +155,56 @@ test("restoreNoOpDisplay keeps parent rollup, does not write own 0", () => {
 	assert.equal(row.own_forecast_2026_8, 0);
 });
 
+test("onSaveCells coalesces two deletes on one account into one API call", async () => {
+	const row = {
+		id: "leaf-1",
+		account: "Acc-1",
+		own_forecast_2026_8: 5,
+		own_forecast_2026_9: 7,
+		actual_2026_8: 5,
+		actual_2026_9: 7,
+	};
+	const frm = { project_budget: { rows: [row] }, doc: { name: "PROJ" } };
+	const prevFrappe = globalThis.frappe;
+	const prevRefresh = globalThis.ProjectBudget;
+	const prevDunder = globalThis.__;
+	const payloads = [];
+	globalThis.ProjectBudget = { refresh: async () => {} };
+	globalThis.__ = (msg) => msg;
+	globalThis.frappe = {
+		__: (msg) => msg,
+		xcall: async (_method, args) => {
+			payloads.push(JSON.parse(args.changes));
+			return { saved: 2 };
+		},
+		show_alert() {},
+	};
+	try {
+		const [a, b] = await Promise.all([
+			onSaveCells(frm, {
+				changes: [change({ field: "actual_2026_8", oldValue: 5, newValue: 0, row })],
+			}),
+			onSaveCells(frm, {
+				changes: [change({ field: "actual_2026_9", oldValue: 7, newValue: 0, row })],
+			}),
+		]);
+		assert.equal(a, true);
+		assert.equal(b, true);
+		assert.equal(payloads.length, 1);
+		assert.deepEqual(
+			payloads[0].map((item) => [item.period_key, item.value]),
+			[
+				["2026_8", 0],
+				["2026_9", 0],
+			],
+		);
+	} finally {
+		globalThis.frappe = prevFrappe;
+		globalThis.ProjectBudget = prevRefresh;
+		globalThis.__ = prevDunder;
+	}
+});
+
 test("onSaveCells no-op restores display without API", async () => {
 	const leaf = {
 		id: "leaf-1",
