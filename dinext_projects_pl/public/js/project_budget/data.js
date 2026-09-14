@@ -1,6 +1,7 @@
 import { GRID_API } from "./constants.js";
 import { ensurePlDefaults } from "./controls.js";
 import { initState } from "./state.js";
+import { flagOn, hasPlAmountAccess, syncPlAccessBanner } from "./access.js";
 
 function toNum(value) {
 	const n = Number(value);
@@ -352,6 +353,8 @@ function applyGridResponse(frm, message) {
 	}
 	state.rows = frm.bg_show_zero_rows ? rows : filterZeroValueRows(rows, state.periods);
 	state.view_mode = viewMode;
+	state.can_read_project_budget = flagOn(message.can_read_project_budget);
+	state.can_read_gl_entry = flagOn(message.can_read_gl_entry);
 	state.summaryRows = buildSummaryFromRoots(state.rows, state.periods, accumulated, viewMode);
 	return message;
 }
@@ -385,6 +388,14 @@ export async function reloadTable(frm, initTable, refreshRuntime) {
 	}
 
 	await loadGridData(frm);
+	syncPlAccessBanner(frm);
+	if (!hasPlAmountAccess(state)) {
+		if (state.table?.destroy) {
+			state.table.destroy();
+		}
+		state.table = null;
+		return null;
+	}
 	if (state.table) {
 		await refreshRuntime(frm);
 		return state.table;

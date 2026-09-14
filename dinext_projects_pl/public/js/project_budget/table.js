@@ -1,6 +1,7 @@
 import { TABLE_MAX_HEIGHT } from "./constants.js";
 import { initState } from "./state.js";
 import { loadGridData, reloadTable } from "./data.js";
+import { hasPlAmountAccess, syncPlAccessBanner } from "./access.js";
 import { applyPlanDeltaVisibility, getColumns, refreshColumns } from "./columns.js";
 import { attachTreePersistence, getExpandedIds, syncExpandedIds } from "./tree.js";
 import { onSaveCells, onValidateCells } from "./save.js";
@@ -149,6 +150,10 @@ export async function initTable(frm) {
 				"/assets/dinext_projects_pl/css/project_budget.css",
 			]);
 			await loadGridData(frm);
+			syncPlAccessBanner(frm);
+			if (!hasPlAmountAccess(state)) {
+				return null;
+			}
 
 			if (state.table) {
 				return state.table;
