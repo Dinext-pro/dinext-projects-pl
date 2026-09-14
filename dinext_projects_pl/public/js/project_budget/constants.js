@@ -10,9 +10,8 @@ export const SAVE_PLAN_API =
 export const FIND_APPROVED_BUDGET_API =
 	"dinext_projects_pl.dinext_projects_pl.budget_approval.service.find_approved_budget_for_period";
 
-/** Collapsed (not fullscreen) grid size — same as Work Efforts. */
-export const TABLE_HEIGHT = "min(60vh, 672px)";
-export const TABLE_MIN_HEIGHT = "280px";
+/** Auto-height cap (DinextTable `layout.maxHeight`) — same as Work Efforts. */
+export const TABLE_MAX_HEIGHT = "min(60vh, 672px)";
 
 /** Period leaf fields; `plan_total` → key `total` (not in period map). */
 export const PERIOD_FIELD_RE = /^(plan|forecast|fact|actual|delta|own_fact|own_plan|own_forecast)_/;
