@@ -3,6 +3,7 @@
  */
 
 import { accumulateRiskExtras, collectRiskExpenseExtras } from "./data.js";
+import { hasPlAmountAccess } from "./access.js";
 
 function toFloat(value) {
 	const n = Number(value);
@@ -40,6 +41,9 @@ function calcPeriodIncomeExpense(rootRows, period, extra) {
  * @returns {object|null} chart payload or null if v2 grid not ready
  */
 export function buildChartData(frm) {
+	if (!hasPlAmountAccess(frm.project_budget)) {
+		return null;
+	}
 	const periods = frm.project_budget?.periods;
 	const rows = frm.project_budget?.rows;
 	if (!periods?.length || !rows?.length) {
@@ -140,6 +144,9 @@ export function buildChartData(frm) {
 }
 
 export function refreshChart(frm) {
+	if (!hasPlAmountAccess(frm.project_budget)) {
+		return;
+	}
 	if (typeof globalThis.render_pl_chart_impl === "function") {
 		globalThis.render_pl_chart_impl(frm, false);
 	} else if (typeof render_pl_chart === "function") {

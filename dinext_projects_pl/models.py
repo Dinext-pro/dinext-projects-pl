@@ -80,6 +80,8 @@ class ProjectBudgetGridResponse(TypedDict, total=False):
 	periods: list[ProjectBudgetDisplayPeriod]
 	rows: list[ProjectBudgetRow]
 	summary_rows: list[ProjectBudgetRow]
+	can_read_project_budget: bool
+	can_read_gl_entry: bool
 
 
 class BucketAmounts(TypedDict, total=False):

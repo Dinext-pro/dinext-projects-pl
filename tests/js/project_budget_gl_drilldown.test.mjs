@@ -8,6 +8,7 @@ import {
 	buildGlRouteOptions,
 	onCellDoubleClicked,
 	onCellEditingStarted,
+	startedByTypingDigit,
 } from "../../dinext_projects_pl/public/js/project_budget/navigation.js";
 
 const periods = [
@@ -328,6 +329,29 @@ describe("onCellEditingStarted", () => {
 			data: { account: "Services - TC", own_forecast_2026_12: 400 },
 		});
 		assert.equal(ownInput.value, "400");
+	});
+
+	it("keeps a digit typed to start edit on an empty forecast cell", () => {
+		const frm = makeFrm();
+		frm.project_budget.periods = periods;
+		let setTo = "5";
+		onCellEditingStarted(frm, {
+			event: { key: "5" },
+			colDef: { field: "actual_2026_12" },
+			data: { account: "Services - TC", own_forecast_2026_12: 0 },
+			api: {
+				getCellEditorInstances: () => [
+					{
+						agSetEditValue: (value) => {
+							setTo = value;
+						},
+					},
+				],
+			},
+		});
+		assert.equal(setTo, "5");
+		assert.equal(startedByTypingDigit({ event: { key: "5" } }), true);
+		assert.equal(startedByTypingDigit({ event: { key: "Enter" } }), false);
 	});
 
 	it("clears via agSetEditValue when eGridCell is missing", () => {
