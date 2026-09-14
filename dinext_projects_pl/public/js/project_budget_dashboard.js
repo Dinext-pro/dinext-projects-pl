@@ -13,8 +13,19 @@ frappe.ui.form.on('Project', {
 })
 
 function mount_pl_dashboard(frm) {
-	add_buttons(frm);
-	return Promise.resolve(add_project_profit_loss_chart(frm));
+	const ready = window.ProjectBudget?.ensureMounted
+		? Promise.resolve(window.ProjectBudget.ensureMounted(frm))
+		: Promise.resolve();
+	return ready.then(() => {
+		if (
+			window.ProjectBudget?.hasPlAmountAccess &&
+			!window.ProjectBudget.hasPlAmountAccess(frm.project_budget)
+		) {
+			return;
+		}
+		add_buttons(frm);
+		return add_project_profit_loss_chart(frm);
+	});
 }
 
 function schedule_pl_dashboard_mount(frm) {

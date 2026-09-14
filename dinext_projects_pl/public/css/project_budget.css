@@ -51,6 +51,34 @@
 	margin-top: 0;
 }
 
+#project-custom_pl:has(> .pl-access-banner) {
+	min-height: 240px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+#project-custom_pl > .pl-access-banner,
+.form-tab-content > .pl-access-banner,
+.budget-container > .pl-access-banner {
+	margin: 0;
+	padding: 24px 16px;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	text-align: center;
+	font-size: calc(var(--text-base, 14px) * 1.5);
+	line-height: 1.4;
+	color: var(--text-muted, #6b7280);
+}
+
+[data-theme="dark"] #project-custom_pl > .pl-access-banner,
+[data-theme="dark"] .form-tab-content > .pl-access-banner,
+[data-theme="dark"] .budget-container > .pl-access-banner {
+	color: var(--text-muted, #9ca3af);
+}
+
 /*
  * Domain controls on toolbar custom host.
  * Host itself gets .budget-controls (not a child) — do not nest those selectors.

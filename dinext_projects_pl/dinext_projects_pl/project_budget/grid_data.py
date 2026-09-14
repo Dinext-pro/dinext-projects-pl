@@ -8,6 +8,9 @@ from frappe import _
 from frappe.utils import cint
 
 from dinext_projects_pl.dinext_projects_pl.project_budget.amounts import (
+	PROJECT_BUDGET,
+	GL_ENTRY,
+	can_read_doctype,
 	load_budget_buckets,
 	load_gl_fact_buckets,
 	merge_bucket_stores,
@@ -646,6 +649,21 @@ def run_get_project_budget_grid(form_input: ProjectBudgetGridFormInput) -> Proje
 	)
 	# Default off — same as Project Budget Plan vs Forecast show_zero_rows.
 	show_zero_rows = _as_bool(form_input.get("show_zero_rows"))
+	can_read_pb = can_read_doctype(PROJECT_BUDGET)
+	can_read_gl = can_read_doctype(GL_ENTRY)
+	if not can_read_pb and not can_read_gl:
+		return {
+			"project": project,
+			"period_type": period_type,
+			"view_mode": view_mode,
+			"show_zero_rows": show_zero_rows,
+			"periods": [],
+			"rows": [],
+			"summary_rows": [],
+			"can_read_project_budget": False,
+			"can_read_gl_entry": False,
+		}
+
 	periods = get_display_periods(project, period_type, view_mode)
 	accounts = _load_pl_accounts(company)
 	root_types = {a["name"]: a.get("root_type") or "" for a in accounts}
@@ -682,4 +700,6 @@ def run_get_project_budget_grid(form_input: ProjectBudgetGridFormInput) -> Proje
 		"periods": periods,
 		"rows": rows,
 		"summary_rows": summary_rows,
+		"can_read_project_budget": can_read_pb,
+		"can_read_gl_entry": can_read_gl,
 	}
