@@ -275,7 +275,7 @@ export function startedByTypingDigit(params) {
 	return typeof key === "string" && /^\d$/.test(key);
 }
 
-/** Calculated forecast (no own_*) → empty editor. Keep a just-typed digit. */
+/** Non-own forecast (empty 0 / rollup) → empty editor. Keep typed digit or own 0. */
 export function onCellEditingStarted(frm, params) {
 	const field = params?.colDef?.field || "";
 	if (!field.startsWith("actual_")) {

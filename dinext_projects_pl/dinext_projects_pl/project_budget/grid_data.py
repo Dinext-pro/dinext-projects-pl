@@ -249,7 +249,13 @@ def _apply_amounts_from_buckets(
 		key = period["key"]
 		month_keys = period_month_keys(period)
 		plan = sum(_to_float(combined.get(f"plan_{mk}")) for mk in month_keys)
-		forecast = sum(_to_float(combined.get(f"forecast_{mk}")) for mk in month_keys)
+		forecast_parts = [
+			_to_float(combined[f"forecast_{mk}"])
+			for mk in month_keys
+			if f"forecast_{mk}" in combined
+		]
+		own_forecast = sum(forecast_parts) if forecast_parts else None
+		forecast = own_forecast if own_forecast is not None else 0.0
 		fact = sum(_to_float(combined.get(f"fact_{mk}")) for mk in month_keys)
 		actual = _resolve_actual(forecast, fact, period["is_past"], view_mode)
 		row[f"plan_{key}"] = plan  # type: ignore[literal-required]
@@ -257,7 +263,7 @@ def _apply_amounts_from_buckets(
 		row[f"fact_{key}"] = fact  # type: ignore[literal-required]
 		# Own bucket amounts (before tree rollup) — save must not use rolled head totals.
 		row[f"own_plan_{key}"] = plan  # type: ignore[literal-required]
-		row[f"own_forecast_{key}"] = forecast  # type: ignore[literal-required]
+		row[f"own_forecast_{key}"] = own_forecast  # type: ignore[literal-required]
 		row[f"own_fact_{key}"] = fact  # type: ignore[literal-required]
 		row[f"actual_{key}"] = actual  # type: ignore[literal-required]
 		row[f"delta_{key}"] = _calc_delta_pct(plan, actual)  # type: ignore[literal-required]
@@ -276,9 +282,14 @@ def _apply_row_totals(row: ProjectBudgetRow, periods: list[ProjectBudgetDisplayP
 	row["delta_total"] = _calc_delta_pct(plan_total, actual_total)  # type: ignore[literal-required]
 
 
-def _has_own_amount(value: object) -> bool:
-	"""Explicit 0 = absent: display falls back to children sum (report analog)."""
+def _has_own_plan(value: object) -> bool:
+	"""Plan: explicit 0 = absent, display falls back to children sum."""
 	return _to_float(value) > 0
+
+
+def _has_own_forecast(value: object) -> bool:
+	"""Forecast: None = empty (paint 0 / children). 0 = manual own."""
+	return value is not None
 
 
 def _rollup_parent_metric(
@@ -287,11 +298,12 @@ def _rollup_parent_metric(
 	period_keys: list[str],
 	own_prefix: str,
 	display_prefix: str,
+	has_own,
 ) -> None:
 	for key in period_keys:
-		own = _to_float(parent.get(f"{own_prefix}_{key}"))
-		if _has_own_amount(own):
-			parent[f"{display_prefix}_{key}"] = own  # type: ignore[literal-required]
+		own = parent.get(f"{own_prefix}_{key}")
+		if has_own(own):
+			parent[f"{display_prefix}_{key}"] = _to_float(own)  # type: ignore[literal-required]
 			continue
 		total = 0.0
 		for child in children:
@@ -305,7 +317,7 @@ def _rollup_parent_plan(
 	period_keys: list[str],
 ) -> None:
 	"""Parent plan = own if set, else sum of child display plans (incl. risk)."""
-	_rollup_parent_metric(parent, children, period_keys, "own_plan", "plan")
+	_rollup_parent_metric(parent, children, period_keys, "own_plan", "plan", _has_own_plan)
 
 
 def _rollup_parent_forecast(
@@ -313,8 +325,10 @@ def _rollup_parent_forecast(
 	children: list[ProjectBudgetRow],
 	period_keys: list[str],
 ) -> None:
-	"""Parent forecast = own if set, else sum of child display forecasts (incl. risk)."""
-	_rollup_parent_metric(parent, children, period_keys, "own_forecast", "forecast")
+	"""Parent forecast = own if set (incl. 0), else sum of child display forecasts."""
+	_rollup_parent_metric(
+		parent, children, period_keys, "own_forecast", "forecast", _has_own_forecast
+	)
 
 
 def _rollup_child_fact(
@@ -601,7 +615,7 @@ def _row_has_value(row: ProjectBudgetRow, periods: list[ProjectBudgetDisplayPeri
 		key = period["key"]
 		if (
 			_to_float(row.get(f"own_plan_{key}"))
-			or _to_float(row.get(f"own_forecast_{key}"))
+			or row.get(f"own_forecast_{key}") is not None
 			or _to_float(row.get(f"own_fact_{key}"))
 		):
 			return True

@@ -32,7 +32,8 @@ test("own forecast: only while cell shows forecast", () => {
 	const own = row({ own_forecast: 50, forecast: 50 });
 	assert.equal(isOwnForecastCell(own, FUTURE), true);
 	assert.equal(isOwnForecastCell(own, PAST), false);
-	assert.equal(isOwnForecastCell(row({ own_forecast: 0, forecast: 80 }), FUTURE), false);
+	assert.equal(isOwnForecastCell(row({ own_forecast: 0, forecast: 0 }), FUTURE), true);
+	assert.equal(isOwnForecastCell(row({ own_forecast: null, forecast: 80 }), FUTURE), false);
 });
 
 test("leaf with physical amount still marks (Ivan)", () => {

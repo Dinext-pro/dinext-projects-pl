@@ -55,15 +55,8 @@ export function formatAmount(params) {
 		.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 }
 
-/** Empty / zero forecast stays blank. Do not paint 0 on unused cells. */
+/** Forecast paints 0 like plan (empty / rollup / own). */
 export function formatForecastAmount(params) {
-	if (isProfitabilityRow(params.data)) {
-		return formatAmount(params);
-	}
-	const n = toNumber(params.value);
-	if (n == null || n === 0) {
-		return "";
-	}
 	return formatAmount(params);
 }
 
@@ -141,11 +134,11 @@ function withoutColumnFilter(col) {
 	return { ...col, filterable: false };
 }
 
-/** Amount editor: digits + decimal; reject letters / negatives. Empty → 0. */
-function plAmountValueParser(params) {
+/** Amount editor: digits + decimal; reject letters / negatives. Empty → null (clear). */
+export function plAmountValueParser(params) {
 	const raw = params.newValue;
 	if (raw == null || raw === "") {
-		return 0;
+		return null;
 	}
 	if (typeof raw === "number") {
 		if (!Number.isFinite(raw) || raw < 0) {
@@ -155,7 +148,7 @@ function plAmountValueParser(params) {
 	}
 	const trimmed = String(raw).trim().replace(/\s/g, "");
 	if (!trimmed) {
-		return 0;
+		return null;
 	}
 	if (!/^\d+([.,]\d+)?$/.test(trimmed)) {
 		return params.oldValue;
