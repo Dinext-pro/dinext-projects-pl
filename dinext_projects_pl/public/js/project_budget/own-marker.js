@@ -1,13 +1,27 @@
-/** Physical bucket (own_*) vs rolled parent display. 0 = absent. */
+/** Physical bucket (own_*). Forecast: null = empty, 0 = manual own. Plan: 0 = absent. */
 
 export const OWN_CELL_CLASS = "project-budget-cell--own";
+
+function ownRaw(row, metric, periodKey) {
+	return row?.[`own_${metric}_${periodKey}`];
+}
 
 export function hasOwnPhysicalAmount(row, metric, periodKey) {
 	if (!row || row.summary_kind || !periodKey) {
 		return false;
 	}
-	const n = Number(row[`own_${metric}_${periodKey}`]);
-	return Number.isFinite(n) && n > 0;
+	const raw = ownRaw(row, metric, periodKey);
+	if (raw == null || raw === "") {
+		return false;
+	}
+	const n = Number(raw);
+	if (!Number.isFinite(n)) {
+		return false;
+	}
+	if (metric === "forecast") {
+		return true;
+	}
+	return n > 0;
 }
 
 export function isOwnPlanCell(row, periodKey) {

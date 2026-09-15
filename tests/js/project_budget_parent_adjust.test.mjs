@@ -25,7 +25,7 @@ function row(id, overrides = {}) {
 		children: overrides.children ?? [],
 		task: overrides.task ?? null,
 		risk: overrides.risk ?? null,
-		[`own_forecast_${KEY}`]: overrides.own_forecast ?? 0,
+		[`own_forecast_${KEY}`]: overrides.own_forecast !== undefined ? overrides.own_forecast : null,
 		[`forecast_${KEY}`]: overrides.forecast ?? overrides.own_forecast ?? 0,
 		[`own_plan_${KEY}`]: overrides.own_plan ?? 0,
 		[`plan_${KEY}`]: overrides.plan ?? overrides.own_plan ?? 0,
@@ -83,7 +83,7 @@ test("aggregated parent (own 0) → no own write, display grows via rollup", () 
 		forecast: 40,
 	});
 	const account = row("Acc-1", {
-		own_forecast: 0,
+		own_forecast: null,
 		forecast: 40,
 		children: [child],
 	});
@@ -96,7 +96,7 @@ test("aggregated parent (own 0) → no own write, display grows via rollup", () 
 
 	const simulated = applyUpdatesToTree([account], updates);
 	assert.equal(displayedForecast(simulated[0]), 90);
-	assert.equal(simulated[0][`own_forecast_${KEY}`], 0);
+	assert.equal(simulated[0][`own_forecast_${KEY}`], null);
 	assert.ok(simulated[0].children.some((c) => c.risk === "RISK-1"));
 });
 
@@ -131,7 +131,7 @@ test("risk on Task: agg task grows via rollup, own account is raised", () => {
 		account: "Acc-1",
 		task: "TASK-1",
 		dimensions: [{ doc: "Task", docname: "TASK-1" }],
-		own_forecast: 0,
+		own_forecast: null,
 		forecast: 0,
 	});
 	const account = row("Acc-1", {
@@ -154,7 +154,7 @@ test("risk on Task: agg task grows via rollup, own account is raised", () => {
 	const simulated = applyUpdatesToTree([account], updates);
 	const taskRow = simulated[0].children.find((c) => c.task === "TASK-1");
 	assert.equal(displayedForecast(taskRow), 50);
-	assert.equal(taskRow[`own_forecast_${KEY}`], 0);
+	assert.equal(taskRow[`own_forecast_${KEY}`], null);
 });
 
 test("server-shaped Task risk (no row.task, Task in dims) still raises parents", () => {

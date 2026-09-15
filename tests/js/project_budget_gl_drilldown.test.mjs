@@ -318,9 +318,17 @@ describe("onCellEditingStarted", () => {
 		onCellEditingStarted(frm, {
 			eGridCell: { querySelector: () => calculatedInput },
 			colDef: { field: "actual_2026_12" },
-			data: { account: "Services - TC", own_forecast_2026_12: 0 },
+			data: { account: "Services - TC" },
 		});
 		assert.equal(calculatedInput.value, "");
+
+		const ownZeroInput = { value: "0" };
+		onCellEditingStarted(frm, {
+			eGridCell: { querySelector: () => ownZeroInput },
+			colDef: { field: "actual_2026_12" },
+			data: { account: "Services - TC", own_forecast_2026_12: 0 },
+		});
+		assert.equal(ownZeroInput.value, "0");
 
 		const ownInput = { value: "400" };
 		onCellEditingStarted(frm, {
@@ -338,7 +346,7 @@ describe("onCellEditingStarted", () => {
 		onCellEditingStarted(frm, {
 			event: { key: "5" },
 			colDef: { field: "actual_2026_12" },
-			data: { account: "Services - TC", own_forecast_2026_12: 0 },
+			data: { account: "Services - TC" },
 			api: {
 				getCellEditorInstances: () => [
 					{
@@ -360,7 +368,7 @@ describe("onCellEditingStarted", () => {
 		let setTo;
 		onCellEditingStarted(frm, {
 			colDef: { field: "actual_2026_12" },
-			data: { account: "Services - TC", own_forecast_2026_12: 0 },
+			data: { account: "Services - TC" },
 			api: {
 				getCellEditorInstances: () => [
 					{
