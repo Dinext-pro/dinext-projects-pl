@@ -25,7 +25,15 @@ class TestProjectBudgetGridFlags(FrappeTestCase):
 		for prefix in ("plan", "forecast", "own_fact", "fact", "actual"):
 			row[f"{prefix}_{self.KEY}"] = float(amounts.get(prefix, 0))
 		row[f"own_plan_{self.KEY}"] = float(amounts.get("own_plan", amounts.get("plan", 0)))
-		row[f"own_forecast_{self.KEY}"] = float(amounts.get("own_forecast", amounts.get("forecast", 0)))
+		if "own_forecast" in amounts:
+			own_forecast = amounts["own_forecast"]
+		elif amounts.get("forecast"):
+			own_forecast = amounts["forecast"]
+		else:
+			own_forecast = None
+		row[f"own_forecast_{self.KEY}"] = (
+			None if own_forecast is None else float(own_forecast)
+		)
 		return row
 
 	def test_row_has_value_uses_own_not_rolled_actual(self):
@@ -113,7 +121,7 @@ class TestProjectBudgetGridFlags(FrappeTestCase):
 		parent = self._row(id="parent", forecast=0)
 		_rollup_child_fact(parent, [child_a, child_b], self.PERIODS, "forecast_and_fact")
 		self.assertEqual(parent[f"forecast_{self.KEY}"], 70)
-		self.assertEqual(parent[f"own_forecast_{self.KEY}"], 0)
+		self.assertIsNone(parent.get(f"own_forecast_{self.KEY}"))
 
 	def test_forecast_rollup_keeps_own(self):
 		child = self._row(id="c", forecast=40)
@@ -121,6 +129,19 @@ class TestProjectBudgetGridFlags(FrappeTestCase):
 		_rollup_child_fact(parent, [child], self.PERIODS, "forecast_and_fact")
 		self.assertEqual(parent[f"forecast_{self.KEY}"], 100)
 		self.assertEqual(parent[f"own_forecast_{self.KEY}"], 100)
+
+	def test_forecast_rollup_keeps_explicit_own_zero(self):
+		child = self._row(id="c", forecast=40)
+		parent = self._row(id="parent", forecast=0, own_forecast=0)
+		_rollup_child_fact(parent, [child], self.PERIODS, "forecast_and_fact")
+		self.assertEqual(parent[f"forecast_{self.KEY}"], 0)
+		self.assertEqual(parent[f"own_forecast_{self.KEY}"], 0)
+
+	def test_row_has_value_keeps_explicit_own_forecast_zero(self):
+		own_zero = self._row(own_forecast=0, forecast=0)
+		self.assertTrue(_row_has_value(own_zero, self.PERIODS))
+		empty = self._row()
+		self.assertFalse(_row_has_value(empty, self.PERIODS))
 
 	def test_plan_and_forecast_rollup_includes_risk_children(self):
 		task = self._row(id="task", plan=40, forecast=25)

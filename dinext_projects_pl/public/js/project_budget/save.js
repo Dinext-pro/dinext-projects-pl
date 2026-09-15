@@ -62,33 +62,71 @@ function toSaveAmount(value) {
 	return Number(value || 0);
 }
 
+function isClearEditorValue(value) {
+	return value === null || value === undefined || value === "";
+}
+
+function periodKeyOfChange(change) {
+	const field = change.field || "";
+	return field.startsWith("actual_") ? field.slice("actual_".length) : "";
+}
+
+/** Explicit own including 0. null/"" = empty cell (painted 0 / rollup). */
+function ownForecastOf(change) {
+	const periodKey = periodKeyOfChange(change);
+	if (!periodKey) {
+		return null;
+	}
+	const raw = change.row?.[`own_forecast_${periodKey}`];
+	if (raw == null || raw === "") {
+		return null;
+	}
+	const n = Number(raw);
+	return Number.isFinite(n) ? n : null;
+}
+
 /** Editable forecast, not displayed rollup (`actual_*` / DinextTable oldValue). */
 function previousForecastAmount(change) {
-	const field = change.field || "";
-	const periodKey = field.startsWith("actual_") ? field.slice("actual_".length) : "";
-	const own = periodKey ? change.row?.[`own_forecast_${periodKey}`] : undefined;
+	const own = ownForecastOf(change);
 	if (own != null) {
 		return own;
 	}
 	return change.oldValue;
 }
 
-/** Diff only (skip 0→0 / empty). Zero is a valid new forecast value. */
+function forecastEditorIntent(change) {
+	if (isClearEditorValue(change.newValue)) {
+		return { kind: "clear" };
+	}
+	return { kind: "set", value: toSaveAmount(change.newValue) };
+}
+
+/** Diff only. Typed 0 = own. Empty editor / Delete = clear own. */
 export function buildSavePayload(changes) {
 	return changes
 		.filter((change) => change.field?.startsWith("actual_") && !change.row?.summary_kind)
-		.filter((change) => toSaveAmount(change.newValue) !== toSaveAmount(previousForecastAmount(change)))
+		.filter((change) => {
+			const intent = forecastEditorIntent(change);
+			const own = ownForecastOf(change);
+			if (intent.kind === "clear") {
+				return own != null;
+			}
+			return own == null || intent.value !== own;
+		})
 		.map((change) => {
 			const periodKey = change.field.slice("actual_".length);
 			const [year, month] = periodKey.split("_");
 			const row = change.row || {};
+			const intent = forecastEditorIntent(change);
+			const clearing = intent.kind === "clear";
 			return {
 				account: row.account,
 				dimensions: row.dimensions || [],
 				period_key: periodKey,
 				year: Number(year),
 				month: Number(month),
-				value: toSaveAmount(change.newValue),
+				value: clearing ? null : intent.value,
+				clear: clearing,
 			};
 		})
 		.filter((item) => item.account);
@@ -138,7 +176,11 @@ function patchLocalForecast(frm, changes) {
 		const periodKey = change.field.slice("actual_".length);
 		const row = flat.find((r) => r.id === change.row?.id);
 		if (!row) continue;
-		const value = Number(change.newValue || 0);
+		if (isClearEditorValue(change.newValue)) {
+			row[`own_forecast_${periodKey}`] = null;
+			continue;
+		}
+		const value = toSaveAmount(change.newValue);
 		row[`own_forecast_${periodKey}`] = value;
 		row[`forecast_${periodKey}`] = value;
 		row[`actual_${periodKey}`] = value;

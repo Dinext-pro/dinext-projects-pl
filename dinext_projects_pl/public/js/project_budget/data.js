@@ -65,16 +65,15 @@ function applyFactRollup(row, periods, viewMode) {
 			}
 			row[`plan_${key}`] = plan;
 		}
-		const ownForecast = toNum(row[`own_forecast_${key}`]);
+		const ownForecastRaw = row[`own_forecast_${key}`];
 		let forecast = toNum(row[`forecast_${key}`]);
-		if (row[`own_forecast_${key}`] != null) {
-			if (ownForecast > 0) {
-				forecast = ownForecast;
-			} else {
-				forecast = 0;
-				for (const child of children) {
-					forecast += toNum(child[`forecast_${key}`]);
-				}
+		if (ownForecastRaw != null && ownForecastRaw !== "") {
+			forecast = toNum(ownForecastRaw);
+			row[`forecast_${key}`] = forecast;
+		} else {
+			forecast = 0;
+			for (const child of children) {
+				forecast += toNum(child[`forecast_${key}`]);
 			}
 			row[`forecast_${key}`] = forecast;
 		}
@@ -309,9 +308,10 @@ function buildSummaryFromRoots(rows, periods, accumulated, viewMode) {
 function rowHasOwnValue(row, periods) {
 	for (const period of periods || []) {
 		const key = period.key;
+		const ownForecast = row[`own_forecast_${key}`];
 		if (
 			toNum(row[`own_plan_${key}`]) ||
-			toNum(row[`own_forecast_${key}`]) ||
+			(ownForecast != null && ownForecast !== "") ||
 			toNum(row[`own_fact_${key}`])
 		) {
 			return true;

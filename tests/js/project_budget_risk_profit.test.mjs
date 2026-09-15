@@ -25,7 +25,7 @@ function amt(overrides, key) {
 	return {
 		[`own_plan_${key}`]: overrides.own_plan ?? 0,
 		[`plan_${key}`]: plan,
-		[`own_forecast_${key}`]: overrides.own_forecast ?? 0,
+		[`own_forecast_${key}`]: overrides.own_forecast !== undefined ? overrides.own_forecast : null,
 		[`forecast_${key}`]: forecast,
 		[`own_fact_${key}`]: overrides.own_fact ?? 0,
 		[`fact_${key}`]: fact,
@@ -77,7 +77,7 @@ test("agg expense root + risk child: profit uses expense+risk once", () => {
 	const expense = row("exp", {
 		root_type: "Expense",
 		own_plan: 0,
-		own_forecast: 0,
+		own_forecast: null,
 		children: [leaf, risk],
 	});
 
@@ -183,7 +183,7 @@ test("agg expense + risk: chart does not double-count risk", () => {
 	const expense = row("exp", {
 		root_type: "Expense",
 		own_plan: 0,
-		own_forecast: 0,
+		own_forecast: null,
 		children: [leaf, risk],
 	});
 

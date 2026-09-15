@@ -31,9 +31,20 @@ export function dimsEqual(a, b) {
 	return dimsKey(a) === dimsKey(b);
 }
 
+/** Explicit own including 0. null/"" = empty (display / children rollup). */
+export function ownForecastAmount(row, key) {
+	const raw = row?.[`own_forecast_${key}`];
+	if (raw == null || raw === "") {
+		return null;
+	}
+	const n = Number(raw);
+	return Number.isFinite(n) ? n : null;
+}
+
 export function forecastOf(row, key) {
-	if (row?.[`own_forecast_${key}`] != null) {
-		return Number(row[`own_forecast_${key}`] || 0);
+	const own = ownForecastAmount(row, key);
+	if (own != null) {
+		return own;
 	}
 	return Number(row?.[`forecast_${key}`] ?? row?.[`actual_${key}`] ?? 0);
 }
@@ -60,8 +71,8 @@ export function childForecastSum(row, key, excludeId = null) {
 	let sum = 0;
 	for (const child of row.children || []) {
 		if (excludeId && child.id === excludeId) continue;
-		const own = forecastOf(child, key);
-		if (own) {
+		const own = ownForecastAmount(child, key);
+		if (own != null) {
 			sum += own;
 		} else {
 			sum += childForecastSum(child, key);
@@ -70,16 +81,17 @@ export function childForecastSum(row, key, excludeId = null) {
 	return sum;
 }
 
+/** Envelope only when parent has explicit own (incl. 0). Rolled display is not a cap. */
 export function parentForecastLimit(rows, row, key) {
 	let current = row;
 	while (current) {
 		const parent = findParent(rows, current.id);
 		if (!parent) return null;
-		const parentForecast = forecastOf(parent, key);
-		if (parentForecast > 0) {
+		const parentOwn = ownForecastAmount(parent, key);
+		if (parentOwn != null) {
 			const siblings = childForecastSum(parent, key, current.id);
 			return {
-				maxAllowed: parentForecast - siblings,
+				maxAllowed: parentOwn - siblings,
 				parent,
 				parentLabel: parent.account_label || parent.account,
 			};
