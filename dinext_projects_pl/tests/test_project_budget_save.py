@@ -47,6 +47,8 @@ class TestProjectBudgetSave(FrappeTestCase):
 		self.assertEqual(result["saved"], 2)
 		self.assertEqual(self._expected(self.MONTH_A), 0)
 		self.assertEqual(self._expected(self.MONTH_B), 0)
+		self.assertTrue(self._has_expected(self.MONTH_A))
+		self.assertTrue(self._has_expected(self.MONTH_B))
 
 	def test_invalid_change_persists_nothing(self):
 		with self.assertRaises(frappe.ValidationError):
@@ -78,12 +80,31 @@ class TestProjectBudgetSave(FrappeTestCase):
 			"value": value,
 		}
 
-	def _expected(self, month):
+	def _amount_row(self, month):
 		doc = frappe.get_doc("Project Budget", self.budget.name)
 		for row in doc.project_budget_amount:
 			if row.pba_year == self.YEAR and row.pba_month == month:
-				return flt(row.pba_expected)
+				return row
 		raise AssertionError(f"Period {self.YEAR}-{month} not found")
+
+	def _expected(self, month):
+		return flt(self._amount_row(month).pba_expected)
+
+	def _has_expected(self, month):
+		return bool(self._amount_row(month).pba_has_expected)
+
+	def test_clear_removes_own_flag_typed_zero_keeps_it(self):
+		run_save_project_budget_forecast(
+			{"project": self.project.name, "changes": [self._change(self.MONTH_A, None)]}
+		)
+		self.assertEqual(self._expected(self.MONTH_A), 0)
+		self.assertFalse(self._has_expected(self.MONTH_A))
+
+		run_save_project_budget_forecast(
+			{"project": self.project.name, "changes": [self._change(self.MONTH_A, 0)]}
+		)
+		self.assertEqual(self._expected(self.MONTH_A), 0)
+		self.assertTrue(self._has_expected(self.MONTH_A))
 
 	@classmethod
 	def _get_expense_account(cls, company):

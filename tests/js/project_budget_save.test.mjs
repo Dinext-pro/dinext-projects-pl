@@ -22,18 +22,41 @@ function values(payload) {
 	return payload.map((item) => item.value);
 }
 
-test("buildSavePayload skips empty/0→0", () => {
-	assert.deepEqual(values(buildSavePayload([change({ oldValue: null, newValue: 0 })])), []);
+test("buildSavePayload writes typed 0 as own, skips empty clear", () => {
+	assert.deepEqual(values(buildSavePayload([change({ oldValue: null, newValue: 0 })])), [0]);
 	assert.deepEqual(values(buildSavePayload([change({ oldValue: undefined, newValue: "" })])), []);
-	assert.deepEqual(values(buildSavePayload([change({ oldValue: "", newValue: 0 })])), []);
-	assert.deepEqual(values(buildSavePayload([change({ oldValue: 0, newValue: 0 })])), []);
-	assert.deepEqual(values(buildSavePayload([change({ oldValue: "0", newValue: 0 })])), []);
-	assert.deepEqual(values(buildSavePayload([change({ oldValue: 5, newValue: 5 })])), []);
+	assert.deepEqual(values(buildSavePayload([change({ oldValue: "", newValue: 0 })])), [0]);
+	assert.deepEqual(
+		values(
+			buildSavePayload([
+				change({
+					oldValue: 0,
+					newValue: 0,
+					row: { account: "Acc-1", dimensions: [], own_forecast_2026_8: 0 },
+				}),
+			]),
+		),
+		[],
+	);
+	assert.deepEqual(
+		values(
+			buildSavePayload([
+				change({
+					oldValue: 5,
+					newValue: 5,
+					row: { account: "Acc-1", dimensions: [], own_forecast_2026_8: 5 },
+				}),
+			]),
+		),
+		[],
+	);
 });
 
-test("buildSavePayload keeps 5→0 delete", () => {
-	assert.deepEqual(values(buildSavePayload([change({ oldValue: 5, newValue: 0 })])), [0]);
-	assert.deepEqual(values(buildSavePayload([change({ oldValue: 5, newValue: "" })])), [0]);
+test("buildSavePayload typed 0 stays own, empty editor clears own", () => {
+	const ownRow = { account: "Acc-1", dimensions: [], own_forecast_2026_8: 5 };
+	assert.deepEqual(values(buildSavePayload([change({ oldValue: 5, newValue: 0, row: ownRow })])), [0]);
+	assert.deepEqual(values(buildSavePayload([change({ oldValue: 5, newValue: "", row: ownRow })])), [null]);
+	assert.equal(buildSavePayload([change({ oldValue: 5, newValue: "", row: ownRow })])[0].clear, true);
 });
 
 test("buildSavePayload keeps 0→5 write", () => {
@@ -41,7 +64,7 @@ test("buildSavePayload keeps 0→5 write", () => {
 	assert.deepEqual(values(buildSavePayload([change({ oldValue: null, newValue: 5 })])), [5]);
 });
 
-test("buildSavePayload skips empty parent cell (forecast_only no-op)", () => {
+test("buildSavePayload skips empty parent clear, writes typed 0", () => {
 	const parent = {
 		account: "Расходы - Подрядчики",
 		dimensions: [],
@@ -50,7 +73,7 @@ test("buildSavePayload skips empty parent cell (forecast_only no-op)", () => {
 	};
 	assert.deepEqual(
 		values(buildSavePayload([change({ oldValue: null, newValue: 0, row: parent })])),
-		[],
+		[0],
 	);
 	assert.deepEqual(
 		values(buildSavePayload([change({ oldValue: 0, newValue: "", row: parent })])),
@@ -58,18 +81,17 @@ test("buildSavePayload skips empty parent cell (forecast_only no-op)", () => {
 	);
 });
 
-test("buildSavePayload skips empty parent when oldValue is displayed rollup", () => {
+test("buildSavePayload writes typed 0 over rollup, skips empty editor on rollup", () => {
 	const parent = {
 		account: "Подрядчики - Dinext",
 		dimensions: [],
 		summary_kind: null,
-		own_forecast_2026_8: 0,
 		actual_2026_8: 3539,
 		children: [{ account: "Child" }],
 	};
 	assert.deepEqual(
 		values(buildSavePayload([change({ oldValue: 3539, newValue: 0, row: parent })])),
-		[],
+		[0],
 	);
 	assert.deepEqual(
 		values(buildSavePayload([change({ oldValue: 3539, newValue: "", row: parent })])),
@@ -82,10 +104,10 @@ test("buildSavePayload keeps parent write when own is 0 and editor has a value",
 		account: "Подрядчики - Dinext",
 		dimensions: [],
 		own_forecast_2026_8: 0,
-		actual_2026_8: 3539,
+		actual_2026_8: 0,
 	};
 	assert.deepEqual(
-		values(buildSavePayload([change({ oldValue: 3539, newValue: 100, row: parent })])),
+		values(buildSavePayload([change({ oldValue: 0, newValue: 100, row: parent })])),
 		[100],
 	);
 });
@@ -105,7 +127,7 @@ test("buildSavePayload keeps parent own delete even if display equals own", () =
 
 test("buildSavePayload drops no-ops from mixed batch", () => {
 	const payload = buildSavePayload([
-		change({ oldValue: null, newValue: 0 }),
+		change({ oldValue: null, newValue: "" }),
 		change({ oldValue: 5, newValue: 0, row: { account: "Acc-2", dimensions: [] } }),
 	]);
 	assert.equal(payload.length, 1);
@@ -129,7 +151,7 @@ test("restoreNoOpDisplay paints 0 back, does not write own", () => {
 	const row = {
 		id: "leaf-1",
 		account: "Acc-1",
-		own_forecast_2026_8: 0,
+		own_forecast_2026_8: null,
 		actual_2026_8: null,
 	};
 	restoreNoOpDisplay(
@@ -137,22 +159,22 @@ test("restoreNoOpDisplay paints 0 back, does not write own", () => {
 		[change({ oldValue: 0, newValue: "", row })],
 	);
 	assert.equal(row.actual_2026_8, 0);
-	assert.equal(row.own_forecast_2026_8, 0);
+	assert.equal(row.own_forecast_2026_8, null);
 });
 
 test("restoreNoOpDisplay keeps parent rollup, does not write own 0", () => {
 	const row = {
 		id: "parent-1",
 		account: "Подрядчики - Dinext",
-		own_forecast_2026_8: 0,
+		own_forecast_2026_8: null,
 		actual_2026_8: 0,
 	};
 	restoreNoOpDisplay(
 		{ project_budget: { rows: [row] } },
-		[change({ oldValue: 3539, newValue: 0, row })],
+		[change({ oldValue: 3539, newValue: "", row })],
 	);
 	assert.equal(row.actual_2026_8, 3539);
-	assert.equal(row.own_forecast_2026_8, 0);
+	assert.equal(row.own_forecast_2026_8, null);
 });
 
 test("onSaveCells coalesces two deletes on one account into one API call", async () => {
@@ -182,20 +204,20 @@ test("onSaveCells coalesces two deletes on one account into one API call", async
 	try {
 		const [a, b] = await Promise.all([
 			onSaveCells(frm, {
-				changes: [change({ field: "actual_2026_8", oldValue: 5, newValue: 0, row })],
+				changes: [change({ field: "actual_2026_8", oldValue: 5, newValue: "", row })],
 			}),
 			onSaveCells(frm, {
-				changes: [change({ field: "actual_2026_9", oldValue: 7, newValue: 0, row })],
+				changes: [change({ field: "actual_2026_9", oldValue: 7, newValue: "", row })],
 			}),
 		]);
 		assert.equal(a, true);
 		assert.equal(b, true);
 		assert.equal(payloads.length, 1);
 		assert.deepEqual(
-			payloads[0].map((item) => [item.period_key, item.value]),
+			payloads[0].map((item) => [item.period_key, item.value, item.clear]),
 			[
-				["2026_8", 0],
-				["2026_9", 0],
+				["2026_8", null, true],
+				["2026_9", null, true],
 			],
 		);
 	} finally {
@@ -209,13 +231,13 @@ test("onSaveCells no-op restores display without API", async () => {
 	const leaf = {
 		id: "leaf-1",
 		account: "Acc-1",
-		own_forecast_2026_8: 0,
+		own_forecast_2026_8: null,
 		actual_2026_8: null,
 	};
 	const parent = {
 		id: "parent-1",
 		account: "Подрядчики - Dinext",
-		own_forecast_2026_8: 0,
+		own_forecast_2026_8: null,
 		actual_2026_8: 0,
 	};
 	const applied = [];
@@ -247,9 +269,9 @@ test("onSaveCells no-op restores display without API", async () => {
 		assert.equal(parentOk, true);
 		assert.equal(xcalls, 0);
 		assert.equal(leaf.actual_2026_8, 0);
-		assert.equal(leaf.own_forecast_2026_8, 0);
+		assert.equal(leaf.own_forecast_2026_8, null);
 		assert.equal(parent.actual_2026_8, 3539);
-		assert.equal(parent.own_forecast_2026_8, 0);
+		assert.equal(parent.own_forecast_2026_8, null);
 		assert.deepEqual(
 			applied.map((item) => item.value),
 			[0, 3539],
@@ -341,6 +363,47 @@ test("onValidateCells allows decrease when parent maxAllowed is negative", () =>
 						oldValue: 312333,
 						newValue: 200000,
 						row: team,
+					}),
+				],
+			},
+		);
+		assert.equal(ok, true);
+		assert.deepEqual(messages, []);
+	});
+});
+
+test("onValidateCells allows write on empty cell under rolled parent", () => {
+	const sibling = {
+		id: "sib-1",
+		account: "Уже заполнено",
+		own_forecast_2026_8: 5000,
+		forecast_2026_8: 5000,
+		children: [],
+	};
+	const empty = {
+		id: "empty-1",
+		account: "Пустая статья",
+		own_forecast_2026_8: null,
+		forecast_2026_8: 0,
+		children: [],
+	};
+	const parent = {
+		id: "rev-1",
+		account: "Работы / услуги (выручка) - Dinext",
+		account_label: "Работы / услуги (выручка)",
+		own_forecast_2026_8: null,
+		forecast_2026_8: 5000,
+		children: [sibling, empty],
+	};
+	withValidateFrappe((messages) => {
+		const ok = onValidateCells(
+			{ project_budget: { rows: [parent] } },
+			{
+				changes: [
+					change({
+						oldValue: 0,
+						newValue: 1200,
+						row: empty,
 					}),
 				],
 			},

@@ -26,7 +26,8 @@ class ProjectBudgetSaveForecastChange(TypedDict, total=False):
 	period_key: str
 	year: int
 	month: int
-	value: float | int | str
+	value: float | int | str | None
+	clear: bool
 
 
 class ProjectBudgetSaveForecastFormInput(TypedDict, total=False):

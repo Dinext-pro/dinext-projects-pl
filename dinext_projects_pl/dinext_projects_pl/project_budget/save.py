@@ -74,7 +74,15 @@ def _get_or_create_project_budget(
 	return doc
 
 
-def _parse_change(change: ProjectBudgetSaveForecastChange) -> tuple[str, int, int, float, list[dict[str, str]]]:
+def _is_clear_change(change: ProjectBudgetSaveForecastChange) -> bool:
+	if change.get("clear"):
+		return True
+	return change.get("value") is None
+
+
+def _parse_change(
+	change: ProjectBudgetSaveForecastChange,
+) -> tuple[str, int, int, float | None, list[dict[str, str]]]:
 	account = (change.get("account") or "").strip()
 	if not account:
 		frappe.throw(_("Account is required"))
@@ -90,18 +98,26 @@ def _parse_change(change: ProjectBudgetSaveForecastChange) -> tuple[str, int, in
 	if not year or not month:
 		frappe.throw(_("Period year/month is required"))
 
-	return account, year, month, flt(change.get("value")), _parse_dimensions(change.get("dimensions"))
+	value = None if _is_clear_change(change) else flt(change.get("value"))
+	return account, year, month, value, _parse_dimensions(change.get("dimensions"))
 
 
-def _apply_period_value(doc, year: int, month: int, value: float) -> None:
+def _apply_period_value(doc, year: int, month: int, value: float | None) -> None:
 	existing = None
 	for row in doc.project_budget_amount or []:
 		if cint(row.pba_year) == year and cint(row.pba_month) == month:
 			existing = row
 			break
 
+	if value is None:
+		if existing:
+			existing.pba_expected = 0
+			existing.pba_has_expected = 0
+		return
+
 	if existing:
 		existing.pba_expected = value
+		existing.pba_has_expected = 1
 	else:
 		doc.append(
 			"project_budget_amount",
@@ -109,6 +125,7 @@ def _apply_period_value(doc, year: int, month: int, value: float) -> None:
 				"pba_year": year,
 				"pba_month": month,
 				"pba_expected": value,
+				"pba_has_expected": 1,
 			},
 		)
 

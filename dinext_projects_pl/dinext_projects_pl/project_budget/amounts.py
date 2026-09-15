@@ -6,7 +6,7 @@ from __future__ import annotations
 import frappe
 from frappe.query_builder import DocType
 from frappe.query_builder.functions import Coalesce, Sum
-from frappe.utils import add_days, get_first_day, getdate
+from frappe.utils import add_days, cint, get_first_day, getdate
 
 from dinext_projects_pl.models import BucketAmounts
 from dinext_projects_pl.dinext_projects_pl.project_budget.dimensions import (
@@ -179,16 +179,21 @@ def load_budget_buckets(project: str) -> dict[str, dict[str, BucketAmounts]]:
 	pb_account = {r.name: r.pb_account for r in pb_rows if r.pb_account}
 	pb_names = list(pb_account.keys())
 	dims_by_pb = _load_pb_dimensions_by_parent(pb_names)
+	has_expected_col = frappe.db.has_column("Project Budget Amount", "pba_has_expected")
+
+	select_fields = [
+		pba.parent,
+		pba.pba_year,
+		pba.pba_month,
+		Coalesce(pba.pba_plan, 0).as_("plan"),
+		Coalesce(pba.pba_expected, 0).as_("forecast"),
+	]
+	if has_expected_col:
+		select_fields.append(pba.pba_has_expected.as_("has_expected"))
 
 	amount_rows = (
 		frappe.qb.from_(pba)
-		.select(
-			pba.parent,
-			pba.pba_year,
-			pba.pba_month,
-			Coalesce(pba.pba_plan, 0).as_("plan"),
-			Coalesce(pba.pba_expected, 0).as_("forecast"),
-		)
+		.select(*select_fields)
 		.where(pba.parent.isin(pb_names))
 		.run(as_dict=True)
 	)
@@ -204,9 +209,13 @@ def load_budget_buckets(project: str) -> dict[str, dict[str, BucketAmounts]]:
 		bucket[f"plan_{period_key}"] = _to_float(bucket.get(f"plan_{period_key}")) + _to_float(
 			row.plan
 		)
-		bucket[f"forecast_{period_key}"] = _to_float(
-			bucket.get(f"forecast_{period_key}")
-		) + _to_float(row.forecast)
+		# Flag or non-zero expected = explicit own. Bare 0 without flag = empty.
+		if (has_expected_col and cint(row.get("has_expected"))) or _to_float(
+			row.forecast
+		) != 0:
+			bucket[f"forecast_{period_key}"] = _to_float(
+				bucket.get(f"forecast_{period_key}")
+			) + _to_float(row.forecast)
 
 	# PB docs without amount lines still create empty buckets for dimension structure
 	for name, account in pb_account.items():

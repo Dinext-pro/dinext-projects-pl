@@ -9,7 +9,8 @@
   "pba_year",
   "pba_month",
   "pba_plan",
-  "pba_expected"
+  "pba_expected",
+  "pba_has_expected"
  ],
  "fields": [
   {
@@ -43,6 +44,13 @@
    "in_list_view": 1,
    "label": "Expected",
    "options": "Company:company:default_currency"
+  },
+  {
+   "default": "0",
+   "fieldname": "pba_has_expected",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Has Expected"
   }
  ],
  "grid_page_length": 50,
