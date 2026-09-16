@@ -4,6 +4,7 @@
  */
 
 import { normalizeDeltaMode } from "./delta-mode.js";
+import { getForecastMenuItems } from "./forecast-menu.js";
 
 const PERIOD_TYPES = ["month", "quarter", "year"];
 
@@ -300,94 +301,17 @@ function applyMutationLock(frm, host) {
 	}
 }
 
-function ensureForecastMenuAliasSync() {
-	const dp = window.dinext_projects || (window.dinext_projects = {});
-	if (!Array.isArray(dp.project_pl_forecast_menu)) {
-		dp.project_pl_forecast_menu = [];
+function findForecastToolbarHost(frm) {
+	const fromState = $(frm.project_budget?.container)
+		.find(".dinext-table-toolbar-custom.budget-controls")
+		.first();
+	if (fromState.length && document.body.contains(fromState.get(0))) {
+		return fromState;
 	}
-	if (
-		!Array.isArray(dp.project_budget_forecast_menu) ||
-		dp.project_budget_forecast_menu !== dp.project_pl_forecast_menu
-	) {
-		if (
-			Array.isArray(dp.project_budget_forecast_menu) &&
-			dp.project_budget_forecast_menu.length &&
-			!dp.project_pl_forecast_menu.length
-		) {
-			dp.project_pl_forecast_menu = dp.project_budget_forecast_menu;
-		}
-		dp.project_budget_forecast_menu = dp.project_pl_forecast_menu;
-	}
-}
-
-/**
- * Registry items from PWA / risk — same conditions as original registrars:
- * - Cost from WE: always (when PWA registered)
- * - Revenue from WE: only T&M payment scheme
- * - Risk reserve: only when project has contingency_reserve risks
- * Also drop stale/dup entries left in the global menu between Project refreshes.
- */
-function isTmPaymentScheme(frm) {
-	const scheme = frm?.doc?.custom_payment_scheme;
-	if (!scheme) {
-		return false;
-	}
-	// Exact option + tolerant match (legacy/partial labels).
-	if (scheme === "Время и затраты (T&M)") {
-		return true;
-	}
-	return /T\s*&\s*M/i.test(String(scheme)) || /время\s+и\s+затраты/i.test(String(scheme));
-}
-
-function isWeRevenueForecastItem(item) {
-	if (!item?.__pwr_pl_forecast_from_we) {
-		return false;
-	}
-	if (item.__pwr_pl_forecast_kind === "revenue") {
-		return true;
-	}
-	if (item.__pwr_pl_forecast_kind === "cost") {
-		return false;
-	}
-	// Legacy items without kind: compare source + translated label.
-	const source = "Revenue forecast from work efforts";
-	const label = item.label || "";
-	return label === source || label === __(source);
-}
-
-function getForecastMenuItems(frm) {
-	ensureForecastMenuAliasSync();
-	const raw = Array.isArray(window.dinext_projects?.project_budget_forecast_menu)
-		? window.dinext_projects.project_budget_forecast_menu
-		: [];
-	const isTm = isTmPaymentScheme(frm);
-	const hasReserveRisk = (frm?.doc?.custom_project_risks || []).some(
-		(r) => r && Number(r.contingency_reserve)
-	);
-	const seen = new Set();
-	const out = [];
-	for (const item of raw) {
-		if (!item || typeof item.label !== "string" || typeof item.action !== "function") {
-			continue;
-		}
-		if (item.__dinext_risk_reserve_forecast && !hasReserveRisk) {
-			continue;
-		}
-		if (isWeRevenueForecastItem(item) && !isTm) {
-			continue;
-		}
-		const key = item.__dinext_risk_reserve_forecast
-			? "__risk__"
-			: item.__pwr_pl_forecast_from_we
-				? `__we__:${item.__pwr_pl_forecast_kind || item.label}`
-				: item.label;
-		if (seen.has(key)) {
-			continue;
-		}
-		seen.add(key);
-		out.push(item);
-	}
-	return out;
+	const $wrap = frm.$wrapper || $(frm.wrapper);
+	return $wrap
+		.find(".budget-container .dinext-table-toolbar-custom.budget-controls")
+		.first();
 }
 
 /** Insert after period select (3rd slot). Fallback: append. */
@@ -601,16 +525,14 @@ export function mount_toolbar_controls(frm, host) {
 
 	applyMutationLock(frm, host);
 
-	// PWA/risk register menu on Project.refresh — may land after first paint.
-	setTimeout(() => addForecastDropdown(frm, host), 0);
-	setTimeout(() => addForecastDropdown(frm, host), 250);
-	setTimeout(() => addForecastDropdown(frm, host), 800);
+	// Registrars run on Project.refresh — paint from live host, not captured node.
+	setTimeout(() => refreshForecastDropdown(frm), 0);
+	setTimeout(() => refreshForecastDropdown(frm), 250);
+	setTimeout(() => refreshForecastDropdown(frm), 800);
 }
 
 export function refreshForecastDropdown(frm) {
-	const $host = $(frm.project_budget?.container)
-		.find(".dinext-table-toolbar-custom.budget-controls")
-		.first();
+	const $host = findForecastToolbarHost(frm);
 	if (!$host.length) {
 		return;
 	}

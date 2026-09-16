@@ -162,10 +162,22 @@ function scroll_to_project_budget_table(frm) {
 	setTimeout(try_scroll, 50);
 }
 
+function bind_pl_forecast_menu_tab(frm) {
+	const $wrap = frm.$wrapper || $(frm.wrapper);
+	if (!$wrap?.length || $wrap.data("pl-forecast-menu-tab")) {
+		return;
+	}
+	$wrap.data("pl-forecast-menu-tab", 1);
+	$wrap.on("shown.bs.tab.plForecastMenu", '[data-fieldname="custom_pl"]', function () {
+		refresh_project_budget_forecast_dropdown(frm);
+	});
+}
+
 frappe.ui.form.on("Project", {
     refresh: function(frm) {
         render_budget_table(frm);
         schedule_open_project_budget_tab(frm);
+        bind_pl_forecast_menu_tab(frm);
     },
     onload_post_render: function(frm) {
         schedule_open_project_budget_tab(frm);
@@ -185,26 +197,51 @@ frappe.ui.form.on("Project", {
 frappe.provide("dinext_projects");
 frappe.provide("dinext_projects.project_budget_forecast_menu");
 frappe.provide("dinext_projects.project_pl_forecast_menu");
-if (!Array.isArray(dinext_projects.project_budget_forecast_menu)) {
-    dinext_projects.project_budget_forecast_menu = Array.isArray(
-        dinext_projects.project_pl_forecast_menu
-    )
-        ? dinext_projects.project_pl_forecast_menu
-        : [];
+
+function sync_forecast_menu_aliases() {
+	if (!Array.isArray(dinext_projects.project_pl_forecast_menu)) {
+		dinext_projects.project_pl_forecast_menu = [];
+	}
+	if (!Array.isArray(dinext_projects.project_budget_forecast_menu)) {
+		dinext_projects.project_budget_forecast_menu = [];
+	}
+	if (dinext_projects.project_budget_forecast_menu === dinext_projects.project_pl_forecast_menu) {
+		return dinext_projects.project_budget_forecast_menu;
+	}
+	const seen = new Set();
+	const merged = [];
+	for (const item of dinext_projects.project_pl_forecast_menu.concat(
+		dinext_projects.project_budget_forecast_menu
+	)) {
+		if (!item || seen.has(item)) {
+			continue;
+		}
+		seen.add(item);
+		merged.push(item);
+	}
+	dinext_projects.project_pl_forecast_menu = merged;
+	dinext_projects.project_budget_forecast_menu = merged;
+	return merged;
 }
-if (
-    !Array.isArray(dinext_projects.project_pl_forecast_menu) ||
-    dinext_projects.project_pl_forecast_menu !== dinext_projects.project_budget_forecast_menu
-) {
-    if (
-        Array.isArray(dinext_projects.project_pl_forecast_menu) &&
-        dinext_projects.project_pl_forecast_menu.length &&
-        !dinext_projects.project_budget_forecast_menu.length
-    ) {
-        dinext_projects.project_budget_forecast_menu = dinext_projects.project_pl_forecast_menu;
-    }
-    dinext_projects.project_pl_forecast_menu = dinext_projects.project_budget_forecast_menu;
+
+function replace_forecast_menu_items(flag, items) {
+	const menu = sync_forecast_menu_aliases();
+	for (let i = menu.length - 1; i >= 0; i--) {
+		if (menu[i] && menu[i][flag]) {
+			menu.splice(i, 1);
+		}
+	}
+	(items || []).forEach(function (item) {
+		if (item) {
+			menu.push(item);
+		}
+	});
+	return menu;
 }
+
+sync_forecast_menu_aliases();
+dinext_projects.sync_forecast_menu_aliases = sync_forecast_menu_aliases;
+dinext_projects.replace_forecast_menu_items = replace_forecast_menu_items;
 
 function render_pl_chart(frm, init = true) {
     if (
@@ -284,12 +321,17 @@ function render_budget_table(frm) {
 function schedule_pl_mount(frm) {
 	const mountWhenVisible = () =>
 		when_project_budget_ready(frm, () => {
+			const afterPaint = () => {
+				refresh_project_budget_forecast_dropdown(frm);
+			};
 			if (frm._plRefreshPending) {
 				frm._plRefreshPending = false;
 				return Promise.resolve(window.ProjectBudget?.refresh?.(frm)).then(() => {
 					render_pl_chart(frm);
+					afterPaint();
 				});
 			}
+			afterPaint();
 		});
 
 	const tryBind = () => {
