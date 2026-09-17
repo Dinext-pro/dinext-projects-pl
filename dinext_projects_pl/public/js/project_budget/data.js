@@ -367,7 +367,7 @@ export async function loadGridData(frm) {
 		const message = await frappe.xcall(GRID_API, {
 			project: frm.doc.name,
 			period_type,
-			view_options: frm.budget_view_options || __("Forecast and actual"),
+			view_options: frm.budget_view_options || __("Forecast and fact"),
 			show_zero_rows: frm.bg_show_zero_rows ? 1 : 0,
 		});
 		if (!message) {
