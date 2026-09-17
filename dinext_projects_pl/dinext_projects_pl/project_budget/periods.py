@@ -21,8 +21,12 @@ _VIEW_OPTIONS_MAP: dict[str, ViewMode] = {
 	"Только прогноз": VIEW_MODE_FORECAST_ONLY,
 	"Только факт": VIEW_MODE_FACT_ONLY,
 	"Forecast and actual": VIEW_MODE_FORECAST_AND_FACT,
+	"Forecast and fact": VIEW_MODE_FORECAST_AND_FACT,
+	"Forecast and Fact": VIEW_MODE_FORECAST_AND_FACT,
 	"Forecast only": VIEW_MODE_FORECAST_ONLY,
 	"Actual only": VIEW_MODE_FACT_ONLY,
+	"Fact only": VIEW_MODE_FACT_ONLY,
+	"Fact Only": VIEW_MODE_FACT_ONLY,
 }
 
 SUPPORTED_PERIOD_TYPES = frozenset({"month", "quarter", "year"})

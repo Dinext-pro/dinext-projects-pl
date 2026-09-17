@@ -12,16 +12,23 @@ function viewLabelByKey(key) {
 		return __("Forecast only");
 	}
 	if (key === "actual_only") {
-		return __("Actual only");
+		return __("Fact only");
 	}
-	return __("Forecast and actual");
+	return __("Forecast and fact");
 }
 
 function viewKeyByLabel(label) {
 	if (label === __("Forecast only") || label === "Forecast only") {
 		return "forecast_only";
 	}
-	if (label === __("Actual only") || label === "Actual only") {
+	if (
+		label === __("Fact only") ||
+		label === "Fact only" ||
+		label === __("Fact Only") ||
+		label === "Fact Only" ||
+		label === __("Actual only") ||
+		label === "Actual only"
+	) {
 		return "actual_only";
 	}
 	return "forecast_actual";
@@ -126,7 +133,7 @@ function ensurePlDefaults(frm) {
 	if (!frm._pl_period_type) {
 		frm._pl_period_type = "month";
 	}
-	frm.budget_view_options = frm.budget_view_options || __("Forecast and actual");
+	frm.budget_view_options = frm.budget_view_options || __("Forecast and fact");
 }
 
 function addPeriodTypeControl(frm, host) {
@@ -171,7 +178,7 @@ function addViewOptionsControl(frm, host) {
 		df: {
 			fieldtype: "Select",
 			fieldname: "view-options",
-			options: [__("Forecast and actual"), __("Forecast only"), __("Actual only")],
+			options: [__("Forecast and fact"), __("Forecast only"), __("Fact only")],
 			get_status: function () {
 				return "Write";
 			},

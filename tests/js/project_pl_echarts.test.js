@@ -286,7 +286,7 @@ function createChartFrm(overrides = {}) {
     return {
         aggregatedBudget: { root: { parent_account: null, task: null } },
         bg_hide_plan: true,
-        budget_view_options: "actual/forecast",
+        budget_view_options: "fact/forecast",
         get_field(fieldname) {
             if (fieldname === "custom_pl_chart") {
                 return { $wrapper: chartWrapper };
@@ -371,9 +371,9 @@ test("get_pl_chart_data adds cumulative income and expense series in expanded mo
     assert.equal(chartData.datasets.length, 12);
     assert.deepEqual(datasetNames.slice(-4), [
         "Cumulative income - plan",
-        "Cumulative income - actual/forecast",
+        "Cumulative income - fact/forecast",
         "Cumulative expenses - plan",
-        "Cumulative expenses - actual/forecast",
+        "Cumulative expenses - fact/forecast",
     ]);
     assert.deepEqual(Array.from(chartData.datasets[8].values), [100, 200]);
     assert.deepEqual(Array.from(chartData.datasets[9].values), [90, 180]);
@@ -388,23 +388,23 @@ test("get_pl_echarts_option styles expanded cumulative volume lines like matchin
 
     const planIncomeBar = option.series.find((series) => series.name === "Income - plan");
     const actualIncomeBar = option.series.find(
-        (series) => series.name === "Income - actual/forecast"
+        (series) => series.name === "Income - fact/forecast"
     );
     const planExpenseBar = option.series.find((series) => series.name === "Expenses - plan");
     const actualExpenseBar = option.series.find(
-        (series) => series.name === "Expenses - actual/forecast"
+        (series) => series.name === "Expenses - fact/forecast"
     );
     const cumPlanIncome = option.series.find(
         (series) => series.name === "Cumulative income - plan"
     );
     const cumActualIncome = option.series.find(
-        (series) => series.name === "Cumulative income - actual/forecast"
+        (series) => series.name === "Cumulative income - fact/forecast"
     );
     const cumPlanExpense = option.series.find(
         (series) => series.name === "Cumulative expenses - plan"
     );
     const cumActualExpense = option.series.find(
-        (series) => series.name === "Cumulative expenses - actual/forecast"
+        (series) => series.name === "Cumulative expenses - fact/forecast"
     );
     const cumPlanProfit = option.series.find(
         (series) => series.name === "Cumulative profit - plan"
@@ -441,7 +441,7 @@ test("get_pl_echarts_option keeps cumulative profit area with Russian labels", (
         "Income - plan": "Доход - план",
         Expenses: "Расход",
         "Expenses - plan": "Расход - план",
-        "actual/forecast": "факт/прогноз",
+        "fact/forecast": "факт/прогноз",
     };
     context.__ = (text) => ru[text] || text;
     const frm = createChartFrm({ bg_hide_plan: false });
@@ -519,16 +519,16 @@ test("get_pl_echarts_option matches cumulative volume line colors when plan is h
     const option = context.get_pl_echarts_option(frm, context.get_pl_chart_data(frm));
 
     const actualIncomeBar = option.series.find(
-        (series) => series.name === "Income - actual/forecast"
+        (series) => series.name === "Income - fact/forecast"
     );
     const actualExpenseBar = option.series.find(
-        (series) => series.name === "Expenses - actual/forecast"
+        (series) => series.name === "Expenses - fact/forecast"
     );
     const cumActualIncome = option.series.find(
-        (series) => series.name === "Cumulative income - actual/forecast"
+        (series) => series.name === "Cumulative income - fact/forecast"
     );
     const cumActualExpense = option.series.find(
-        (series) => series.name === "Cumulative expenses - actual/forecast"
+        (series) => series.name === "Cumulative expenses - fact/forecast"
     );
 
     assert.equal(cumActualIncome.color, actualIncomeBar.color);
@@ -675,28 +675,28 @@ test("get_pl_echarts_option keeps period bar colors when cumulative series prece
         labels: ["Jan", "Feb"],
         datasets: [
             {
-                name: "Cumulative income - actual/forecast",
+                name: "Cumulative income - fact/forecast",
                 values: [100, 200],
                 plLayer: "cumulative",
                 plSeriesKind: "cumulative_income",
                 plIsPlan: false,
             },
             {
-                name: "Cumulative expenses - actual/forecast",
+                name: "Cumulative expenses - fact/forecast",
                 values: [-40, -80],
                 plLayer: "cumulative",
                 plSeriesKind: "cumulative_expense",
                 plIsPlan: false,
             },
             {
-                name: "Income - actual/forecast",
+                name: "Income - fact/forecast",
                 values: [100, 100],
                 plLayer: "bar",
                 plSeriesKind: "income",
                 plIsPlan: false,
             },
             {
-                name: "Expenses - actual/forecast",
+                name: "Expenses - fact/forecast",
                 values: [-40, -40],
                 plLayer: "bar",
                 plSeriesKind: "expense",

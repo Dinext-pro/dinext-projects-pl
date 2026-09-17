@@ -422,11 +422,11 @@ br.get_budget_chart_presentation = function (report) {
 
 br.build_budget_chart_frm = function (report) {
 	var filters = report.get_filter_values();
-	var budget_view_options = __("Forecast and actual");
+	var budget_view_options = __("Forecast and fact");
 	if (filters.view_type === "forecast_only") {
 		budget_view_options = __("Forecast only");
 	} else if (filters.view_type === "actual_only") {
-		budget_view_options = __("Actual only");
+		budget_view_options = __("Fact only");
 	}
 
 	var company = filters.company;
