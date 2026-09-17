@@ -335,7 +335,10 @@ function get_budget_display_periods(frm, periodType) {
         const year = current.getFullYear();
         const month = current.getMonth() + 1;
         let is_past;
-        if (frm.budget_view_options == __("Actual only")) {
+        if (
+            frm.budget_view_options == __("Fact only") ||
+            frm.budget_view_options == __("Actual only")
+        ) {
             is_past = true;
         } else if (frm.budget_view_options == __("Forecast only")) {
             is_past = false;

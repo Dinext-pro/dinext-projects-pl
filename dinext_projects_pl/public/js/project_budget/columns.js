@@ -267,7 +267,7 @@ function buildPeriodColumns(frm, periods) {
 
 	return (periods || []).map((period) => {
 		const key = period.key;
-		const actualLabel = period.is_past ? __("Actual") : __("Forecast");
+		const actualLabel = period.is_past ? __("Fact") : __("Forecast");
 		const headerName =
 			period.label ||
 			(period.quarter
@@ -320,7 +320,7 @@ function buildTotalColumn(frm, periods) {
 	const hideDelta = !!frm.bg_hide_delta;
 	const leafWidth = periodLeafWidth(hidePlan, hideDelta);
 	const last = periods?.[periods.length - 1];
-	const actualLabel = last?.is_past ? __("Actual") : __("Forecast");
+	const actualLabel = last?.is_past ? __("Fact") : __("Forecast");
 
 	return {
 		colId: "total",

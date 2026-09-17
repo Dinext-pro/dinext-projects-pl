@@ -227,7 +227,7 @@ export function saveForecastAsPlan(frm) {
 
 	frappe.confirm(
 		__(
-			"Are you sure you want to save the selected forecast / actual data as plan (checked rows and selected cells)?"
+			"Are you sure you want to save the selected forecast / fact data as plan (checked rows and selected cells)?"
 		),
 		() => {
 			executeSavePlan(frm, data).catch((err) => {
