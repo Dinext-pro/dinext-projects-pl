@@ -17,10 +17,14 @@ test("formatForecastAmount paints empty zero like formatAmount", () => {
 	assert.equal(formatForecastAmount({ value: 1500, data: {} }), "1 500");
 });
 
-test("formatForecastAmount keeps profitability percent", () => {
+test("formatForecastAmount keeps profitability percent to hundredths", () => {
 	assert.equal(
 		formatForecastAmount({ value: 0, data: { summary_kind: "profitability" } }),
-		"0.0%",
+		"0.00%",
+	);
+	assert.equal(
+		formatAmount({ value: 33.333, data: { summary_kind: "profitability" } }),
+		"33.33%",
 	);
 });
 

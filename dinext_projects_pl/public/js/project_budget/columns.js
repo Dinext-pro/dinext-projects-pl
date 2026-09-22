@@ -42,12 +42,12 @@ function isProfitRow(data) {
 	return data?.summary_kind === "profit";
 }
 
-/** Legacy numberformat: integer + thin space; profitability = one decimal + %. */
+/** Legacy numberformat: integer + thin space; profitability = hundredths + %. */
 export function formatAmount(params) {
 	const n = toNumber(params.value);
 	if (n == null) return "";
 	if (isProfitabilityRow(params.data)) {
-		return `${n.toFixed(1)}%`;
+		return `${n.toFixed(2)}%`;
 	}
 	return n
 		.toFixed(0)
@@ -60,12 +60,13 @@ export function formatForecastAmount(params) {
 	return formatAmount(params);
 }
 
-/** Legacy delta: one decimal + %. */
+/** Legacy delta: one decimal + %. Profitability row: hundredths. */
 function formatDelta(params) {
 	const n = toNumber(params.value);
 	if (n == null) return "";
-	if (n === 0) return "0%";
-	return `${n.toFixed(1)}%`;
+	const digits = isProfitabilityRow(params.data) ? 2 : 1;
+	if (n === 0) return digits === 2 ? "0.00%" : "0%";
+	return `${n.toFixed(digits)}%`;
 }
 
 function isDeltaAbs(frm) {
