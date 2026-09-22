@@ -13,8 +13,6 @@ function resolveTableContainer(wrapper) {
 
 	const el = $table[0];
 	if (el) {
-		el.style.height = "min(50vh, 560px)";
-		el.style.minHeight = "280px";
 		el.style.width = "100%";
 	}
 	return el || null;

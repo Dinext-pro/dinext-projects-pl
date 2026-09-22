@@ -51,6 +51,34 @@
 	margin-top: 0;
 }
 
+#project-custom_pl:has(> .pl-access-banner) {
+	min-height: 240px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+#project-custom_pl > .pl-access-banner,
+.form-tab-content > .pl-access-banner,
+.budget-container > .pl-access-banner {
+	margin: 0;
+	padding: 24px 16px;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	text-align: center;
+	font-size: calc(var(--text-base, 14px) * 1.5);
+	line-height: 1.4;
+	color: var(--text-muted, #6b7280);
+}
+
+[data-theme="dark"] #project-custom_pl > .pl-access-banner,
+[data-theme="dark"] .form-tab-content > .pl-access-banner,
+[data-theme="dark"] .budget-container > .pl-access-banner {
+	color: var(--text-muted, #9ca3af);
+}
+
 /*
  * Domain controls on toolbar custom host.
  * Host itself gets .budget-controls (not a child) — do not nest those selectors.
@@ -129,6 +157,83 @@
 	align-items: center;
 }
 
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-delta-group {
+	display: inline-flex;
+	align-items: center;
+	gap: 0;
+	flex: 0 0 auto;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-delta-mode-slot {
+	display: grid;
+	grid-template-columns: 0fr;
+	margin-left: 0;
+	transition: grid-template-columns 0.22s ease, margin-left 0.22s ease;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-delta-mode-slot.is-open {
+	grid-template-columns: 1fr;
+	margin-left: 4px;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-delta-mode-slot-inner {
+	min-width: 0;
+	overflow: hidden;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-delta-mode {
+	display: inline-flex;
+	align-items: stretch;
+	width: max-content;
+	border: 1px solid var(--border-color, #d1d8dd);
+	border-radius: 4px;
+	overflow: hidden;
+	opacity: 0;
+	transform: translateX(-8px);
+	transition: opacity 0.18s ease, transform 0.22s ease;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-delta-mode-slot.is-open .pl-delta-mode {
+	opacity: 1;
+	transform: translateX(0);
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-delta-mode-btn {
+	margin: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	color: var(--text-muted, #6c7680);
+	padding: 0 6px;
+	height: 22px;
+	min-width: 26px;
+	font-size: 11px;
+	line-height: 22px;
+	cursor: pointer;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-delta-mode-btn + .pl-delta-mode-btn {
+	border-left: 1px solid var(--border-color, #d1d8dd);
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-delta-mode-btn.is-active {
+	background: var(--control-bg, var(--fg-hover-color, #f4f5f6));
+	color: var(--text-color, #36414c);
+	font-weight: 600;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-delta-mode-slot.no-anim,
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-delta-mode-slot.no-anim .pl-delta-mode {
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.budget-container .dinext-table-toolbar-custom.budget-controls .pl-delta-mode-slot,
+	.budget-container .dinext-table-toolbar-custom.budget-controls .pl-delta-mode {
+		transition: none;
+	}
+}
+
 .budget-container .dinext-table-toolbar-custom.budget-controls > .btn {
 	white-space: nowrap;
 	flex-shrink: 0;
@@ -158,15 +263,24 @@
 }
 
 .pl-toolbar-forecast-menu li {
-	padding: 8px 15px;
 	white-space: nowrap;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-forecast-plus {
+	font-weight: 600;
+	line-height: 1;
+}
+
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-forecast-dropdown-wrapper .btn:disabled,
+.budget-container .dinext-table-toolbar-custom.budget-controls .pl-save-plan-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+	pointer-events: none;
 }
 
 .budget-container .budget-table.dinext-table {
 	width: 100%;
-	min-height: 280px;
-	height: min(50vh, 560px);
-	max-height: 560px;
+	max-height: min(60vh, 672px);
 }
 
 /* Host has fixed height (+ inline from mount) — clear for core container fullscreen. */
@@ -444,9 +558,7 @@
 
 .budget-table.dinext-table {
 	width: 100%;
-	min-height: 280px;
-	height: min(50vh, 560px);
-	max-height: 560px;
+	max-height: min(60vh, 672px);
 	--project-budget-row-height: 29px;
 	--ag-font-size: 14px;
 	--ag-header-font-weight: 600;
@@ -455,9 +567,7 @@
 
 .budget-container > .budget-table:not(.dinext-table) {
 	width: 100%;
-	min-height: 280px;
-	height: min(50vh, 560px);
-	max-height: 560px;
+	max-height: min(60vh, 672px);
 	box-sizing: border-box;
 }
 
@@ -532,6 +642,24 @@
 .budget-table.dinext-table .ag-cell.project-budget-cell--profit-neg,
 .budget-table.dinext-table .ag-cell.project-budget-cell--profit-neg .ag-cell-value {
 	color: #e03636 !important;
+}
+
+.budget-table.dinext-table .ag-cell.project-budget-cell--own::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: 0;
+	height: 0;
+	border-style: solid;
+	border-width: 0 7px 7px 0;
+	border-color: transparent #000 transparent transparent;
+	pointer-events: none;
+}
+
+html[data-theme="dark"] .budget-table.dinext-table .ag-cell.project-budget-cell--own::after,
+html[data-theme-mode="dark"] .budget-table.dinext-table .ag-cell.project-budget-cell--own::after {
+	border-color: transparent #fff transparent transparent;
 }
 
 .budget-table.dinext-table .project-budget-account-label {

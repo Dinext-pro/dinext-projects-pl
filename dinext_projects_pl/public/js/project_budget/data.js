@@ -1,6 +1,7 @@
 import { GRID_API } from "./constants.js";
 import { ensurePlDefaults } from "./controls.js";
 import { initState } from "./state.js";
+import { flagOn, hasPlAmountAccess, syncPlAccessBanner } from "./access.js";
 
 function toNum(value) {
 	const n = Number(value);
@@ -13,9 +14,16 @@ function resolveActual(forecast, fact, isPast, viewMode) {
 	return isPast ? fact : forecast;
 }
 
-function calcDeltaPct(plan, actual) {
+function calcDeltaPct(plan, actual, digits = 1) {
 	if (!plan) return 0;
-	return Math.round(((actual - plan) / plan) * 1000) / 10;
+	const scale = 10 ** digits;
+	return Math.round(((actual - plan) / plan) * 100 * scale) / scale;
+}
+
+/** (profit / income) * 100, hundredths; null when no income. */
+function calcProfitabilityPct(profit, income) {
+	if (!income) return null;
+	return Math.round((profit / income) * 10000) / 100;
 }
 
 function applyRowTotals(row, periods) {
@@ -30,15 +38,15 @@ function applyRowTotals(row, periods) {
 	row.delta_total = calcDeltaPct(planTotal, actualTotal);
 }
 
-/** Report analog: parent fact = own + descendants.
- *  Plan/forecast = own if set, else sum of non-risk child display values.
+/** Project table: parent fact = own + descendants.
+ *  Plan/forecast = own if set, else sum of child display values (incl. risk).
+ *  BVF report still keeps risk off CoA — do not copy this into the report.
  */
 function applyFactRollup(row, periods, viewMode) {
 	const children = row.children || [];
 	for (const child of children) {
 		applyFactRollup(child, periods, viewMode);
 	}
-	const financialChildren = children.filter((child) => !child.risk);
 	for (const period of periods || []) {
 		const key = period.key;
 		let fact = toNum(row[`own_fact_${key}`]);
@@ -52,22 +60,21 @@ function applyFactRollup(row, periods, viewMode) {
 				plan = ownPlan;
 			} else {
 				plan = 0;
-				for (const child of financialChildren) {
+				for (const child of children) {
 					plan += toNum(child[`plan_${key}`]);
 				}
 			}
 			row[`plan_${key}`] = plan;
 		}
-		const ownForecast = toNum(row[`own_forecast_${key}`]);
+		const ownForecastRaw = row[`own_forecast_${key}`];
 		let forecast = toNum(row[`forecast_${key}`]);
-		if (row[`own_forecast_${key}`] != null) {
-			if (ownForecast > 0) {
-				forecast = ownForecast;
-			} else {
-				forecast = 0;
-				for (const child of financialChildren) {
-					forecast += toNum(child[`forecast_${key}`]);
-				}
+		if (ownForecastRaw != null && ownForecastRaw !== "") {
+			forecast = toNum(ownForecastRaw);
+			row[`forecast_${key}`] = forecast;
+		} else {
+			forecast = 0;
+			for (const child of children) {
+				forecast += toNum(child[`forecast_${key}`]);
 			}
 			row[`forecast_${key}`] = forecast;
 		}
@@ -127,8 +134,93 @@ function rootPeriodTotals(rows, key) {
 	return { planIncome, planExpense, actualIncome, actualExpense };
 }
 
-/** Report addProfitRow: summary from displayed Income/Expense roots. */
-function buildSummaryFromRoots(rows, periods, accumulated) {
+function isRiskRow(row) {
+	return !!(row && row.risk);
+}
+
+function isOwnTrack(row, key, track) {
+	const own = row[`own_${track}_${key}`];
+	return own != null && toNum(own) > 0;
+}
+
+function riskTrackAmount(row, key, track) {
+	const own = row[`own_${track}_${key}`];
+	if (own != null) return toNum(own);
+	return toNum(row[`${track}_${key}`]);
+}
+
+function sumRiskDescendants(row, key, track) {
+	let total = 0;
+	for (const child of row.children || []) {
+		if (isRiskRow(child)) {
+			total += riskTrackAmount(child, key, track);
+		} else {
+			total += sumRiskDescendants(child, key, track);
+		}
+	}
+	return total;
+}
+
+/** Risk cut off by an own ancestor — not in that ancestor's displayed track. */
+function riskNotInDisplayed(row, key, track) {
+	if (isRiskRow(row)) return 0;
+	if (isOwnTrack(row, key, track)) {
+		return sumRiskDescendants(row, key, track);
+	}
+	let total = 0;
+	for (const child of row.children || []) {
+		if (!isRiskRow(child)) {
+			total += riskNotInDisplayed(child, key, track);
+		}
+	}
+	return total;
+}
+
+function actualUsesForecast(period, viewMode) {
+	if (viewMode === "forecast_only") return true;
+	if (viewMode === "fact_only") return false;
+	return !period.is_past;
+}
+
+/** Period-level extras from own_* (survives applyAccumulatedValues). */
+function collectRiskExpenseExtras(rows, periods, viewMode) {
+	const extras = {};
+	for (const period of periods || []) {
+		let plan = 0;
+		let actual = 0;
+		for (const row of rows || []) {
+			if (row.root_type !== "Expense") continue;
+			plan += riskNotInDisplayed(row, period.key, "plan");
+			if (actualUsesForecast(period, viewMode)) {
+				actual += riskNotInDisplayed(row, period.key, "forecast");
+			}
+		}
+		extras[period.key] = { plan, actual };
+	}
+	return extras;
+}
+
+function accumulateRiskExtras(extras, periods) {
+	let runPlan = 0;
+	let runActual = 0;
+	const out = {};
+	for (const period of periods || []) {
+		const extra = extras[period.key] || { plan: 0, actual: 0 };
+		runPlan += extra.plan;
+		runActual += extra.actual;
+		out[period.key] = { plan: runPlan, actual: runActual };
+	}
+	return out;
+}
+
+/** Report addProfitRow: summary from displayed Income/Expense roots + risk not in display. */
+function buildSummaryFromRoots(rows, periods, accumulated, viewMode) {
+	const extras = collectRiskExpenseExtras(
+		rows,
+		periods,
+		viewMode || "forecast_and_fact"
+	);
+	const adj = accumulated ? accumulateRiskExtras(extras, periods) : extras;
 	const profit = {
 		id: "pl-v2-profit",
 		account: "pl-v2-profit",
@@ -161,38 +253,39 @@ function buildSummaryFromRoots(rows, periods, accumulated) {
 	for (const period of periods || []) {
 		const key = period.key;
 		const t = rootPeriodTotals(rows, key);
+		const extra = adj[key] || { plan: 0, actual: 0 };
+		const planExpense = t.planExpense + extra.plan;
+		const actualExpense = t.actualExpense + extra.actual;
 		if (accumulated) {
 			if (period === last) {
 				planIncomeTotal = t.planIncome;
-				planExpenseTotal = t.planExpense;
+				planExpenseTotal = planExpense;
 				actualIncomeTotal = t.actualIncome;
-				actualExpenseTotal = t.actualExpense;
+				actualExpenseTotal = actualExpense;
 			}
 		} else {
 			planIncomeTotal += t.planIncome;
-			planExpenseTotal += t.planExpense;
+			planExpenseTotal += planExpense;
 			actualIncomeTotal += t.actualIncome;
-			actualExpenseTotal += t.actualExpense;
+			actualExpenseTotal += actualExpense;
 		}
 
-		const profitPlan = t.planIncome - t.planExpense;
-		const profitActual = t.actualIncome - t.actualExpense;
+		const profitPlan = t.planIncome - planExpense;
+		const profitActual = t.actualIncome - actualExpense;
 		profit[`plan_${key}`] = profitPlan;
 		profit[`actual_${key}`] = profitActual;
 		profit[`forecast_${key}`] = period.is_past ? 0 : profitActual;
 		profit[`fact_${key}`] = period.is_past ? profitActual : 0;
 		profit[`delta_${key}`] = calcDeltaPct(profitPlan, profitActual);
 
-		const profPlan = t.planIncome ? Math.round((profitPlan / t.planIncome) * 10) / 10 : null;
-		const profActual = t.actualIncome
-			? Math.round((profitActual / t.actualIncome) * 10) / 10
-			: null;
+		const profPlan = calcProfitabilityPct(profitPlan, t.planIncome);
+		const profActual = calcProfitabilityPct(profitActual, t.actualIncome);
 		profitability[`plan_${key}`] = profPlan;
 		profitability[`actual_${key}`] = profActual;
 		profitability[`forecast_${key}`] = period.is_past ? null : profActual;
 		profitability[`fact_${key}`] = period.is_past ? profActual : null;
 		profitability[`delta_${key}`] =
-			profPlan != null && profActual != null ? calcDeltaPct(profPlan, profActual) : null;
+			profPlan != null && profActual != null ? calcDeltaPct(profPlan, profActual, 2) : null;
 	}
 
 	const profitPlanTotal = planIncomeTotal - planExpenseTotal;
@@ -201,17 +294,13 @@ function buildSummaryFromRoots(rows, periods, accumulated) {
 	profit.actual_total = profitActualTotal;
 	profit.delta_total = calcDeltaPct(profitPlanTotal, profitActualTotal);
 
-	const profPlanTotal = planIncomeTotal
-		? Math.round((profitPlanTotal / planIncomeTotal) * 10) / 10
-		: null;
-	const profActualTotal = actualIncomeTotal
-		? Math.round((profitActualTotal / actualIncomeTotal) * 10) / 10
-		: null;
+	const profPlanTotal = calcProfitabilityPct(profitPlanTotal, planIncomeTotal);
+	const profActualTotal = calcProfitabilityPct(profitActualTotal, actualIncomeTotal);
 	profitability.plan_total = profPlanTotal;
 	profitability.actual_total = profActualTotal;
 	profitability.delta_total =
 		profPlanTotal != null && profActualTotal != null
-			? calcDeltaPct(profPlanTotal, profActualTotal)
+			? calcDeltaPct(profPlanTotal, profActualTotal, 2)
 			: null;
 
 	return [profit, profitability];
@@ -220,9 +309,10 @@ function buildSummaryFromRoots(rows, periods, accumulated) {
 function rowHasOwnValue(row, periods) {
 	for (const period of periods || []) {
 		const key = period.key;
+		const ownForecast = row[`own_forecast_${key}`];
 		if (
 			toNum(row[`own_plan_${key}`]) ||
-			toNum(row[`own_forecast_${key}`]) ||
+			(ownForecast != null && ownForecast !== "") ||
 			toNum(row[`own_fact_${key}`])
 		) {
 			return true;
@@ -240,8 +330,7 @@ function filterZeroValueRows(rows, periods) {
 			row.has_children = true;
 			row.expandable = 1;
 			kept.push(row);
-		} else if (row.task || rowHasOwnValue(row, periods)) {
-			// Keep Task WBS stubs (legacy always expanded full tree under account).
+		} else if (rowHasOwnValue(row, periods)) {
 			delete row.children;
 			row.has_children = false;
 			row.expandable = 0;
@@ -264,7 +353,10 @@ function applyGridResponse(frm, message) {
 		}
 	}
 	state.rows = frm.bg_show_zero_rows ? rows : filterZeroValueRows(rows, state.periods);
-	state.summaryRows = buildSummaryFromRoots(state.rows, state.periods, accumulated);
+	state.view_mode = viewMode;
+	state.can_read_project_budget = flagOn(message.can_read_project_budget);
+	state.can_read_gl_entry = flagOn(message.can_read_gl_entry);
+	state.summaryRows = buildSummaryFromRoots(state.rows, state.periods, accumulated, viewMode);
 	return message;
 }
 
@@ -276,7 +368,7 @@ export async function loadGridData(frm) {
 		const message = await frappe.xcall(GRID_API, {
 			project: frm.doc.name,
 			period_type,
-			view_options: frm.budget_view_options || __("Forecast and actual"),
+			view_options: frm.budget_view_options || __("Forecast and fact"),
 			show_zero_rows: frm.bg_show_zero_rows ? 1 : 0,
 		});
 		if (!message) {
@@ -297,9 +389,26 @@ export async function reloadTable(frm, initTable, refreshRuntime) {
 	}
 
 	await loadGridData(frm);
+	syncPlAccessBanner(frm);
+	if (!hasPlAmountAccess(state)) {
+		if (state.table?.destroy) {
+			state.table.destroy();
+		}
+		state.table = null;
+		return null;
+	}
 	if (state.table) {
 		await refreshRuntime(frm);
 		return state.table;
 	}
 	return initTable(frm);
 }
+
+export {
+	applyAccumulatedValues,
+	applyFactRollup,
+	accumulateRiskExtras,
+	buildSummaryFromRoots,
+	calcProfitabilityPct,
+	collectRiskExpenseExtras,
+};

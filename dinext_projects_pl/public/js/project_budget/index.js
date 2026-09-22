@@ -19,6 +19,7 @@ import {
 } from "./selection.js";
 import { refreshForecastDropdown } from "./controls.js";
 import { buildChartData, refreshChart } from "./chart-adapter.js";
+import { hasPlAmountAccess } from "./access.js";
 import {
 	accountAllowsTask,
 	buildParentAdjustmentsFromUpdates,
@@ -56,6 +57,7 @@ const ProjectBudget = {
 	buildSavePlanPayload,
 	saveForecastAsPlan,
 	refreshForecastDropdown,
+	hasPlAmountAccess,
 	buildChartData,
 	refreshChart,
 

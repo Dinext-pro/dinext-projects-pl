@@ -8,6 +8,9 @@ from frappe import _
 from frappe.utils import cint
 
 from dinext_projects_pl.dinext_projects_pl.project_budget.amounts import (
+	PROJECT_BUDGET,
+	GL_ENTRY,
+	can_read_doctype,
 	load_budget_buckets,
 	load_gl_fact_buckets,
 	merge_bucket_stores,
@@ -246,7 +249,13 @@ def _apply_amounts_from_buckets(
 		key = period["key"]
 		month_keys = period_month_keys(period)
 		plan = sum(_to_float(combined.get(f"plan_{mk}")) for mk in month_keys)
-		forecast = sum(_to_float(combined.get(f"forecast_{mk}")) for mk in month_keys)
+		forecast_parts = [
+			_to_float(combined[f"forecast_{mk}"])
+			for mk in month_keys
+			if f"forecast_{mk}" in combined
+		]
+		own_forecast = sum(forecast_parts) if forecast_parts else None
+		forecast = own_forecast if own_forecast is not None else 0.0
 		fact = sum(_to_float(combined.get(f"fact_{mk}")) for mk in month_keys)
 		actual = _resolve_actual(forecast, fact, period["is_past"], view_mode)
 		row[f"plan_{key}"] = plan  # type: ignore[literal-required]
@@ -254,7 +263,7 @@ def _apply_amounts_from_buckets(
 		row[f"fact_{key}"] = fact  # type: ignore[literal-required]
 		# Own bucket amounts (before tree rollup) — save must not use rolled head totals.
 		row[f"own_plan_{key}"] = plan  # type: ignore[literal-required]
-		row[f"own_forecast_{key}"] = forecast  # type: ignore[literal-required]
+		row[f"own_forecast_{key}"] = own_forecast  # type: ignore[literal-required]
 		row[f"own_fact_{key}"] = fact  # type: ignore[literal-required]
 		row[f"actual_{key}"] = actual  # type: ignore[literal-required]
 		row[f"delta_{key}"] = _calc_delta_pct(plan, actual)  # type: ignore[literal-required]
@@ -273,14 +282,14 @@ def _apply_row_totals(row: ProjectBudgetRow, periods: list[ProjectBudgetDisplayP
 	row["delta_total"] = _calc_delta_pct(plan_total, actual_total)  # type: ignore[literal-required]
 
 
-def _has_own_amount(value: object) -> bool:
-	"""Explicit 0 = absent: display falls back to children sum (report analog)."""
+def _has_own_plan(value: object) -> bool:
+	"""Plan: explicit 0 = absent, display falls back to children sum."""
 	return _to_float(value) > 0
 
 
-def _financial_children(children: list[ProjectBudgetRow]) -> list[ProjectBudgetRow]:
-	"""Risk reserves stay off CoA plan/forecast rollup (report analog)."""
-	return [child for child in children if not child.get("risk")]
+def _has_own_forecast(value: object) -> bool:
+	"""Forecast: None = empty (paint 0 / children). 0 = manual own."""
+	return value is not None
 
 
 def _rollup_parent_metric(
@@ -289,15 +298,15 @@ def _rollup_parent_metric(
 	period_keys: list[str],
 	own_prefix: str,
 	display_prefix: str,
+	has_own,
 ) -> None:
-	financial = _financial_children(children)
 	for key in period_keys:
-		own = _to_float(parent.get(f"{own_prefix}_{key}"))
-		if _has_own_amount(own):
-			parent[f"{display_prefix}_{key}"] = own  # type: ignore[literal-required]
+		own = parent.get(f"{own_prefix}_{key}")
+		if has_own(own):
+			parent[f"{display_prefix}_{key}"] = _to_float(own)  # type: ignore[literal-required]
 			continue
 		total = 0.0
-		for child in financial:
+		for child in children:
 			total += _to_float(child.get(f"{display_prefix}_{key}"))
 		parent[f"{display_prefix}_{key}"] = total  # type: ignore[literal-required]
 
@@ -307,8 +316,8 @@ def _rollup_parent_plan(
 	children: list[ProjectBudgetRow],
 	period_keys: list[str],
 ) -> None:
-	"""Parent plan = own if set, else sum of non-risk child display plans."""
-	_rollup_parent_metric(parent, children, period_keys, "own_plan", "plan")
+	"""Parent plan = own if set, else sum of child display plans (incl. risk)."""
+	_rollup_parent_metric(parent, children, period_keys, "own_plan", "plan", _has_own_plan)
 
 
 def _rollup_parent_forecast(
@@ -316,8 +325,10 @@ def _rollup_parent_forecast(
 	children: list[ProjectBudgetRow],
 	period_keys: list[str],
 ) -> None:
-	"""Parent forecast = own if set, else sum of non-risk child display forecasts."""
-	_rollup_parent_metric(parent, children, period_keys, "own_forecast", "forecast")
+	"""Parent forecast = own if set (incl. 0), else sum of child display forecasts."""
+	_rollup_parent_metric(
+		parent, children, period_keys, "own_forecast", "forecast", _has_own_forecast
+	)
 
 
 def _rollup_child_fact(
@@ -326,7 +337,7 @@ def _rollup_child_fact(
 	periods: list[ProjectBudgetDisplayPeriod],
 	view_mode: ViewMode,
 ) -> None:
-	"""Parent fact = own + descendants. Plan/forecast = own or non-risk children sum."""
+	"""Parent fact = own + descendants. Plan/forecast = own or children sum (incl. risk)."""
 	period_keys = [period["key"] for period in periods]
 	_rollup_parent_plan(parent, children, period_keys)
 	_rollup_parent_forecast(parent, children, period_keys)
@@ -403,6 +414,7 @@ def _build_risk_rows(
 	periods: list[ProjectBudgetDisplayPeriod],
 	view_mode: ViewMode,
 	risk_titles: dict[str, str],
+	task: str | None = None,
 ) -> list[ProjectBudgetRow]:
 	rows: list[ProjectBudgetRow] = []
 	for risk_name, bucket in risk_buckets:
@@ -415,6 +427,7 @@ def _build_risk_rows(
 			dimensions=bucket.get("dimensions") or [],
 			indent=indent,
 			root_type=root_type,
+			task=task,
 			risk=risk_name,
 		)
 		_apply_amounts_from_buckets(row, [bucket], periods, view_mode)
@@ -497,6 +510,7 @@ def _build_tree_rows(
 				periods=periods,
 				view_mode=view_mode,
 				risk_titles=risk_titles,
+				task=task_name,
 			)
 			# Legacy sibling order under task: child tasks, then risks.
 			tree_children = nested_tasks + risk_rows
@@ -601,7 +615,7 @@ def _row_has_value(row: ProjectBudgetRow, periods: list[ProjectBudgetDisplayPeri
 		key = period["key"]
 		if (
 			_to_float(row.get(f"own_plan_{key}"))
-			or _to_float(row.get(f"own_forecast_{key}"))
+			or row.get(f"own_forecast_{key}") is not None
 			or _to_float(row.get(f"own_fact_{key}"))
 		):
 			return True
@@ -612,12 +626,7 @@ def _filter_zero_value_rows(
 	rows: list[ProjectBudgetRow],
 	periods: list[ProjectBudgetDisplayPeriod],
 ) -> list[ProjectBudgetRow]:
-	"""Drop empty nodes; keep ancestors of valued rows and Task WBS stubs.
-
-	Legacy P&L always expanded full Task tree under Task-allowed accounts so
-	users can enter plan/forecast on empty stubs. Zero-row filter must not
-	strip those stubs (only empty CoA/risk leaves without Task).
-	"""
+	"""Drop empty nodes including Task/risk dimension stubs; keep ancestors of valued rows."""
 	kept: list[ProjectBudgetRow] = []
 	for row in rows:
 		children = _filter_zero_value_rows(list(row.get("children") or []), periods)
@@ -626,7 +635,7 @@ def _filter_zero_value_rows(
 			row["has_children"] = True
 			row["expandable"] = 1
 			kept.append(row)
-		elif row.get("task") or _row_has_value(row, periods):
+		elif _row_has_value(row, periods):
 			row.pop("children", None)
 			row["has_children"] = False
 			row["expandable"] = 0
@@ -654,6 +663,21 @@ def run_get_project_budget_grid(form_input: ProjectBudgetGridFormInput) -> Proje
 	)
 	# Default off — same as Project Budget Plan vs Forecast show_zero_rows.
 	show_zero_rows = _as_bool(form_input.get("show_zero_rows"))
+	can_read_pb = can_read_doctype(PROJECT_BUDGET)
+	can_read_gl = can_read_doctype(GL_ENTRY)
+	if not can_read_pb and not can_read_gl:
+		return {
+			"project": project,
+			"period_type": period_type,
+			"view_mode": view_mode,
+			"show_zero_rows": show_zero_rows,
+			"periods": [],
+			"rows": [],
+			"summary_rows": [],
+			"can_read_project_budget": False,
+			"can_read_gl_entry": False,
+		}
+
 	periods = get_display_periods(project, period_type, view_mode)
 	accounts = _load_pl_accounts(company)
 	root_types = {a["name"]: a.get("root_type") or "" for a in accounts}
@@ -680,7 +704,7 @@ def run_get_project_budget_grid(form_input: ProjectBudgetGridFormInput) -> Proje
 	)
 	if not show_zero_rows:
 		rows = _filter_zero_value_rows(rows, periods)
-	summary_rows = build_project_budget_summary_rows(rows, periods)
+	summary_rows = build_project_budget_summary_rows(rows, periods, view_mode)
 
 	return {
 		"project": project,
@@ -690,4 +714,6 @@ def run_get_project_budget_grid(form_input: ProjectBudgetGridFormInput) -> Proje
 		"periods": periods,
 		"rows": rows,
 		"summary_rows": summary_rows,
+		"can_read_project_budget": can_read_pb,
+		"can_read_gl_entry": can_read_gl,
 	}

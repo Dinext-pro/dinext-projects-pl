@@ -15,14 +15,14 @@
    "fieldname": "valid_from",
    "fieldtype": "Date",
    "in_list_view": 1,
-   "label": "\u0414\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 \u0441",
+   "label": "Valid From",
    "reqd": 1
   },
   {
    "fieldname": "business_area",
    "fieldtype": "Link",
    "in_list_view": 1,
-   "label": "\u0411\u0438\u0437\u043d\u0435\u0441 \u0441\u0444\u0435\u0440\u0430",
+   "label": "Business Area",
    "link_filters": "[[\"Business Area\",\"enabled\",\"=\",1]]",
    "options": "Business Area",
    "reqd": 1
@@ -41,7 +41,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-08-06 02:45:02.937983",
+ "modified": "2026-09-17 15:10:00.000000",
  "modified_by": "Administrator",
  "module": "Dinext Projects Pl",
  "name": "Cost Business Area",

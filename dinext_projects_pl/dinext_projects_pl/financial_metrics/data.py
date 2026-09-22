@@ -8,6 +8,14 @@ from datetime import date
 import frappe
 from frappe.utils import add_months, flt, getdate
 
+from dinext_projects_pl.dinext_projects_pl.project_budget.amounts import (
+	GL_ENTRY,
+	PROJECT_BUDGET,
+	can_read_doctype,
+	list_readable_gle_names,
+	list_readable_pb_names,
+	period_date_bounds,
+)
 from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.actual_loader import (
 	get_actual_data_simple,
 )
@@ -66,7 +74,15 @@ def _build_parent_children_map(accounts: list[dict]) -> dict[str | None, list[di
 	return parent_children_map
 
 
-def _collect_project_plan_rows(project: str, company: str, from_year: int, from_month: int, to_year: int, to_month: int):
+def _collect_project_plan_rows(
+	project: str,
+	company: str,
+	from_year: int,
+	from_month: int,
+	to_year: int,
+	to_month: int,
+	pb_names=None,
+):
 	filters = {
 		"project": project,
 		"company": company,
@@ -75,7 +91,7 @@ def _collect_project_plan_rows(project: str, company: str, from_year: int, from_
 		"from_month": from_month,
 		"to_month": to_month,
 	}
-	return process_project_data(project, filters) or []
+	return process_project_data(project, filters, pb_names=pb_names) or []
 
 
 def _build_normalized_plan_values(
@@ -98,7 +114,15 @@ def _build_normalized_plan_values(
 	return plan_values
 
 
-def _collect_actual_values(project: str, company: str, from_year: int, from_month: int, to_year: int, to_month: int):
+def _collect_actual_values(
+	project: str,
+	company: str,
+	from_year: int,
+	from_month: int,
+	to_year: int,
+	to_month: int,
+	gle_names=None,
+):
 	filters = {
 		"project": project,
 		"company": company,
@@ -109,7 +133,7 @@ def _collect_actual_values(project: str, company: str, from_year: int, from_mont
 	}
 	actual_values: dict[tuple[str, int, int], float] = defaultdict(float)
 
-	for row in get_actual_data_simple(filters) or []:
+	for row in get_actual_data_simple(filters, gle_names=gle_names) or []:
 		account = row.get("account")
 		year = int(row.get("year") or 0)
 		month = int(row.get("month") or 0)
@@ -179,27 +203,61 @@ def _sum_top_level_track_totals(
 
 
 def get_track_period_totals(project_doc) -> tuple[list[dict], dict[str, dict[tuple[int, int], dict[str, float]]]]:
-	"""Return monthly periods and Income/Expense plan-fact totals keyed by (year, month)."""
+	"""Return monthly periods and Income/Expense plan-fact totals keyed by (year, month).
+
+	Same spirit as grid: no Project Budget read → empty plan; no GL Entry read → empty fact.
+	Doctype read but query conditions hide docs → BVF sees only list_readable names.
+	Does not throw. BVF report itself is a separate surface.
+	"""
+	empty_totals = {track_type: {} for track_type in TRACK_TYPES}
 	periods = get_project_monthly_periods(project_doc)
 	if not periods:
-		return [], {track_type: {} for track_type in TRACK_TYPES}
+		return [], empty_totals
+
+	can_read_pb = can_read_doctype(PROJECT_BUDGET)
+	can_read_gl = can_read_doctype(GL_ENTRY)
+	if not can_read_pb and not can_read_gl:
+		return periods, empty_totals
 
 	from_year, from_month, to_year, to_month = _get_project_date_bounds(project_doc)
 	accounts = _get_pl_accounts(project_doc.company)
-	plan_values = _build_normalized_plan_values(
-		_collect_project_plan_rows(
-			project_doc.name,
-			project_doc.company,
-			from_year,
-			from_month,
-			to_year,
-			to_month,
-		),
-		accounts,
+	plan_values = (
+		_build_normalized_plan_values(
+			_collect_project_plan_rows(
+				project_doc.name,
+				project_doc.company,
+				from_year,
+				from_month,
+				to_year,
+				to_month,
+				pb_names=list_readable_pb_names(project_doc.name),
+			),
+			accounts,
+		)
+		if can_read_pb
+		else {}
 	)
-	actual_values = _rollup_account_period_values(
-		_collect_actual_values(project_doc.name, project_doc.company, from_year, from_month, to_year, to_month),
-		accounts,
+	start_date, end_date = period_date_bounds(periods)
+	actual_values = (
+		_rollup_account_period_values(
+			_collect_actual_values(
+				project_doc.name,
+				project_doc.company,
+				from_year,
+				from_month,
+				to_year,
+				to_month,
+				gle_names=list_readable_gle_names(
+					project_doc.name,
+					project_doc.company,
+					start_date,
+					end_date,
+				),
+			),
+			accounts,
+		)
+		if can_read_gl
+		else {}
 	)
 	track_totals = _sum_top_level_track_totals(accounts, plan_values, actual_values)
 	return periods, track_totals

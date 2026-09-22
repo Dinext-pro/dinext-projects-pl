@@ -31,9 +31,20 @@ export function dimsEqual(a, b) {
 	return dimsKey(a) === dimsKey(b);
 }
 
+/** Explicit own including 0. null/"" = empty (display / children rollup). */
+export function ownForecastAmount(row, key) {
+	const raw = row?.[`own_forecast_${key}`];
+	if (raw == null || raw === "") {
+		return null;
+	}
+	const n = Number(raw);
+	return Number.isFinite(n) ? n : null;
+}
+
 export function forecastOf(row, key) {
-	if (row?.[`own_forecast_${key}`] != null) {
-		return Number(row[`own_forecast_${key}`] || 0);
+	const own = ownForecastAmount(row, key);
+	if (own != null) {
+		return own;
 	}
 	return Number(row?.[`forecast_${key}`] ?? row?.[`actual_${key}`] ?? 0);
 }
@@ -60,9 +71,8 @@ export function childForecastSum(row, key, excludeId = null) {
 	let sum = 0;
 	for (const child of row.children || []) {
 		if (excludeId && child.id === excludeId) continue;
-		if (child.risk) continue;
-		const own = forecastOf(child, key);
-		if (own) {
+		const own = ownForecastAmount(child, key);
+		if (own != null) {
 			sum += own;
 		} else {
 			sum += childForecastSum(child, key);
@@ -71,16 +81,17 @@ export function childForecastSum(row, key, excludeId = null) {
 	return sum;
 }
 
+/** Envelope only when parent has explicit own (incl. 0). Rolled display is not a cap. */
 export function parentForecastLimit(rows, row, key) {
 	let current = row;
 	while (current) {
 		const parent = findParent(rows, current.id);
 		if (!parent) return null;
-		const parentForecast = forecastOf(parent, key);
-		if (parentForecast > 0) {
+		const parentOwn = ownForecastAmount(parent, key);
+		if (parentOwn != null) {
 			const siblings = childForecastSum(parent, key, current.id);
 			return {
-				maxAllowed: parentForecast - siblings,
+				maxAllowed: parentOwn - siblings,
 				parent,
 				parentLabel: parent.account_label || parent.account,
 			};
@@ -129,11 +140,10 @@ export function rollupDisplayPlan(rows, periodKeys) {
 		rollupDisplayPlan(children, periodKeys);
 		for (const key of periodKeys) {
 			const own = planOf(row, key);
-			const financial = children.filter((child) => !child.risk);
 			if (own > 0) {
 				row[`plan_${key}`] = own;
-			} else if (financial.length) {
-				row[`plan_${key}`] = financial.reduce(
+			} else if (children.length) {
+				row[`plan_${key}`] = children.reduce(
 					(sum, child) => sum + Number(child[`plan_${key}`] || 0),
 					0
 				);
@@ -246,9 +256,60 @@ function cloneTree(rows) {
 	return JSON.parse(JSON.stringify(rows || []));
 }
 
+function ownForecastOf(row, key) {
+	return Number(row?.[`own_forecast_${key}`] || 0);
+}
+
+function rowTaskId(row) {
+	if (row?.task) return row.task;
+	return (row?.dimensions || []).find((d) => d?.doc === "Task")?.docname || "";
+}
+
+function findRiskRow(rows, account, riskId, taskId) {
+	if (!account || !riskId) return null;
+	const wantTask = taskId || "";
+	return (
+		flattenTree(rows).find(
+			(row) =>
+				row.account === account &&
+				row.risk === riskId &&
+				rowTaskId(row) === wantTask
+		) || null
+	);
+}
+
+function attachRiskChild(parent, account, riskId, taskId, dimensions) {
+	const row = {
+		id: `${parent.id}|risk|${riskId}`,
+		account,
+		account_label: parent.account_label,
+		task: taskId || null,
+		risk: riskId,
+		dimensions: dimensions.slice(),
+		children: [],
+		has_children: false,
+		expandable: false,
+	};
+	parent.children = parent.children || [];
+	parent.children.push(row);
+	parent.has_children = true;
+	parent.expandable = true;
+	return row;
+}
+
+function findUpdateLeaf(rows, account, dimensions) {
+	const taskId = dimensions.find((d) => d?.doc === "Task")?.docname || "";
+	const riskId =
+		dimensions.find((d) => d?.doc === "Project Risk")?.docname || "";
+	if (riskId) {
+		return findRiskRow(rows, account, riskId, taskId);
+	}
+	return findRowByAccountDims(rows, account, dimensions);
+}
+
 /**
  * Apply reserve/forecast updates onto cloned tree (add to forecast_*).
- * Creates a synthetic risk child under matching parent if missing.
+ * Risk updates land on the risk child (create under account/task parent if missing).
  */
 export function applyUpdatesToTree(rows, updates) {
 	const root = cloneTree(rows);
@@ -260,29 +321,20 @@ export function applyUpdatesToTree(rows, updates) {
 			dimensions.find((d) => d?.doc === "Project Risk")?.docname || "";
 		const periodAmountMap = item.period_amount_map || {};
 
-		let row = findRowByAccountDims(root, account, dimensions);
-		if (!row && riskId) {
-			const parentDims = taskId
-				? [{ doc: "Task", docname: taskId }]
-				: [];
-			const parent = findRowByAccountDims(root, account, parentDims);
-			if (parent) {
-				row = {
-					id: `${parent.id}|risk|${riskId}`,
-					account,
-					account_label: parent.account_label,
-					task: taskId || null,
-					risk: riskId,
-					dimensions: dimensions.slice(),
-					children: [],
-					has_children: false,
-					expandable: false,
-				};
-				parent.children = parent.children || [];
-				parent.children.push(row);
-				parent.has_children = true;
-				parent.expandable = true;
+		let row;
+		if (riskId) {
+			row = findRiskRow(root, account, riskId, taskId);
+			if (!row) {
+				const parentDims = taskId
+					? [{ doc: "Task", docname: taskId }]
+					: [];
+				const parent = findRowByAccountDims(root, account, parentDims);
+				if (parent) {
+					row = attachRiskChild(parent, account, riskId, taskId, dimensions);
+				}
 			}
+		} else {
+			row = findRowByAccountDims(root, account, dimensions);
 		}
 		if (!row) continue;
 
@@ -323,7 +375,7 @@ export function buildParentAdjustmentsFromUpdates(frm, updates) {
 	for (const item of updates) {
 		const account = (item.account || "").trim();
 		const dimensions = item.dimensions || [];
-		let leaf = findRowByAccountDims(simulated, account, dimensions);
+		const leaf = findUpdateLeaf(simulated, account, dimensions);
 		if (!leaf) continue;
 
 		for (const pk of periodKeys) {
@@ -332,36 +384,30 @@ export function buildParentAdjustmentsFromUpdates(frm, updates) {
 
 			let current = leaf;
 			while (current) {
-				const limit = parentForecastLimit(simulated, current, pk);
-				if (!limit?.parent) break;
+				const parent = findParent(simulated, current.id);
+				if (!parent) break;
 
-				const parent = limit.parent;
-				const parentForecast = forecastOf(parent, pk);
-				const requiredValue = flt(
-					parentForecast + reserveValue - limit.maxAllowed,
-					2
-				);
-
-				if (parentForecast > 0 && parentForecast < requiredValue) {
-					setForecast(parent, pk, requiredValue);
-					const adjKey = `${parent.account}|${dimsKey(parent.dimensions || [])}`;
-					if (!adjustmentMap[adjKey]) {
-						adjustmentMap[adjKey] = {
-							account: parent.account,
-							dimensions: (parent.dimensions || []).slice(),
-							period_amount_map: {},
-						};
-						adjusted_parents.push({
-							account: parent.account,
-							dimensions: (parent.dimensions || []).slice(),
-						});
+				const own = ownForecastOf(parent, pk);
+				if (own > 0) {
+					const requiredValue = flt(childForecastSum(parent, pk), 2);
+					if (own < requiredValue) {
+						setForecast(parent, pk, requiredValue);
+						const adjKey = `${parent.account}|${dimsKey(parent.dimensions || [])}`;
+						if (!adjustmentMap[adjKey]) {
+							adjustmentMap[adjKey] = {
+								account: parent.account,
+								dimensions: (parent.dimensions || []).slice(),
+								period_amount_map: {},
+							};
+							adjusted_parents.push({
+								account: parent.account,
+								dimensions: (parent.dimensions || []).slice(),
+							});
+						}
+						adjustmentMap[adjKey].period_amount_map[pk] = requiredValue;
 					}
-					adjustmentMap[adjKey].period_amount_map[pk] = requiredValue;
 				}
 
-				if (parentForecast > 0 && parentForecast >= requiredValue) {
-					break;
-				}
 				current = parent;
 			}
 		}

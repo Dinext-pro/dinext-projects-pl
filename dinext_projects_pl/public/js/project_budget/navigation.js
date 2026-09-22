@@ -1,10 +1,13 @@
 /**
- * Legacy P&L: dblclick on fact (readonly actual) → General Ledger.
- * Cell: month/quarter/year range. Total column: project expected dates.
- * Empty/summary account → all tree accounts. ISS-2025-01237.
+ * P&L navigation — same as HTML project_pl.js (976406e):
+ * - account / task row → List Budget (project + dinext_budget_account)
+ * - plan cell → Form approved Budget
+ * - fact (readonly actual) → General Ledger (ISS-2025-01237)
  */
 
 import { flattenTree } from "./budget-tree.js";
+import { FIND_APPROVED_BUDGET_API } from "./constants.js";
+import { isOwnForecastCell } from "./own-marker.js";
 
 function pad2(value) {
 	return String(value).padStart(2, "0");
@@ -40,6 +43,71 @@ export function parseActualField(field) {
 		return null;
 	}
 	return { kind: "period", key: match[1] };
+}
+
+export function parsePlanField(field) {
+	if (field === "plan_total") {
+		return { kind: "total" };
+	}
+	const match = /^plan_(.+)$/.exec(field || "");
+	if (!match) {
+		return null;
+	}
+	return { kind: "period", key: match[1] };
+}
+
+function resolvePeriodYearMonth(periods, periodKey) {
+	const period = (periods || []).find((item) => item.key === periodKey);
+	if (!period) {
+		return null;
+	}
+	const firstKey = period.monthly_keys?.[0];
+	const parsed = parseMonthlyKey(firstKey) || parseMonthlyKey(`${period.year}_${period.month}`);
+	if (!parsed) {
+		return null;
+	}
+	return parsed;
+}
+
+function openBudgetList(frm, row) {
+	const desk = globalThis.frappe;
+	if (!desk?.set_route || !frm?.doc?.name || isPlaceholderAccount(row?.account)) {
+		return;
+	}
+	const options = {
+		project: frm.doc.name,
+		dinext_budget_account: row.account,
+		budget_against: row.task ? "Task" : "Project",
+	};
+	if (row.task) {
+		options.task = row.task;
+	}
+	desk.route_options = options;
+	desk.set_route("List", "Budget");
+}
+
+async function openApprovedBudget(frm, row, periodKey) {
+	if (row?.summary_kind || isPlaceholderAccount(row?.account) || !periodKey) {
+		return;
+	}
+	const desk = globalThis.frappe;
+	const translate = desk?.__ || globalThis.__ || ((text) => text);
+	const ym = resolvePeriodYearMonth(frm.project_budget?.periods, periodKey);
+	if (!ym || typeof desk?.xcall !== "function" || typeof desk?.set_route !== "function") {
+		return;
+	}
+	const name = await desk.xcall(FIND_APPROVED_BUDGET_API, {
+		project: frm.doc.name,
+		account: row.account,
+		year: ym.year,
+		month: ym.month,
+		dimensions: row.dimensions || [],
+	});
+	if (!name) {
+		desk.show_alert?.(translate("No approved Budget found for the selected cell."), 5);
+		return;
+	}
+	desk.set_route("Form", "Budget", name);
 }
 
 export function collectGlAccounts(rows) {
@@ -139,10 +207,29 @@ export function buildGlRouteOptions(frm, row, field, periods) {
 	};
 }
 
-export function onCellDoubleClicked(frm, params) {
+export async function onCellDoubleClicked(frm, params) {
 	const field = params?.colDef?.field || params?.column?.getColDef?.()?.field || "";
 	const row = params?.data;
 	if (!frm?.doc || !row) {
+		return;
+	}
+
+	if (field === "account_label" && !row.summary_kind) {
+		params?.event?.preventDefault?.();
+		params?.event?.stopPropagation?.();
+		openBudgetList(frm, row);
+		return;
+	}
+
+	const plan = parsePlanField(field);
+	if (plan) {
+		const planValue = Number(row[field]);
+		if (plan.kind === "total" || !Number.isFinite(planValue) || planValue === 0) {
+			return;
+		}
+		params?.event?.preventDefault?.();
+		params?.event?.stopPropagation?.();
+		await openApprovedBudget(frm, row, plan.key);
 		return;
 	}
 
@@ -159,4 +246,52 @@ export function onCellDoubleClicked(frm, params) {
 	}
 	desk.route_options = options;
 	desk.set_route("query-report", "General Ledger");
+}
+
+/** AG 33+ CellEditingStartedEvent has no eGridCell. Number editor exposes agSetEditValue. */
+function clearForecastEditor(params) {
+	const instances = params?.api?.getCellEditorInstances?.() || [];
+	for (const editor of instances) {
+		if (typeof editor?.agSetEditValue === "function") {
+			editor.agSetEditValue(null);
+			return;
+		}
+		const input = editor.getGui?.()?.querySelector?.("input");
+		if (input) {
+			input.value = "";
+			return;
+		}
+	}
+	const fallback = params?.eGridCell?.querySelector?.("input");
+	if (fallback) {
+		fallback.value = "";
+	}
+}
+
+/** Type-to-edit already put a digit in the editor — do not wipe it. */
+export function startedByTypingDigit(params) {
+	const ev = params?.event;
+	const key = ev?.key ?? ev?.data ?? ev?.event?.key;
+	return typeof key === "string" && /^\d$/.test(key);
+}
+
+/** Non-own forecast (empty 0 / rollup) → empty editor. Keep typed digit or own 0. */
+export function onCellEditingStarted(frm, params) {
+	const field = params?.colDef?.field || "";
+	if (!field.startsWith("actual_")) {
+		return;
+	}
+	const periodKey = field.slice("actual_".length);
+	const period = (frm?.project_budget?.periods || []).find((item) => item.key === periodKey);
+	if (!period || period.is_past) {
+		return;
+	}
+	if (isOwnForecastCell(params.data, period)) {
+		return;
+	}
+	if (startedByTypingDigit(params)) {
+		return;
+	}
+
+	clearForecastEditor(params);
 }

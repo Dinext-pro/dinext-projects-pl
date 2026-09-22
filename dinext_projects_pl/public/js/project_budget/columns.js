@@ -2,6 +2,13 @@ import {
 	accountLabelTreeContentKey,
 	renderAccountLabel,
 } from "./risk-delete.js";
+import {
+	OWN_CELL_CLASS,
+	isOwnForecastCell,
+	isOwnPlanCell,
+	ownValueTooltip,
+} from "./own-marker.js";
+import { normalizeDeltaMode, resolveDeltaValue } from "./delta-mode.js";
 
 /** Legacy period group width: 210 − 70 per hidden plan − 50 per hidden Δ. */
 const LEGACY_PERIOD_GROUP_WIDTH = 210;
@@ -35,12 +42,12 @@ function isProfitRow(data) {
 	return data?.summary_kind === "profit";
 }
 
-/** Legacy numberformat: integer + thin space; profitability = one decimal + %. */
-function formatAmount(params) {
+/** Legacy numberformat: integer + thin space; profitability = hundredths + %. */
+export function formatAmount(params) {
 	const n = toNumber(params.value);
 	if (n == null) return "";
 	if (isProfitabilityRow(params.data)) {
-		return `${n.toFixed(1)}%`;
+		return `${n.toFixed(2)}%`;
 	}
 	return n
 		.toFixed(0)
@@ -48,12 +55,36 @@ function formatAmount(params) {
 		.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 }
 
-/** Legacy delta: one decimal + %. */
+/** Forecast paints 0 like plan (empty / rollup / own). */
+export function formatForecastAmount(params) {
+	return formatAmount(params);
+}
+
+/** Legacy delta: one decimal + %. Profitability row: hundredths. */
 function formatDelta(params) {
 	const n = toNumber(params.value);
 	if (n == null) return "";
-	if (n === 0) return "0%";
-	return `${n.toFixed(1)}%`;
+	const digits = isProfitabilityRow(params.data) ? 2 : 1;
+	if (n === 0) return digits === 2 ? "0.00%" : "0%";
+	return `${n.toFixed(digits)}%`;
+}
+
+function isDeltaAbs(frm) {
+	return normalizeDeltaMode(frm?.bg_delta_mode) === "abs";
+}
+
+function deltaFormatter(frm) {
+	return isDeltaAbs(frm) ? formatAmount : formatDelta;
+}
+
+function deltaLeafGetter(frm, planField, actualField, deltaField) {
+	return (params) =>
+		resolveDeltaValue({
+			plan: params.data?.[planField],
+			actual: params.data?.[actualField],
+			storedPct: params.data?.[deltaField],
+			mode: frm?.bg_delta_mode,
+		});
 }
 
 function isZeroValue(params) {
@@ -104,11 +135,11 @@ function withoutColumnFilter(col) {
 	return { ...col, filterable: false };
 }
 
-/** Amount editor: digits + decimal; reject letters / negatives. Empty → 0. */
-function plAmountValueParser(params) {
+/** Amount editor: digits + decimal; reject letters / negatives. Empty → null (clear). */
+export function plAmountValueParser(params) {
 	const raw = params.newValue;
 	if (raw == null || raw === "") {
-		return 0;
+		return null;
 	}
 	if (typeof raw === "number") {
 		if (!Number.isFinite(raw) || raw < 0) {
@@ -118,7 +149,7 @@ function plAmountValueParser(params) {
 	}
 	const trimmed = String(raw).trim().replace(/\s/g, "");
 	if (!trimmed) {
-		return 0;
+		return null;
 	}
 	if (!/^\d+([.,]\d+)?$/.test(trimmed)) {
 		return params.oldValue;
@@ -168,7 +199,18 @@ function serialValueGetter(params) {
 }
 
 function buildPeriodLeaf(opts) {
-	const { field, colId, headerName, width, hide, valueFormatter, edit, pinned } = opts;
+	const {
+		field,
+		colId,
+		headerName,
+		width,
+		hide,
+		valueFormatter,
+		valueGetter,
+		edit,
+		pinned,
+		isOwnCell,
+	} = opts;
 	const col = withoutColumnFilter(
 		withCenterAlign({
 			field,
@@ -181,7 +223,18 @@ function buildPeriodLeaf(opts) {
 			type: "number",
 			hide: !!hide,
 			valueFormatter,
-			cellClassRules: { ...AMOUNT_CELL_CLASS_RULES },
+			cellClassRules: {
+				...AMOUNT_CELL_CLASS_RULES,
+				...(isOwnCell
+					? { [OWN_CELL_CLASS]: (params) => isOwnCell(params.data) }
+					: {}),
+			},
+			tooltipValueGetter: isOwnCell
+				? (params) => {
+						const text = ownValueTooltip(isOwnCell(params.data));
+						return text ? __(text) : undefined;
+					}
+				: undefined,
 		})
 	);
 	if (edit !== undefined) {
@@ -194,6 +247,9 @@ function buildPeriodLeaf(opts) {
 		col.valueParser = plAmountValueParser;
 	} else {
 		col.edit = false;
+	}
+	if (valueGetter) {
+		col.valueGetter = valueGetter;
 	}
 	if (pinned) {
 		col.pinned = pinned;
@@ -208,11 +264,11 @@ function buildPeriodColumns(frm, periods) {
 	const leafWidth = periodLeafWidth(hidePlan, hideDelta);
 
 	const periodType = form._pl_period_type || "month";
-	const canEditForecast = periodType === "month";
+	const canEditForecast = periodType === "month" && !form.bg_accumulated_values;
 
 	return (periods || []).map((period) => {
 		const key = period.key;
-		const actualLabel = period.is_past ? __("Actual") : __("Forecast");
+		const actualLabel = period.is_past ? __("Fact") : __("Forecast");
 		const headerName =
 			period.label ||
 			(period.quarter
@@ -234,6 +290,7 @@ function buildPeriodColumns(frm, periods) {
 					width: leafWidth,
 					hide: hidePlan,
 					valueFormatter: formatAmount,
+					isOwnCell: (row) => isOwnPlanCell(row, key),
 				}),
 				buildPeriodLeaf({
 					field: `actual_${key}`,
@@ -242,7 +299,8 @@ function buildPeriodColumns(frm, periods) {
 					width: leafWidth,
 					edit: (row) =>
 						canEditForecast && !period.is_past && !row?.summary_kind,
-					valueFormatter: formatAmount,
+					valueFormatter: period.is_past ? formatAmount : formatForecastAmount,
+					isOwnCell: (row) => isOwnForecastCell(row, period),
 				}),
 				buildPeriodLeaf({
 					field: `delta_${key}`,
@@ -250,7 +308,8 @@ function buildPeriodColumns(frm, periods) {
 					headerName: "Δ",
 					width: leafWidth,
 					hide: hideDelta,
-					valueFormatter: formatDelta,
+					valueGetter: deltaLeafGetter(form, `plan_${key}`, `actual_${key}`, `delta_${key}`),
+					valueFormatter: deltaFormatter(form),
 				}),
 			],
 		};
@@ -262,7 +321,7 @@ function buildTotalColumn(frm, periods) {
 	const hideDelta = !!frm.bg_hide_delta;
 	const leafWidth = periodLeafWidth(hidePlan, hideDelta);
 	const last = periods?.[periods.length - 1];
-	const actualLabel = last?.is_past ? __("Actual") : __("Forecast");
+	const actualLabel = last?.is_past ? __("Fact") : __("Forecast");
 
 	return {
 		colId: "total",
@@ -295,7 +354,8 @@ function buildTotalColumn(frm, periods) {
 				width: leafWidth,
 				hide: hideDelta,
 				pinned: "right",
-				valueFormatter: formatDelta,
+				valueGetter: deltaLeafGetter(frm, "plan_total", "actual_total", "delta_total"),
+				valueFormatter: deltaFormatter(frm),
 			}),
 		],
 	};

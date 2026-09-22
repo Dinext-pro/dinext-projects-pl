@@ -1,12 +1,15 @@
+import { TABLE_MAX_HEIGHT } from "./constants.js";
 import { initState } from "./state.js";
 import { loadGridData, reloadTable } from "./data.js";
+import { hasPlAmountAccess, syncPlAccessBanner } from "./access.js";
 import { applyPlanDeltaVisibility, getColumns, refreshColumns } from "./columns.js";
 import { attachTreePersistence, getExpandedIds, syncExpandedIds } from "./tree.js";
 import { onSaveCells, onValidateCells } from "./save.js";
-import { onCellDoubleClicked } from "./navigation.js";
+import { onCellDoubleClicked, onCellEditingStarted } from "./navigation.js";
 import { buildToolbarItems } from "./toolbar.js";
 import {
 	ensurePlDefaults,
+	isMutationLocked,
 	start_fullscreen_overlay_watch,
 	stop_fullscreen_overlay_watch,
 	bring_overlays_into_fullscreen,
@@ -33,10 +36,6 @@ function resolveFullscreenOpts(container) {
 		onEnter: ({ element }) => {
 			element?.classList.add(FS_SHELL_CLASS);
 			if (container) {
-				container.dataset.plV2PrevHeight = container.style.height || "";
-				container.dataset.plV2PrevMinHeight = container.style.minHeight || "";
-				container.style.height = "auto";
-				container.style.minHeight = "0";
 				container.style.flex = "1 1 auto";
 			}
 			afterLayout();
@@ -44,11 +43,7 @@ function resolveFullscreenOpts(container) {
 		onExit: ({ element }) => {
 			element?.classList.remove(FS_SHELL_CLASS);
 			if (container) {
-				container.style.height = container.dataset.plV2PrevHeight || "min(50vh, 560px)";
-				container.style.minHeight = container.dataset.plV2PrevMinHeight || "280px";
 				container.style.flex = "";
-				delete container.dataset.plV2PrevHeight;
-				delete container.dataset.plV2PrevMinHeight;
 			}
 			afterLayout();
 		},
@@ -77,12 +72,13 @@ function buildTableOptions(frm, state) {
 		columns: getColumns(frm, state.periods),
 		summaryRows: state.summaryRows || [],
 		summary: { pin: "bottom", edit: false, clipboard: false, selection: false },
+		layout: { height: "auto", maxHeight: TABLE_MAX_HEIGHT },
 		expandedIds: getExpandedIds(frm),
-		edit: true,
+		edit: !isMutationLocked(frm),
 		selection: { enabled: true },
 		// Excel UX: TSV copy/paste + fill-handle (same as WE v2).
-		clipboard: { enabled: true },
-		fillHandle: { enabled: true },
+		clipboard: { enabled: !isMutationLocked(frm) },
+		fillHandle: { enabled: !isMutationLocked(frm) },
 		// Excel-like Average | Count | Sum under grid (min 2 cells).
 		selectionStatus: { enabled: true },
 		// Checkbox select for «Сохранить план»; each bucket row independently.
@@ -113,6 +109,9 @@ function buildTableOptions(frm, state) {
 			headerHeight: 22,
 			groupHeaderHeight: 22,
 			suppressMovableColumns: true,
+			enableBrowserTooltips: true,
+			tooltipShowDelay: 400,
+			onCellEditingStarted: (params) => onCellEditingStarted(frm, params),
 		},
 		// Fullscreen: core default (target: container). Domain controls live in toolbar.
 	};
@@ -151,6 +150,10 @@ export async function initTable(frm) {
 				"/assets/dinext_projects_pl/css/project_budget.css",
 			]);
 			await loadGridData(frm);
+			syncPlAccessBanner(frm);
+			if (!hasPlAmountAccess(state)) {
+				return null;
+			}
 
 			if (state.table) {
 				return state.table;
@@ -176,7 +179,13 @@ export async function refreshRuntime(frm) {
 
 	syncExpandedIds(frm);
 
+	const locked = isMutationLocked(frm);
+	if (state.table.options) {
+		state.table.options.clipboard = { enabled: !locked };
+		state.table.options.fillHandle = { enabled: !locked };
+	}
 	if (state.table.setOption) {
+		state.table.setOption("edit", !locked);
 		state.table.setOption("columns", getColumns(frm, state.periods));
 	}
 	if (state.table.setSummaryRows) {
