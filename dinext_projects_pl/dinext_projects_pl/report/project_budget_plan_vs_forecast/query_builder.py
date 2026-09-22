@@ -104,6 +104,15 @@ def apply_writable_projects_filter(query, column, filters):
 	return query.where(column.isin(writable))
 
 
+def apply_optional_name_filter(query, column, names):
+	"""None = no name filter (report default). Empty = match nothing."""
+	if names is None:
+		return query
+	if not names:
+		return query.where(column.isin(["__no_readable_doc__"]))
+	return query.where(column.isin(list(names)))
+
+
 def _period_match_criterion(pba, month_periods):
 	criterion = None
 	for period_year, period_month in month_periods:
@@ -263,8 +272,11 @@ def _project_risk_exists(pb):
 	)
 
 
-def build_budget_raw_query(filters, *, project=None, projects=None):
-	"""Build grouped budget/plan vs forecast query for one or many projects."""
+def build_budget_raw_query(filters, *, project=None, projects=None, pb_names=None):
+	"""Build grouped budget/plan vs forecast query for one or many projects.
+
+	pb_names=None keeps the unrestricted report path. Metrics pass get_list-visible names.
+	"""
 	pba = frappe.qb.DocType("Project Budget Amount")
 	pb = frappe.qb.DocType("Project Budget")
 	pbd = frappe.qb.DocType("Project Budget Dimension")
@@ -331,6 +343,7 @@ def build_budget_raw_query(filters, *, project=None, projects=None):
 			project_doctype.custom_project_portfolio == filters.get("project_portfolio")
 		)
 
+	query = apply_optional_name_filter(query, pb.name, pb_names)
 	return query
 
 
@@ -378,12 +391,13 @@ def build_drill_budget_projects_query(filters, account_names, month_periods):
 	return query
 
 
-def execute_raw_budget_data(filters, *, project=None, projects=None):
+def execute_raw_budget_data(filters, *, project=None, projects=None, pb_names=None):
 	"""Execute the raw budget query and return rows as dicts."""
 	return build_budget_raw_query(
 		filters,
 		project=project,
 		projects=projects,
+		pb_names=pb_names,
 	).run(as_dict=True)
 
 
@@ -399,6 +413,7 @@ def build_gl_actual_query(
 	*,
 	group_by_project=False,
 	apply_cc_ba_filters=True,
+	gle_names=None,
 ):
 	GLE = frappe.qb.DocType("GL Entry")
 	Account = frappe.qb.DocType("Account")
@@ -440,6 +455,7 @@ def build_gl_actual_query(
 	query = apply_finance_book_filter(query, GLE.finance_book, filters)
 	query = apply_portfolio_filter(query, GLE.project, filters)
 	query = apply_writable_projects_filter(query, GLE.project, filters)
+	query = apply_optional_name_filter(query, GLE.name, gle_names)
 	return query
 
 

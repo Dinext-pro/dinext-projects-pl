@@ -166,11 +166,14 @@ function format_pl_chart_tooltip_value(value, frm) {
 }
 
 function get_pl_chart_view_label(frm) {
-    let view = __("actual/forecast");
+    let view = __("fact/forecast");
     if (frm.budget_view_options == __("Forecast only")) {
         view = __("forecast");
-    } else if (frm.budget_view_options == __("Actual only")) {
-        view = __("actual");
+    } else if (
+        frm.budget_view_options == __("Fact only") ||
+        frm.budget_view_options == __("Actual only")
+    ) {
+        view = __("fact");
     }
     return view;
 }
@@ -548,7 +551,8 @@ function get_pl_chart_dataset_color(dataset, index, palette, frm) {
         return hidePlan ? palette[1] : palette[dataset.plIsPlan ? 2 : 3];
     }
     if (kind === "period_profit" || kind === "cumulative_profit") {
-        return hidePlan ? palette[3] : palette[dataset.plIsPlan ? 4 : 5];
+        // hidePlan palette: income, expense, actual-profit yellow. Keep yellow shades.
+        return hidePlan ? palette[2] : palette[dataset.plIsPlan ? 4 : 5];
     }
 
     return palette[index] || palette[palette.length - 1];

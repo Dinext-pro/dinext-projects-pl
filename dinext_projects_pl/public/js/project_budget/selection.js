@@ -1,5 +1,6 @@
 import { PERIOD_FIELD_RE, SAVE_PLAN_API } from "./constants.js";
 import { flattenTree, validatePlanWrites } from "./budget-tree.js";
+import { isMutationLocked } from "./controls.js";
 
 function isSavableRow(row) {
 	return !!(row && !row.summary_kind && row.account);
@@ -195,6 +196,9 @@ async function executeSavePlan(frm, data) {
  * Save plan for checked rows and/or selected period cells. Confirm once, then save.
  */
 export function saveForecastAsPlan(frm) {
+	if (isMutationLocked(frm)) {
+		return;
+	}
 	if ((frm._pl_period_type || "month") !== "month") {
 		frappe.msgprint(
 			__("Saving plan is available only in monthly display mode.")
@@ -223,7 +227,7 @@ export function saveForecastAsPlan(frm) {
 
 	frappe.confirm(
 		__(
-			"Are you sure you want to save the selected forecast / actual data as plan (checked rows and selected cells)?"
+			"Are you sure you want to save the selected forecast / fact data as plan (checked rows and selected cells)?"
 		),
 		() => {
 			executeSavePlan(frm, data).catch((err) => {

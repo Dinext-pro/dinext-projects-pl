@@ -11,6 +11,9 @@ import frappe
 from dinext_projects_pl.dinext_projects_pl.project_budget.grid_data import (
 	run_get_project_budget_grid,
 )
+from dinext_projects_pl.dinext_projects_pl.project_budget.revenue_progress import (
+	run_get_revenue_progress,
+)
 from dinext_projects_pl.models import (
 	ProjectBudgetGridFormInput,
 	ProjectBudgetGridResponse,
@@ -42,6 +45,12 @@ def get_project_budget_grid(
 		),
 	}
 	return run_get_project_budget_grid(form_input)
+
+
+@frappe.whitelist()
+def get_revenue_progress(project: str | None = None) -> dict:
+	"""Income plan vs actual for Project Details Revenue bar."""
+	return run_get_revenue_progress(project)
 
 
 @frappe.whitelist()

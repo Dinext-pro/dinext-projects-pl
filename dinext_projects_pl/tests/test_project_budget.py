@@ -30,8 +30,41 @@ class TestProjectBudget(FrappeTestCase):
         super().setUpClass()
         if not frappe.db.exists("Workflow", BUDGET_WORKFLOW_NAME):
             raise AssertionError("Dinext Budget Approval workflow fixture must be installed for tests")
+        cls._ensure_budget_task_column()
         cls.company = "_Test Company"
         cls.expense_account = cls._get_expense_account(cls.company)
+
+    @classmethod
+    def _ensure_budget_task_column(cls):
+        from erpnext.accounts.doctype.accounting_dimension.accounting_dimension import (
+            make_dimension_in_accounting_doctypes,
+        )
+
+        from dinext_projects_pl.install import sync_accounting_dimensions
+
+        sync_accounting_dimensions()
+        if frappe.db.has_column("Budget", "task"):
+            return
+        if not frappe.db.exists("DocType", "Task"):
+            raise AssertionError("Task DocType is required to create Budget.task")
+        if not frappe.db.exists("Accounting Dimension", {"document_type": "Task"}):
+            frappe.get_doc(
+                {
+                    "doctype": "Accounting Dimension",
+                    "document_type": "Task",
+                    "fieldname": "task",
+                    "label": "Task",
+                }
+            ).insert()
+        dimension_name = frappe.db.get_value(
+            "Accounting Dimension", {"document_type": "Task"}, "name"
+        )
+        make_dimension_in_accounting_doctypes(
+            frappe.get_doc("Accounting Dimension", dimension_name)
+        )
+        frappe.clear_cache(doctype="Budget")
+        if not frappe.db.has_column("Budget", "task"):
+            raise AssertionError("Budget.task column missing after accounting dimension sync")
 
     def setUp(self):
         self.project = self._make_project()

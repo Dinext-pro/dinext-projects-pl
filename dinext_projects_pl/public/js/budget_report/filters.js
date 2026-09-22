@@ -64,7 +64,10 @@ br.__ = function (text) {
 	if (translated !== text) {
 		return translated;
 	}
-	return br.ru_fallback_translations[text] || text;
+	if ((frappe.boot && frappe.boot.lang) === "ru") {
+		return br.ru_fallback_translations[text] || text;
+	}
+	return text;
 };
 
 function budget_report_link_options(doctype, txt, extra_filters) {

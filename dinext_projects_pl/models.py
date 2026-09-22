@@ -26,7 +26,8 @@ class ProjectBudgetSaveForecastChange(TypedDict, total=False):
 	period_key: str
 	year: int
 	month: int
-	value: float | int | str
+	value: float | int | str | None
+	clear: bool
 
 
 class ProjectBudgetSaveForecastFormInput(TypedDict, total=False):
@@ -80,6 +81,8 @@ class ProjectBudgetGridResponse(TypedDict, total=False):
 	periods: list[ProjectBudgetDisplayPeriod]
 	rows: list[ProjectBudgetRow]
 	summary_rows: list[ProjectBudgetRow]
+	can_read_project_budget: bool
+	can_read_gl_entry: bool
 
 
 class BucketAmounts(TypedDict, total=False):

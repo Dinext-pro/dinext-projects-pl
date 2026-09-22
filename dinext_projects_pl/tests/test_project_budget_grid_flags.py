@@ -25,7 +25,15 @@ class TestProjectBudgetGridFlags(FrappeTestCase):
 		for prefix in ("plan", "forecast", "own_fact", "fact", "actual"):
 			row[f"{prefix}_{self.KEY}"] = float(amounts.get(prefix, 0))
 		row[f"own_plan_{self.KEY}"] = float(amounts.get("own_plan", amounts.get("plan", 0)))
-		row[f"own_forecast_{self.KEY}"] = float(amounts.get("own_forecast", amounts.get("forecast", 0)))
+		if "own_forecast" in amounts:
+			own_forecast = amounts["own_forecast"]
+		elif amounts.get("forecast"):
+			own_forecast = amounts["forecast"]
+		else:
+			own_forecast = None
+		row[f"own_forecast_{self.KEY}"] = (
+			None if own_forecast is None else float(own_forecast)
+		)
 		return row
 
 	def test_row_has_value_uses_own_not_rolled_actual(self):
@@ -46,14 +54,27 @@ class TestProjectBudgetGridFlags(FrappeTestCase):
 		self.assertEqual(len(kept), 1)
 		self.assertEqual([c["id"] for c in kept[0]["children"]], ["plan"])
 
-	def test_filter_keeps_empty_task_stubs(self):
-		"""Legacy: full Task WBS under account even without amounts."""
+	def test_filter_drops_empty_task_stubs(self):
+		"""Empty Task / dimension rows hide with empty accounts when show_zero_rows is off."""
 		task_stub = self._row(id="acct-task")
 		task_stub["task"] = "TASK-1"
 		parent = self._row(id="acct", children=[task_stub])
 		kept = _filter_zero_value_rows([parent], self.PERIODS)
+		self.assertEqual(kept, [])
+
+	def test_filter_drops_empty_risk_leaves(self):
+		risk_stub = self._row(id="acct-risk")
+		risk_stub["risk"] = "RISK-1"
+		parent = self._row(id="acct", children=[risk_stub])
+		kept = _filter_zero_value_rows([parent], self.PERIODS)
+		self.assertEqual(kept, [])
+
+	def test_filter_keeps_valued_task_row(self):
+		task_row = self._row(id="acct-task", plan=20)
+		task_row["task"] = "TASK-1"
+		parent = self._row(id="acct", children=[task_row])
+		kept = _filter_zero_value_rows([parent], self.PERIODS)
 		self.assertEqual(len(kept), 1)
-		self.assertEqual(len(kept[0]["children"]), 1)
 		self.assertEqual(kept[0]["children"][0]["task"], "TASK-1")
 
 	def test_rollup_on_is_own_plus_descendants(self):
@@ -100,7 +121,7 @@ class TestProjectBudgetGridFlags(FrappeTestCase):
 		parent = self._row(id="parent", forecast=0)
 		_rollup_child_fact(parent, [child_a, child_b], self.PERIODS, "forecast_and_fact")
 		self.assertEqual(parent[f"forecast_{self.KEY}"], 70)
-		self.assertEqual(parent[f"own_forecast_{self.KEY}"], 0)
+		self.assertIsNone(parent.get(f"own_forecast_{self.KEY}"))
 
 	def test_forecast_rollup_keeps_own(self):
 		child = self._row(id="c", forecast=40)
@@ -109,10 +130,31 @@ class TestProjectBudgetGridFlags(FrappeTestCase):
 		self.assertEqual(parent[f"forecast_{self.KEY}"], 100)
 		self.assertEqual(parent[f"own_forecast_{self.KEY}"], 100)
 
-	def test_plan_and_forecast_rollup_skip_risk_children(self):
+	def test_forecast_rollup_keeps_explicit_own_zero(self):
+		child = self._row(id="c", forecast=40)
+		parent = self._row(id="parent", forecast=0, own_forecast=0)
+		_rollup_child_fact(parent, [child], self.PERIODS, "forecast_and_fact")
+		self.assertEqual(parent[f"forecast_{self.KEY}"], 0)
+		self.assertEqual(parent[f"own_forecast_{self.KEY}"], 0)
+
+	def test_row_has_value_keeps_explicit_own_forecast_zero(self):
+		own_zero = self._row(own_forecast=0, forecast=0)
+		self.assertTrue(_row_has_value(own_zero, self.PERIODS))
+		empty = self._row()
+		self.assertFalse(_row_has_value(empty, self.PERIODS))
+
+	def test_plan_and_forecast_rollup_includes_risk_children(self):
 		task = self._row(id="task", plan=40, forecast=25)
 		risk = self._row(id="risk", plan=80, forecast=90, risk="RISK-1")
 		parent = self._row(id="parent", plan=0, forecast=0)
 		_rollup_child_fact(parent, [task, risk], self.PERIODS, "forecast_and_fact")
-		self.assertEqual(parent[f"plan_{self.KEY}"], 40)
-		self.assertEqual(parent[f"forecast_{self.KEY}"], 25)
+		self.assertEqual(parent[f"plan_{self.KEY}"], 120)
+		self.assertEqual(parent[f"forecast_{self.KEY}"], 115)
+
+	def test_own_plan_forecast_still_ignore_risk_children(self):
+		task = self._row(id="task", plan=40, forecast=25)
+		risk = self._row(id="risk", plan=80, forecast=90, risk="RISK-1")
+		parent = self._row(id="parent", plan=200, forecast=150)
+		_rollup_child_fact(parent, [task, risk], self.PERIODS, "forecast_and_fact")
+		self.assertEqual(parent[f"plan_{self.KEY}"], 200)
+		self.assertEqual(parent[f"forecast_{self.KEY}"], 150)

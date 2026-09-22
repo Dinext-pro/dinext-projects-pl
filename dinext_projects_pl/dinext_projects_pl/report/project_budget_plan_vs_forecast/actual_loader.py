@@ -103,13 +103,14 @@ def _aggregate_allocated_rows(project_rows, filters):
 	]
 
 
-def _fetch_gl_by_project(filters, start_date, end_date):
+def _fetch_gl_by_project(filters, start_date, end_date, gle_names=None):
 	rows = build_gl_actual_query(
 		filters,
 		start_date,
 		end_date,
 		group_by_project=True,
 		apply_cc_ba_filters=False,
+		gle_names=gle_names,
 	).run(as_dict=True)
 
 	for row in rows:
@@ -118,10 +119,10 @@ def _fetch_gl_by_project(filters, start_date, end_date):
 	return rows
 
 
-def _get_allocated_actual_data(filters, start_date, end_date):
+def _get_allocated_actual_data(filters, start_date, end_date, gle_names=None):
 	_report_debug("=== GET ALLOCATED ACTUAL DATA START ===", filters)
 
-	project_rows = _fetch_gl_by_project(filters, start_date, end_date)
+	project_rows = _fetch_gl_by_project(filters, start_date, end_date, gle_names=gle_names)
 	actual_data = _aggregate_allocated_rows(project_rows, filters)
 
 	if filters.get("include_future_actual"):
@@ -134,15 +135,18 @@ def _get_allocated_actual_data(filters, start_date, end_date):
 	return actual_data or []
 
 
-def get_actual_data_simple(filters):
+def get_actual_data_simple(filters, gle_names=None):
 	"""Получает фактические данные из GL Entry + черновики если включено"""
 	try:
 		_report_debug("=== GET ACTUAL DATA SIMPLE START ===", filters)
 
+		if gle_names is not None and not gle_names:
+			return []
+
 		start_date, end_date = _get_period_dates(filters)
 
 		if _uses_project_dimension_path(filters):
-			return _get_allocated_actual_data(filters, start_date, end_date)
+			return _get_allocated_actual_data(filters, start_date, end_date, gle_names=gle_names)
 
 		actual_data = build_gl_actual_query(
 			filters,
@@ -150,6 +154,7 @@ def get_actual_data_simple(filters):
 			end_date,
 			group_by_project=False,
 			apply_cc_ba_filters=True,
+			gle_names=gle_names,
 		).run(as_dict=True)
 
 		for row in actual_data:
