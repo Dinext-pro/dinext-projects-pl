@@ -14,15 +14,16 @@ function resolveActual(forecast, fact, isPast, viewMode) {
 	return isPast ? fact : forecast;
 }
 
-function calcDeltaPct(plan, actual) {
+function calcDeltaPct(plan, actual, digits = 1) {
 	if (!plan) return 0;
-	return Math.round(((actual - plan) / plan) * 1000) / 10;
+	const scale = 10 ** digits;
+	return Math.round(((actual - plan) / plan) * 100 * scale) / scale;
 }
 
-/** Server summary.py: round((profit / income) * 100, 1); null when no income. */
+/** (profit / income) * 100, hundredths; null when no income. */
 function calcProfitabilityPct(profit, income) {
 	if (!income) return null;
-	return Math.round((profit / income) * 1000) / 10;
+	return Math.round((profit / income) * 10000) / 100;
 }
 
 function applyRowTotals(row, periods) {
@@ -284,7 +285,7 @@ function buildSummaryFromRoots(rows, periods, accumulated, viewMode) {
 		profitability[`forecast_${key}`] = period.is_past ? null : profActual;
 		profitability[`fact_${key}`] = period.is_past ? profActual : null;
 		profitability[`delta_${key}`] =
-			profPlan != null && profActual != null ? calcDeltaPct(profPlan, profActual) : null;
+			profPlan != null && profActual != null ? calcDeltaPct(profPlan, profActual, 2) : null;
 	}
 
 	const profitPlanTotal = planIncomeTotal - planExpenseTotal;
@@ -299,7 +300,7 @@ function buildSummaryFromRoots(rows, periods, accumulated, viewMode) {
 	profitability.actual_total = profActualTotal;
 	profitability.delta_total =
 		profPlanTotal != null && profActualTotal != null
-			? calcDeltaPct(profPlanTotal, profActualTotal)
+			? calcDeltaPct(profPlanTotal, profActualTotal, 2)
 			: null;
 
 	return [profit, profitability];
