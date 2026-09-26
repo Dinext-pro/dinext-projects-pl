@@ -3,7 +3,7 @@ app_title = "Dinext Projects Pl"
 app_publisher = "Dinext"
 app_description = "Dinext Projects P&L"
 app_email = "info@dinext.ru"
-app_license = "mit"
+app_license = "GNU General Public License (v3)"
 
 fixtures = [
     {
