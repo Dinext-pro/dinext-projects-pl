@@ -4,7 +4,7 @@ var br = dinext_projects_pl.budget_plan_vs_forecast;
 
 var BUDGET_CHART_ASSETS = [
 	"/assets/dinext_common/js/echarts.min.js",
-	"/assets/dinext_projects_pl/js/project_pl_echarts.js",
+	"/assets/dinext_projects_pl/js/project_budget_chart.js",
 ];
 
 br._budget_chart_instance = null;
