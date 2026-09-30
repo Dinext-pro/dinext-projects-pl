@@ -280,7 +280,15 @@ function build_financial_metrics(frm) {
 
 const METRICS_LAZY_FIELD = "custom_metrics";
 
+function is_metrics_tab_hidden(frm) {
+    const tab = frm?.get_field?.("custom_метрики");
+    return Boolean(tab?.df?.hidden);
+}
+
 function schedule_financial_metrics_mount(frm) {
+    if (is_metrics_tab_hidden(frm)) {
+        return;
+    }
     const bind = window.project_workload_assignment?.bindLazyTabMount;
     if (typeof bind !== "function") {
         console.error("[Project Metrics] bindLazyTabMount missing — refuse eager mount");
