@@ -19,6 +19,18 @@ fixtures = [
         ]
     },
     {
+        "doctype": "Client Script",
+        "filters": [
+            ["module", "in", ["Dinext Projects Pl"]],
+        ]
+    },
+    {
+        "doctype": "Server Script",
+        "filters": [
+            ["module", "in", ["Dinext Projects Pl"]],
+        ]
+    },
+    {
         "doctype": "Report",
         "filters": [
             ["module", "in", ["Dinext Projects Pl"]],
