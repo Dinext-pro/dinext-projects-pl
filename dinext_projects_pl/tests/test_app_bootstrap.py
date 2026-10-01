@@ -23,6 +23,11 @@ class TestAppBootstrap(unittest.TestCase):
         self.assertIn("Workflow State", fixture_doctypes)
         self.assertIn("Workflow Action Master", fixture_doctypes)
         self.assertIn("Custom Field", fixture_doctypes)
+        workflow_types = _fixture_filter_values(hooks, "Workflow", "document_type")
+        self.assertIn("Expense Claim", workflow_types)
+        docperm_parents = _fixture_filter_values(hooks, "Custom DocPerm", "parent")
+        self.assertIn("Expense Claim", docperm_parents)
+        self.assertIn("Expense Claim Type", docperm_parents)
         self.assertEqual(
             hooks.override_doctype_class["Budget"],
             "dinext_projects_pl.dinext_projects_pl.overrides.budget.Budget",
@@ -51,3 +56,19 @@ class TestAppBootstrap(unittest.TestCase):
 
         self.assertEqual(bootstrap.ROLE_BUDGET_SUBMITTER, "Dinext_Project_Manager")
         self.assertEqual(bootstrap.ROLE_BUDGET_APPROVER, "Dinext_Budget_Approver")
+
+
+def _fixture_filter_values(hooks, doctype, fieldname):
+    values = set()
+    for entry in hooks.fixtures:
+        if not isinstance(entry, dict) or entry.get("doctype") != doctype:
+            continue
+        for condition in entry.get("filters") or []:
+            if (
+                isinstance(condition, (list, tuple))
+                and len(condition) == 3
+                and condition[0] == fieldname
+                and condition[1] == "in"
+            ):
+                values.update(condition[2])
+    return values
