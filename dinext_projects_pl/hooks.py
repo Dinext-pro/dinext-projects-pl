@@ -64,6 +64,7 @@ fixtures = [
                 "Budget",
                 "Purchase Invoice",
                 "Sales Invoice",
+                "Expense Claim",
             ]],
             ["is_active", "=", 1],
         ]
@@ -129,6 +130,8 @@ fixtures = [
                 "Rate Category",
                 "Business Area",
                 "Project Budget",
+                "Expense Claim",
+                "Expense Claim Type",
             ]],
         ]
     },
