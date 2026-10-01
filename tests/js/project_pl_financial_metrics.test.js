@@ -575,6 +575,33 @@ test("metrics refresh schedules lazy mount on custom_metrics", () => {
     assert.equal(renderCount, 1);
 });
 
+test("metrics refresh skips mount when the Metrics tab is hidden", () => {
+    const context = loadFinancialMetricsModule();
+    let bindCalls = [];
+    context.project_workload_assignment = {
+        bindLazyTabMount(frm, fieldname, mountFn) {
+            bindCalls.push({ fieldname, mountFn });
+        },
+    };
+
+    const frm = {
+        doc: { name: "PROJ-0001" },
+        is_new() {
+            return false;
+        },
+        get_field(fieldname) {
+            if (fieldname === "custom_метрики") {
+                return { df: { hidden: 1 } };
+            }
+            return null;
+        },
+    };
+
+    context.__formHandlers.Project.refresh(frm);
+
+    assert.equal(bindCalls.length, 0);
+});
+
 test("dashboard refresh schedules lazy mount on P&L summary, not metrics", () => {
     const context = loadDashboardModule();
     let renderCount = 0;
