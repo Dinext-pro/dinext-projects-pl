@@ -109,6 +109,29 @@ fixtures = [
             ["docstatus", "!=", 2],
         ]
     },
+    {
+        "doctype": "Project Payment Scheme",
+        "filters": [
+            ["name", "in", [
+                "Неоплачиваемый",
+                "Фикс. стоимость",
+                "Время и затраты (T&M)",
+            ]],
+        ]
+    },
+    {
+        "doctype": "Custom DocPerm",
+        "filters": [
+            ["role", "like", "%Dinext%"],
+            ["parent", "in", [
+                "Project Payment Scheme",
+                "Cost Level",
+                "Rate Category",
+                "Business Area",
+                "Project Budget",
+            ]],
+        ]
+    },
 ]
 
 # Apps
