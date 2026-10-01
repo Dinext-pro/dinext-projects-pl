@@ -1,0 +1,26 @@
+[
+ {
+  "description": null,
+  "docstatus": 0,
+  "doctype": "Project Payment Scheme",
+  "modified": "2025-03-27 19:35:20.386809",
+  "name": "Неоплачиваемый",
+  "payment_scheme": "Неоплачиваемый"
+ },
+ {
+  "description": null,
+  "docstatus": 0,
+  "doctype": "Project Payment Scheme",
+  "modified": "2025-03-27 19:35:34.487572",
+  "name": "Фикс. стоимость",
+  "payment_scheme": "Фикс. стоимость"
+ },
+ {
+  "description": null,
+  "docstatus": 0,
+  "doctype": "Project Payment Scheme",
+  "modified": "2025-03-27 19:35:49.668883",
+  "name": "Время и затраты (T&M)",
+  "payment_scheme": "Время и затраты (T&M)"
+ }
+]
