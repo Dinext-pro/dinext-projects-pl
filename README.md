@@ -1,39 +1,41 @@
+[Русский](README.ru.md)
+
 # Dinext Projects P&L
 
-## 📖 Обзор
+## 📖 Overview
 
-**Dinext Projects P&L** — это приложение для Frappe/ERPNext, которое расширяет стандартный DocType `Project` функциями проектного P&L, планирования, прогноза, отчетности и согласования бюджета. После семантического разделения владеет финансовыми masters (`Cost Level`, `Rate Category` / `Rate Table`, `Account Table`, `Cost Center Table`, `Business Area`, `Project Payment Scheme`, `Worker Level`), rate-control reports, ролями `Dinext_Financier` / `Dinext_Fin_Dir` / `Dinext_Budget_Approver`, workspaces **Фин. Контроль** и **Аналитика**, а также Number Card **Коммерческие проекты**.
+**Dinext Projects P&L** is a Frappe/ERPNext application that extends the standard `Project` DocType with project P&L, planning, forecasting, reporting and budget approval. Following the semantic separation, it owns financial master data (`Cost Level`, `Rate Category` / `Rate Table`, `Account Table`, `Cost Center Table`, `Business Area`, `Project Payment Scheme`, `Worker Level`), rate-control reports, the `Dinext_Financier` / `Dinext_Fin_Dir` / `Dinext_Budget_Approver` roles, the **Financial Control** and **Analytics** workspaces, and the **Commercial Projects** Number Card.
 
-Приложение объединяет кастомный P&L-интерфейс и отдельную вкладку `Метрики` в карточке проекта с Dinext-логикой бюджетирования. Текущие плановые и прогнозные данные отображаются и редактируются в UI проекта, EVM-показатели рассчитываются на сервере через единый whitelisted API и отображаются на вкладке `Метрики`, а сохранение плана работает в двух режимах: через стандартные ERPNext-документы `Budget` и `Monthly Distribution` с workflow согласования либо через прямую запись в кастомный read model `Project Budget`. Точные утвержденные помесячные суммы хранятся отдельно от процентного `Monthly Distribution`, поэтому persisted-значения плана не дрейфуют из-за round-trip округления.
+The application combines a custom P&L interface and a separate `Metrics` tab on the project form with Dinext budgeting logic. Current planned and forecast data is displayed and edited in the project UI, EVM metrics are calculated on the server through a single whitelisted API and displayed on the `Metrics` tab, and plan saving operates in two modes: through standard ERPNext `Budget` and `Monthly Distribution` documents with an approval workflow, or by writing directly to the custom `Project Budget` read model. Exact approved monthly amounts are stored separately from the percentage-based `Monthly Distribution`, preventing persisted plan values from drifting due to round-trip rounding.
 
-## ✨ Возможности
+## ✨ Features
 
-- **Кастомная вкладка P&L в `Project`** с таблицей трудозатрат/затрат, итоговыми блоками, кнопками отчетов и графиком.
-- **Отдельная вкладка `Метрики` в `Project`** с финансовыми EVM-метриками по контурам доходов и расходов, отчетной датой расчета и серверным расчетом `BAC/PV/EV/AC/CV/SV/CPI/SPI/EAC/ETC/VAC/TCPI`.
-- **Единый серверный API EVM-метрик** `get_project_financial_metrics`, переиспользующий агрегацию plan/fact из report pipeline и возвращающий готовый payload для UI.
-- **Режимы просмотра план / прогноз / факт** с переключателями видимости плана и дельт.
-- **Flow согласования бюджета**, в котором сохранение плана из P&L создает ERPNext `Budget`, а не пишет напрямую в `Project Budget`, если site-level toggle согласования включен.
-- **Site-level toggle сохранения плана**: можно переключить режим между workflow согласования и прямым сохранением `pba_plan` без `Budget` и workflow.
-- **Гранулярность бюджета по ключу**: один `Budget` на сочетание `account + project/task + fiscal year`.
-- **Workflow согласования Dinext** со специальными ролями:
-  - `Dinext_Project_Manager` отправляет на согласование;
-  - `Dinext_Budget_Approver` согласует и отменяет.
-- **Семантика замещения**:
-  - новый запрос отменяет существующий pending budget для того же канонического ключа;
-  - согласование новой версии отменяет ранее согласованный budget для того же ключа.
-- **Точное хранение approved monthly amounts** в скрытом поле `Budget.dinext_budget_monthly_amounts`, при этом `Monthly Distribution` остается производным ERPNext-артефактом.
-- **Синхронизация `Project Budget`** на submit/cancel через app-owned Python hooks.
-- **Навигация из P&L-таблицы**:
-  - двойной клик по строке статьи/задачи открывает список `Budget`;
-  - двойной клик по ячейке плановой суммы открывает соответствующий approved `Budget`;
-  - двойной клик по ячейке факта открывает `General Ledger`.
-- **Script Report** `Project Budget Plan vs Forecast` для сравнения плана с прогнозом и фактом.
-- **Workspace «Аналитика»** (вложенный под «Мои проекты») с финансовыми number cards/charts и shortcuts на ERPNext reports; Number Card **«Коммерческие проекты»** поставляется этим приложением.
-- **Fixture-driven доставка метаданных** для workflow, workflow states, actions, roles, accounting dimensions, custom fields, client scripts и связанной metadata.
+- **Custom P&L tab in `Project`** with an effort/cost table, summary blocks, report buttons and a chart.
+- **Separate `Metrics` tab in `Project`** with financial EVM metrics for revenue and expense domains, a reporting date and server-side calculation of `BAC/PV/EV/AC/CV/SV/CPI/SPI/EAC/ETC/VAC/TCPI`.
+- **Single server-side EVM metrics API** `get_project_financial_metrics`, reusing plan/actual aggregation from the report pipeline and returning a ready-to-use UI payload.
+- **Plan / forecast / actual views** with toggles for plan and delta visibility.
+- **Budget approval flow** in which saving a plan from P&L creates an ERPNext `Budget`, rather than writing directly to `Project Budget`, when the site-level approval toggle is enabled.
+- **Site-level plan-saving toggle**: switch between the approval workflow and directly saving `pba_plan` without `Budget` or a workflow.
+- **Budget granularity by key**: one `Budget` per `account + project/task + fiscal year` combination.
+- **Dinext approval workflow** with dedicated roles:
+  - `Dinext_Project_Manager` submits for approval;
+  - `Dinext_Budget_Approver` approves and cancels.
+- **Replacement semantics**:
+  - a new request cancels the existing pending budget for the same canonical key;
+  - approving a new version cancels the previously approved budget for the same key.
+- **Exact storage of approved monthly amounts** in the hidden `Budget.dinext_budget_monthly_amounts` field, while `Monthly Distribution` remains a derived ERPNext artifact.
+- **`Project Budget` synchronization** on submit/cancel through app-owned Python hooks.
+- **Navigation from the P&L table**:
+  - double-clicking an account/task row opens the `Budget` list;
+  - double-clicking a planned amount cell opens the corresponding approved `Budget`;
+  - double-clicking an actual amount cell opens `General Ledger`.
+- **Script Report** `Project Budget Plan vs Forecast` for comparing the plan with forecast and actuals.
+- **Analytics workspace** (nested under My Projects) with financial number cards/charts and ERPNext report shortcuts; the **Commercial Projects** Number Card is supplied by this application.
+- **Fixture-driven metadata delivery** for workflows, workflow states, actions, roles, accounting dimensions, custom fields, client scripts and related metadata.
 
-## 🚀 Установка
+## 🚀 Installation
 
-Установите приложение в существующий bench:
+Install the application into an existing bench:
 
 ```bash
 cd $PATH_TO_YOUR_BENCH
@@ -41,43 +43,43 @@ bench get-app $URL_OF_THIS_REPO --branch develop
 bench install-app dinext_projects_pl
 ```
 
-Затем примените изменения схемы и метаданных:
+Then apply schema and metadata changes:
 
 ```bash
 bench --site $SITE migrate
 ```
 
-Приложение опирается на fixture-based и module JSON доставку метаданных. При установке и миграции применяются custom fields, client/server scripts, accounting dimensions, workflow `Dinext Budget Approval`, workflow states/actions, финансовые роли, workspaces «Фин. Контроль» / «Аналитика», number cards/charts и rate-control reports.
+The application relies on fixture-based and module JSON metadata delivery. Installation and migration apply custom fields, client/server scripts, accounting dimensions, the `Dinext Budget Approval` workflow, workflow states/actions, financial roles, Financial Control / Analytics workspaces, number cards/charts and rate-control reports.
 
 `required_apps`: `dinext_common`, `doctype_permission`, `dinext_projects`.
 
-## 🛠️ Использование
+## 🛠️ Usage
 
-### Основной P&L-сценарий
+### Main P&L scenario
 
-1. Откройте документ `Project`.
-2. Перейдите в кастомный раздел P&L.
-3. Проверьте план, прогноз и факт по месяцам.
-4. Нажмите `Сохранить план`.
-5. Клиентский код вызывает app-owned Python service `save_budget_plan_for_approval`, который группирует строки по `account + target + fiscal year`, а затем:
-   - **по умолчанию** создает `Budget` и `Monthly Distribution`, сохраняет точные исходные помесячные суммы в metadata `Budget` и переводит бюджет в Dinext workflow согласования;
-   - **если отключен site-level toggle** — сразу обновляет `Project Budget.pba_plan` без создания `Budget` и без workflow.
+1. Open a `Project` document.
+2. Go to the custom P&L section.
+3. Review the plan, forecast and actuals by month.
+4. Click `Save Plan`.
+5. Client code calls the app-owned Python service `save_budget_plan_for_approval`, which groups rows by `account + target + fiscal year`, then:
+   - **by default**, creates `Budget` and `Monthly Distribution`, stores the exact original monthly amounts in `Budget` metadata, and moves the budget into the Dinext approval workflow;
+   - **if the site-level toggle is disabled**, immediately updates `Project Budget.pba_plan` without creating a `Budget` or using a workflow.
 
-### Сценарий просмотра метрик
+### Metrics viewing scenario
 
-1. Откройте документ `Project`.
-2. Перейдите на вкладку `Метрики`.
-3. Выберите `Отчетная дата метрик`.
-4. Клиентский код вызывает серверный API `get_project_financial_metrics`, который:
-   - собирает помесячный plan из `Project Budget` через `process_project_data`;
-   - собирает fact из `GL Entry` через `get_actual_data_simple`;
-   - рассчитывает EVM-показатели на выбранную отчетную дату с proration текущего месяца.
-5. Проверьте EVM-показатели по двум контурам:
-   - `Доходы`;
-   - `Расходы`.
-6. Используйте показатели `BAC`, `PV`, `EV`, `AC`, `CV`, `SV`, `CPI`, `SPI`, `EAC`, `ETC`, `VAC`, `TCPI` для анализа исполнения проекта на выбранную дату.
+1. Open a `Project` document.
+2. Go to the `Metrics` tab.
+3. Select the `Metrics Reporting Date`.
+4. Client code calls the server API `get_project_financial_metrics`, which:
+   - collects the monthly plan from `Project Budget` through `process_project_data`;
+   - collects actuals from `GL Entry` through `get_actual_data_simple`;
+   - calculates EVM metrics as of the selected reporting date, prorating the current month.
+5. Review EVM metrics for the two domains:
+   - `Revenue`;
+   - `Expenses`.
+6. Use `BAC`, `PV`, `EV`, `AC`, `CV`, `SV`, `CPI`, `SPI`, `EAC`, `ETC`, `VAC`, `TCPI` to analyze project performance as of the selected date.
 
-Пример программного вызова API:
+Example API call from code:
 
 ```python
 frappe.call(
@@ -97,120 +99,120 @@ frappe.call({
 });
 ```
 
-### Согласование бюджета
+### Budget approval
 
-- Режим согласования управляется site config ключом `dinext_projects_pl_enable_plan_approval`.
-- Если ключ равен `1`, используется approval flow через `Budget`.
-- Если ключ равен `0`, план сохраняется напрямую в `Project Budget`, а workflow согласования не запускается.
-- Pending budgets находятся в состоянии `Pending Approval`.
-- При `Approve` бюджет submit'ится и синхронизируется в `Project Budget`.
-- При согласовании replacement-версии ранее approved budget для того же канонического ключа отменяется, а новая версия становится источником истины.
-- При отмене ранее approved budget read model либо восстанавливается из другого approved replacement, либо очищается по затронутым месяцам.
+- Approval mode is controlled by the `dinext_projects_pl_enable_plan_approval` site config key.
+- If the key is `1`, the approval flow through `Budget` is used.
+- If the key is `0`, the plan is saved directly to `Project Budget`, and the approval workflow does not run.
+- Pending budgets are in the `Pending Approval` state.
+- On `Approve`, the budget is submitted and synchronized to `Project Budget`.
+- When a replacement version is approved, the previously approved budget for the same canonical key is canceled, and the new version becomes the source of truth.
+- When a previously approved budget is canceled, the read model is either restored from another approved replacement or cleared for the affected months.
 
-### UI-помощники
+### UI helpers
 
-- Двойной клик по строке статьи/задачи в P&L открывает подходящие документы `Budget`.
-- Двойной клик по ячейке плановой суммы открывает approved `Budget` для этого периода.
-- Кнопки отчетов открывают ERPNext financial reports с фильтрами по проекту.
+- Double-clicking an account/task row in P&L opens the matching `Budget` documents.
+- Double-clicking a planned amount cell opens the approved `Budget` for that period.
+- Report buttons open ERPNext financial reports filtered by project.
 
-### Расширение меню прогноза
+### Extending the forecast menu
 
-Другие приложения могут расширять выпадающее меню `Добавить прогноз` через глобальный реестр:
+Other applications can extend the `Add Forecast` dropdown through a global registry:
 
 ```javascript
 frappe.provide("dinext_projects.project_budget_forecast_menu");
 dinext_projects.project_budget_forecast_menu =
   dinext_projects.project_budget_forecast_menu || [];
 dinext_projects.project_budget_forecast_menu.push({
-  label: __("Мой прогноз"),
+  label: __("My Forecast"),
   action(frm) {
-    // кастомная логика
+    // custom logic
   },
 });
 ```
 
-Если пункты добавлены после первичной отрисовки, вызовите
+If items are added after the initial render, call
 `dinext_projects.refresh_project_budget_forecast_dropdown(frm)`.
 
-Для cutover со старым risk доступны aliases: `project_pl_forecast_menu` и
-`refresh_pl_forecast_dropdown` (тот же массив / та же функция).
+For cutover from the old risk module, the aliases `project_pl_forecast_menu` and
+`refresh_pl_forecast_dropdown` are available (the same array / the same function).
 
-## 📦 Технологии
+## 📦 Technologies
 
 - **Python 3.10+**
 - **Frappe Framework**
-- **ERPNext** (`Budget`, `Monthly Distribution`, финансовые отчеты)
-- **JavaScript client scripts** для `Project`
-- **Fixture-driven metadata** через `hooks.py`
-- **Ruff**, **ESLint**, **Prettier** и **pre-commit** для локальной разработки
+- **ERPNext** (`Budget`, `Monthly Distribution`, financial reports)
+- **JavaScript client scripts** for `Project`
+- **Fixture-driven metadata** through `hooks.py`
+- **Ruff**, **ESLint**, **Prettier** and **pre-commit** for local development
 
-## 🔧 Конфигурация
+## 🔧 Configuration
 
-Приложение не вводит собственные environment variables. Основная конфигурация выполняется через метаданные Frappe, `site_config.json` и стандартные ERPNext-сущности:
+The application introduces no environment variables of its own. Main configuration uses Frappe metadata, `site_config.json` and standard ERPNext entities:
 
 - `site_config.json`:
-  - `dinext_projects_pl_enable_plan_approval` — включает (`1`) или отключает (`0`, default) сохранение плана через `Budget` workflow.
-- Пример настройки:
+  - `dinext_projects_pl_enable_plan_approval` — enables (`1`) or disables (`0`, default) plan saving through the `Budget` workflow.
+- Configuration example:
 
 ```bash
 bench --site $SITE set-config dinext_projects_pl_enable_plan_approval 0
 ```
 
-При выключенном ключе кнопка `Сохранить план` продолжает использовать тот же серверный API, но он пишет значения напрямую в `Project Budget.pba_plan` и не создает `Budget` / `Monthly Distribution`.
+When the key is disabled, the `Save Plan` button continues to use the same server API, but it writes values directly to `Project Budget.pba_plan` without creating `Budget` / `Monthly Distribution`.
 
-- fixtures для `Accounting Dimension`;
-- custom fields в `Budget`:
+- fixtures for `Accounting Dimension`;
+- custom fields in `Budget`:
   - `dinext_budget_account`;
   - `dinext_budget_monthly_amounts`;
   - `workflow_state`;
-- workflow metadata для `Dinext Budget Approval`;
-- custom fields и client scripts для UI проекта, включая вкладки `P&L` и `Метрики`.
+- workflow metadata for `Dinext Budget Approval`;
+- custom fields and client scripts for the project UI, including the `P&L` and `Metrics` tabs.
 
-Важные эксплуатационные детали:
+Important operational details:
 
-- `Monthly Distribution` — производный артефакт для monthly checks в ERPNext, а не источник истины для sync approved plan.
-- Точные approved monthly amounts сохраняются прямо в `Budget`, чтобы исключить drift из-за round-trip округления.
-- При `dinext_projects_pl_enable_plan_approval = 0` источником истины для новых операций `Сохранить план` сразу становится `Project Budget.pba_plan`, без промежуточного `Budget`.
-- `Project Budget.pba_expected` остается независимым прогнозом и не перезаписывается автоматически при approve-sync.
-- EVM-метрики используют только `pba_plan` и факт из `GL Entry`; прогноз (`pba_expected`) в расчет EVM не входит.
-- Отчетная дата EVM передается в API явно; proration текущего месяца выполняется на сервере.
-- В репозитории по-прежнему присутствует fixture `server_script.json`, но основной путь согласования плана реализован в app-owned Python service, а не в site-only server script.
+- `Monthly Distribution` is a derived artifact for ERPNext monthly checks, rather than the source of truth for approved plan synchronization.
+- Exact approved monthly amounts are stored directly in `Budget` to prevent drift from round-trip rounding.
+- With `dinext_projects_pl_enable_plan_approval = 0`, `Project Budget.pba_plan` immediately becomes the source of truth for new `Save Plan` operations, without an intermediate `Budget`.
+- `Project Budget.pba_expected` remains an independent forecast and is not automatically overwritten during approval synchronization.
+- EVM metrics use only `pba_plan` and actuals from `GL Entry`; the forecast (`pba_expected`) is excluded from EVM calculations.
+- The EVM reporting date is passed explicitly to the API; current-month proration is performed on the server.
+- The `server_script.json` fixture is still present in the repository, but the primary plan approval path is implemented in an app-owned Python service rather than a site-only server script.
 
-## ✅ Требования
+## ✅ Requirements
 
-- Рабочий **bench** с **Frappe**.
-- Установленный **ERPNext** на целевом сайте для стандартных budget/report doctypes и их логики.
-- **Python >= 3.10** согласно [pyproject.toml](pyproject.toml).
-- Доступ к стандартным финансовым doctypes и отчетам, которые использует приложение.
+- A working **bench** with **Frappe**.
+- **ERPNext** installed on the target site for standard budget/report DocTypes and their logic.
+- **Python >= 3.10** according to [pyproject.toml](pyproject.toml).
+- Access to the standard financial DocTypes and reports used by the application.
 
-## 🤝 Как вносить изменения
+## 🤝 Contributing
 
-Подключите локальные проверки через `pre-commit`:
+Enable local checks through `pre-commit`:
 
 ```bash
 cd apps/dinext_projects_pl
 pre-commit install
 ```
 
-Основной инструментарий разработки:
+Main development tools:
 
-- `ruff` для lint/format/import ordering Python-кода;
-- `eslint` для JavaScript;
-- `prettier` для форматирования фронтенда;
-- `pyupgrade` для обновления синтаксиса Python.
+- `ruff` for Python linting, formatting and import ordering;
+- `eslint` for JavaScript;
+- `prettier` for frontend formatting;
+- `pyupgrade` for Python syntax upgrades.
 
-Если нужно изменить metadata:
+If metadata needs to change:
 
-1. Вносите изменения через систему Frappe/ERPNext.
-2. Затем выполняйте:
+1. Make the changes through the Frappe/ERPNext system.
+2. Then run:
 
 ```bash
 bench --site $SITE export-fixtures --app dinext_projects_pl
 ```
 
-Не редактируйте generated fixture JSON-файлы вручную.
+Do not manually edit generated fixture JSON files.
 
-Запуск regression-тестов:
+Running regression tests:
 
 ```bash
 bench --site $SITE run-tests --app dinext_projects_pl
@@ -218,27 +220,23 @@ node --test tests/js/project_pl_financial_metrics.test.js
 node --test tests/js/project_pl_echarts.test.js
 ```
 
-## 📄 Документация
+## 📄 Documentation
 
-- [README.md](README.md) — обзор репозитория и текущей архитектуры.
-- [dinext_projects_pl/hooks.py](dinext_projects_pl/hooks.py) — wiring приложения, fixture filters и hooks.
-- [dinext_projects_pl/dinext_projects_pl/budget_approval/service.py](dinext_projects_pl/dinext_projects_pl/budget_approval/service.py) — сервисы согласования бюджета и sync-логика.
-- [dinext_projects_pl/dinext_projects_pl/financial_metrics/service.py](dinext_projects_pl/dinext_projects_pl/financial_metrics/service.py) — whitelisted API расчета EVM-метрик проекта.
-- [dinext_projects_pl/dinext_projects_pl/financial_metrics/data.py](dinext_projects_pl/dinext_projects_pl/financial_metrics/data.py) — серверная агрегация plan/fact по месяцам для EVM.
-- [dinext_projects_pl/dinext_projects_pl/financial_metrics/calculations.py](dinext_projects_pl/dinext_projects_pl/financial_metrics/calculations.py) — формулы EVM и формирование response payload.
-- [dinext_projects_pl/public/js/project_pl_financial_metrics.js](dinext_projects_pl/public/js/project_pl_financial_metrics.js) — клиентский render-слой вкладки `Метрики`.
-- [dinext_projects_pl/dinext_projects_pl/budget_approval/bootstrap.py](dinext_projects_pl/dinext_projects_pl/budget_approval/bootstrap.py) — константы workflow, ролей и полей.
-- [dinext_projects_pl/dinext_projects_pl/overrides/budget.py](dinext_projects_pl/dinext_projects_pl/overrides/budget.py) — override duplicate-validation для `Budget`.
-- [dinext_projects_pl/dinext_projects_pl/doctype/project_budget/test_project_budget.py](dinext_projects_pl/dinext_projects_pl/doctype/project_budget/test_project_budget.py) — regression-тесты budget approval flow.
-- [dinext_projects_pl/tests/test_financial_metrics_service.py](dinext_projects_pl/tests/test_financial_metrics_service.py) — unit/integration-тесты серверного расчета EVM-метрик.
-- [tests/js/project_pl_financial_metrics.test.js](tests/js/project_pl_financial_metrics.test.js) — JS-тесты render-слоя вкладки `Метрики`.
-- [tests/js/project_pl_echarts.test.js](tests/js/project_pl_echarts.test.js) — JS-тесты P&L ECharts (palette, tooltip, markLine, toolbox, geometry).
+- [README.md](README.md) — repository and current architecture overview.
+- [dinext_projects_pl/hooks.py](dinext_projects_pl/hooks.py) — application wiring, fixture filters and hooks.
+- [dinext_projects_pl/dinext_projects_pl/budget_approval/service.py](dinext_projects_pl/dinext_projects_pl/budget_approval/service.py) — budget approval services and synchronization logic.
+- [dinext_projects_pl/dinext_projects_pl/financial_metrics/service.py](dinext_projects_pl/dinext_projects_pl/financial_metrics/service.py) — whitelisted API for project EVM metric calculation.
+- [dinext_projects_pl/dinext_projects_pl/financial_metrics/data.py](dinext_projects_pl/dinext_projects_pl/financial_metrics/data.py) — server-side monthly plan/actual aggregation for EVM.
+- [dinext_projects_pl/dinext_projects_pl/financial_metrics/calculations.py](dinext_projects_pl/dinext_projects_pl/financial_metrics/calculations.py) — EVM formulas and response payload construction.
+- [dinext_projects_pl/public/js/project_pl_financial_metrics.js](dinext_projects_pl/public/js/project_pl_financial_metrics.js) — client rendering layer for the `Metrics` tab.
+- [dinext_projects_pl/dinext_projects_pl/budget_approval/bootstrap.py](dinext_projects_pl/dinext_projects_pl/budget_approval/bootstrap.py) — workflow, role and field constants.
+- [dinext_projects_pl/dinext_projects_pl/overrides/budget.py](dinext_projects_pl/dinext_projects_pl/overrides/budget.py) — duplicate validation override for `Budget`.
+- [dinext_projects_pl/dinext_projects_pl/doctype/project_budget/test_project_budget.py](dinext_projects_pl/dinext_projects_pl/doctype/project_budget/test_project_budget.py) — budget approval flow regression tests.
+- [dinext_projects_pl/tests/test_financial_metrics_service.py](dinext_projects_pl/tests/test_financial_metrics_service.py) — unit/integration tests for server-side EVM metric calculation.
+- [tests/js/project_pl_financial_metrics.test.js](tests/js/project_pl_financial_metrics.test.js) — `Metrics` tab rendering layer JS tests.
+- [tests/js/project_pl_echarts.test.js](tests/js/project_pl_echarts.test.js) — P&L ECharts JS tests (palette, tooltip, markLine, toolbox, geometry).
 
-## ❤️ Благодарности
-
-Приложение построено на Frappe и ERPNext budgeting/reporting primitives и адаптировано под Dinext-процессы проектных финансов.
-
-## 🗂️ Структура репозитория
+## 🗂️ Repository structure
 
 ```text
 .
@@ -309,24 +307,24 @@ node --test tests/js/project_pl_echarts.test.js
             └── test_financial_metrics_service.py
 ```
 
-- `dinext_projects_pl/hooks.py` подключает client assets, fixtures, override для `Budget` и submit/cancel hooks.
-- `dinext_projects_pl/fixtures/` содержит system-generated metadata, экспортированную из сайта.
-- `dinext_projects_pl/dinext_projects_pl/workspace/` содержит Desk Workspaces «Фин. Контроль» и «Аналитика» (module JSON).
-- `dinext_projects_pl/dinext_projects_pl/number_card/` и `dashboard_chart/` содержат финансовые KPI и charts; Number Card «Коммерческие проекты» также принадлежит этому модулю.
-- `dinext_projects_pl/public/js/` содержит UI проекта, агрегацию данных, рендеринг P&L-графика, вкладки `P&L`/`Метрики` и интерактивные обработчики навигации.
-- `dinext_projects_pl/public/js/project_pl_financial_metrics.js` — thin client render для вкладки `Метрики`; расчет выполняется на сервере.
-- `dinext_projects_pl/dinext_projects_pl/budget_approval/` содержит app-owned flow согласования бюджета и sync с `Project Budget`.
-- `dinext_projects_pl/dinext_projects_pl/financial_metrics/` содержит серверный расчет EVM-метрик и whitelisted API для UI проекта.
-- `dinext_projects_pl/dinext_projects_pl/overrides/` адаптирует duplicate-checks ERPNext `Budget` под Dinext replacement semantics.
-- `dinext_projects_pl/dinext_projects_pl/doctype/` определяет кастомный read model `Project Budget`.
-- `dinext_projects_pl/dinext_projects_pl/report/` содержит script report для сравнения плана и прогноза; его helpers переиспользуются EVM API.
-- `dinext_projects_pl/dinext_projects_pl/tests/` и `tests/js/` содержат Python/JS regression-тесты для budget approval и EVM metrics.
+- `dinext_projects_pl/hooks.py` connects client assets, fixtures, the `Budget` override and submit/cancel hooks.
+- `dinext_projects_pl/fixtures/` contains system-generated metadata exported from the site.
+- `dinext_projects_pl/dinext_projects_pl/workspace/` contains the Financial Control and Analytics Desk Workspaces (module JSON).
+- `dinext_projects_pl/dinext_projects_pl/number_card/` and `dashboard_chart/` contain financial KPIs and charts; the Commercial Projects Number Card also belongs to this module.
+- `dinext_projects_pl/public/js/` contains the project UI, data aggregation, P&L chart rendering, the `P&L`/`Metrics` tabs and interactive navigation handlers.
+- `dinext_projects_pl/public/js/project_pl_financial_metrics.js` provides thin client rendering for the `Metrics` tab; calculation is performed on the server.
+- `dinext_projects_pl/dinext_projects_pl/budget_approval/` contains the app-owned budget approval flow and synchronization with `Project Budget`.
+- `dinext_projects_pl/dinext_projects_pl/financial_metrics/` contains server-side EVM metric calculation and a whitelisted API for the project UI.
+- `dinext_projects_pl/dinext_projects_pl/overrides/` adapts ERPNext `Budget` duplicate checks to Dinext replacement semantics.
+- `dinext_projects_pl/dinext_projects_pl/doctype/` defines the custom `Project Budget` read model.
+- `dinext_projects_pl/dinext_projects_pl/report/` contains the script report for plan/forecast comparison; its helpers are reused by the EVM API.
+- `dinext_projects_pl/dinext_projects_pl/tests/` and `tests/js/` contain Python/JS regression tests for budget approval and EVM metrics.
 
-## 🔗 Схема потока
+## 🔗 Flow diagram
 
 ```mermaid
 flowchart LR
-  ProjectForm[Карточка проекта: P&L и Метрики] --> ClientJS[project_pl.js и связанные helpers]
+  ProjectForm[Project form: P&L and Metrics] --> ClientJS[project_pl.js and related helpers]
   ClientJS --> ApprovalAPI[save_budget_plan_for_approval]
   ApprovalAPI --> BudgetDoc[ERPNext Budget]
   ApprovalAPI --> MonthlyDistribution[Monthly Distribution]
@@ -337,23 +335,23 @@ flowchart LR
   SubmitHook --> ProjectBudget[Read model Project Budget]
   CancelHook --> ProjectBudget
   MetricsUI[project_pl_financial_metrics.js] --> MetricsAPI[get_project_financial_metrics]
-  MetricsAPI --> ReportPipeline[process_project_data и get_actual_data_simple]
+  MetricsAPI --> ReportPipeline[process_project_data and get_actual_data_simple]
   ReportPipeline --> ProjectBudget
   ReportPipeline --> GLEntry[GL Entry fact]
   MetricsAPI --> ProjectProgress[Project.percent_complete]
   ProjectForm --> MetricsUI
-  ClientJS -->|Двойной клик по plan cell| FindApproved[find_approved_budget_for_period]
+  ClientJS -->|Double-click plan cell| FindApproved[find_approved_budget_for_period]
   FindApproved --> BudgetDoc
-  ClientJS --> Reports[ERPNext P&L и GL reports]
+  ClientJS --> Reports[ERPNext P&L and GL reports]
 ```
 
-## 📝 История изменений
+## 📝 Changelog
 
-Последние значимые изменения на уровне репозитория:
+Recent significant repository-level changes:
 
-- расчет EVM-метрик вынесен в единый серверный API `get_project_financial_metrics`; клиентская вкладка `Метрики` стала thin render-слоем;
-- добавлены Python/JS regression-тесты для серверного расчета EVM и render-слоя вкладки `Метрики`;
-- основной flow сохранения плана переведен с прямой записи в `Project Budget` на app-owned budget approval services;
-- добавлены Dinext workflow fixtures для согласования `Budget`, включая отдельную роль согласующего и набор workflow states/actions;
-- добавлено точное хранение approved monthly amounts в `Budget`, чтобы исключить round-trip drift при approve-sync;
-- добавлено regression-покрытие для multi-month approval sync и replacement semantics.
+- EVM metric calculation moved into the single server API `get_project_financial_metrics`; the client `Metrics` tab became a thin rendering layer;
+- added Python/JS regression tests for server-side EVM calculation and the `Metrics` tab rendering layer;
+- the main plan-saving flow moved from direct `Project Budget` writes to app-owned budget approval services;
+- added Dinext workflow fixtures for `Budget` approval, including a dedicated approver role and workflow states/actions;
+- added exact storage of approved monthly amounts in `Budget` to prevent round-trip drift during approval synchronization;
+- added regression coverage for multi-month approval synchronization and replacement semantics.
