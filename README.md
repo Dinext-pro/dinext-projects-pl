@@ -1,5 +1,25 @@
 [Русский](README.ru.md)
 
+<!-- dinext-presentation:start -->
+<p align="center">
+  <a href="https://dinext.ru"><img src="docs/assets/readme/dinext-logo.png" alt="Dinext" width="128"></a>
+</p>
+<h1 align="center">Dinext Projects P&amp;L</h1>
+
+<hr>
+
+<p align="center">Plan and control project revenue, costs, budgets and financial forecasts in one P&amp;L interface.</p>
+
+<p align="center">
+  <img src="docs/assets/readme/overview.png" alt="Project P&amp;L, financial forecast and budget figures for a demonstration project." width="960">
+</p>
+<p align="center"><sub>Project P&amp;L, financial forecast and budget figures for a demonstration project.</sub></p>
+
+<p align="center">
+  <a href="https://dinext.ru">Website</a> · <a href="https://docs.dinext.ru">Documentation</a>
+</p>
+<!-- dinext-presentation:end -->
+
 # Dinext Projects P&L
 
 ## 📖 Overview
