@@ -18,6 +18,11 @@ module.exports = {
 		testIsolation: true,
 		setupNodeEvents(on, config) {
 			on("task", {
+				clearLiquidityWorkbook() {
+					const filename = path.resolve(config.downloadsFolder, "liquidity-payment-calendar.xlsx");
+					if (fs.existsSync(filename)) fs.unlinkSync(filename);
+					return null;
+				},
 				readLiquidityWorkbook() {
 					const filename = path.resolve(config.downloadsFolder, "liquidity-payment-calendar.xlsx");
 					const script = "import json,sys; from openpyxl import load_workbook; w=load_workbook(sys.argv[1]); print(json.dumps({'rows':[[c.value for c in r] for r in w.worksheets[0]],'numeric':sum(c.data_type=='n' for s in w for r in s for c in r),'sheets':len(w.worksheets)}))";

@@ -56,6 +56,7 @@ describe("Liquidity Payment Calendar", () => {
 		cy.get(grid).contains(context.payment).should("be.visible");
 		cy.get(grid + " .dinext-table-toolbar-group--end [data-testid=liquidity-export]").should("have.attr", "aria-label").and("include", "XLSX");
 		cy.get("[data-testid=liquidity-export]").should(($button) => expect($button.text().trim()).to.eq("")).find("svg").should("exist");
+		cy.task("clearLiquidityWorkbook");
 		cy.get("[data-testid=liquidity-export]").click();
 		cy.readFile("cypress/downloads/liquidity-payment-calendar.xlsx", "binary").should("have.length.greaterThan", 1000);
 	});
@@ -154,6 +155,7 @@ describe("Liquidity Payment Calendar", () => {
 		});
 		cy.liquidityFilter("grain", "month");
 		cy.window().then((win) => expect(win.frappe.query_report.__liquidityView.columns()[2].headerName).to.match(/\d{2}\.\d{4}/));
+		cy.task("clearLiquidityWorkbook");
 		cy.get("[data-testid=liquidity-export]").click();
 		cy.readFile("cypress/downloads/liquidity-payment-calendar.xlsx", "binary").should("have.length.greaterThan", 1000);
 		cy.task("readLiquidityWorkbook").then((book) => {
@@ -542,6 +544,7 @@ describe("Liquidity Payment Calendar", () => {
 	testCase("UI-16 downloads a complete XLSX while the tree remains collapsed", () => {
 		cy.openLiquidity(context);
 		cy.get(grid).contains(context.invoice).should("not.exist");
+		cy.task("clearLiquidityWorkbook");
 		cy.get("[data-testid=liquidity-export]").click();
 		cy.readFile("cypress/downloads/liquidity-payment-calendar.xlsx", "binary").should("have.length.greaterThan", 1000);
 		cy.task("readLiquidityWorkbook").then((book) => {
