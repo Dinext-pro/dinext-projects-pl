@@ -143,7 +143,7 @@
 				container: host[0], data: p.rows, columns: this.columns(), edit: false,
 				rowIdField: "id", childrenField: "children", expandedIds: [],
 				filter: { enabled: false }, sort: { enabled: false }, toolbar: false,
-				summaryRows: [{ id: "net", label: __("Net cash movement"), ...p.net }],
+				summaryRows: this.summaryRows(),
 				summary: { pin: "bottom" },
 				onExpandRow: async ({ rowId, row, table }) => {
 					try {
@@ -151,16 +151,22 @@
 						if (this.valid(sequence)) table.setRowChildren(rowId, children);
 					} catch (error) { if (this.valid(sequence)) frappe.msgprint(__("Unable to load this branch. Collapse and retry.")); }
 				},
-				gridOptions: { rowHeight: 34, onCellClicked: (event) => {
-					const field = event.colDef.field;
-					if (!field?.includes("__")) return;
-					const [period, metric] = field.split("__");
-					this.details(event.data.id, period, metric, 0, sequence);
-				} },
+				gridOptions: { rowHeight: 34,
+					getRowClass: (params) => params.data?.balanceKind ? "liquidity-balance-row" : "",
+					onCellClicked: (event) => {
+						const field = event.colDef.field;
+						if (!field?.includes("__")) return;
+						const [period, metric] = field.split("__");
+						if (event.data.balanceKind) {
+							if (event.data[field] == null) return;
+							const prefix = metric === "actual" ? "actual" : "projected";
+							this.details("root", period, `${prefix}_${event.data.balanceKind}`, 0, sequence);
+						} else this.details(event.data.id, period, metric, 0, sequence);
+					},
+				},
 			});
 			if (!this.valid(sequence)) { grid.destroy(); return; }
 			this.grid = grid;
-			this.renderBalances();
 		}
 
 		select(host, id, label, values, initial, onChange) {
@@ -179,13 +185,16 @@
 			["transfer", "adjustment"].forEach((m) => { if (Object.keys(this.payload.net).some((k) => k.endsWith("__" + m))) metrics.push(m); });
 			periods.forEach(([key, title]) => columns.push({ headerName: title, children: metrics.map((metric) => ({
 				field: key + "__" + metric, headerName: labels[metric], type: "number", width: 145,
-				valueFormatter: (params) => this.format(params.value || 0),
+				valueFormatter: (params) => this.format(params.data?.balanceKind ? params.value : (params.value ?? 0)),
 				cellClass: "liquidity-money", tooltipValueGetter: (params) => {
 					const overdue = params.data?.[key + "__" + metric + "__overdue"];
 					const contractual = params.data?.[key + "__" + metric + "__contract_overdue"];
 					return [overdue ? __("Overdue portion") + ": " + this.format(overdue) : "", contractual ? __("Original due date overdue") + ": " + this.format(contractual) : ""].filter(Boolean).join(" · ");
 				},
-				cellClassRules: { "liquidity-overdue": (params) => !!(params.data?.[key + "__" + metric + "__overdue"] || params.data?.[key + "__" + metric + "__contract_overdue"]) },
+				cellClassRules: {
+					"liquidity-negative-balance": (params) => !!params.data?.balanceKind && params.value < 0,
+					"liquidity-unavailable-balance": (params) => !!params.data?.balanceKind && params.value == null,
+					"liquidity-overdue": (params) => !!(params.data?.[key + "__" + metric + "__overdue"] || params.data?.[key + "__" + metric + "__contract_overdue"]) },
 			})) }));
 			return columns;
 		}
@@ -230,24 +239,22 @@
 			}, true);
 		}
 
-		renderBalances() {
-			if (!this.payload.balances) return;
-			const wrapper = $("<div class='liquidity-balances'></div>").appendTo(this.root);
-			const table = $("<table class='table table-bordered table-sm'></table>").appendTo(wrapper);
-			const fields = [["actual_opening", __("Actual opening")], ["actual_closing", __("Actual closing")], ["projected_opening", __("Projected opening")], ["projected_closing", __("Projected closing")]];
-			const header = $("<tr></tr>").appendTo($("<thead></thead>").appendTo(table));
-			$("<th></th>").text(__("Balances")).appendTo(header);
-			this.payload.periods.forEach((p) => $("<th></th>").text(p.start).appendTo(header));
-			const body = $("<tbody></tbody>").appendTo(table);
-			fields.filter(([key]) => this.payload.balances.periods.some((p) => p[key] != null)).forEach(([key, label]) => {
-				const row = $("<tr></tr>").appendTo(body);
-				$("<th></th>").text(label).appendTo(row);
-				this.payload.balances.periods.forEach((p) => {
-					const cell = $("<td></td>").appendTo(row);
-					if (p[key] == null) cell.text("—");
-					else $("<button class='btn btn-link btn-sm'></button>").toggleClass("text-danger", p[key] < 0).text(this.format(p[key])).on("click", () => this.details("root", p.key, key, 0, this.sequence)).appendTo(cell);
-				});
-			});
+		summaryRows() {
+			const net = { id: "net", label: __("Net cash movement"), ...this.payload.net };
+			if (!this.payload.balances) return [net];
+			const balances = ["opening", "closing"].map((kind) => {
+				const row = { id: "balance-" + kind, balanceKind: kind,
+					label: kind === "opening" ? __("Opening balance") : __("Closing balance") };
+				for (const period of this.payload.balances.periods) {
+					for (const metric of this.filters.metrics) {
+						const prefix = { actual: "actual", forecast: "projected" }[metric];
+						if (prefix) row[period.key + "__" + metric] = period[`${prefix}_${kind}`];
+					}
+				}
+				return row;
+			}).filter((row) => Object.entries(row).some(([key, value]) => key.includes("__") && value != null));
+			return [...balances.filter((row) => row.balanceKind === "opening"), net,
+				...balances.filter((row) => row.balanceKind === "closing")];
 		}
 
 		async details(node, period, metric, start, sequence) {

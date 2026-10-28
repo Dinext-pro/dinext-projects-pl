@@ -330,3 +330,5 @@ total,Итого
 Date source,Источник даты
 Original due date overdue,Просрочен исходный срок оплаты
 Counterparty type,Тип контрагента
+Opening balance,Начальный остаток
+Closing balance,Конечный остаток

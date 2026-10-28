@@ -9,13 +9,94 @@ describe("Liquidity Payment Calendar", () => {
 	let context;
 	beforeEach(function () {
 		const title = this.currentTest.title;
-		const scenario = title.includes("UI-20") ? "pnl" : title.includes("zero rows") ? "zero" : (title.includes("UI-10") || title.includes("UI-11")) ? "standalone" : title.includes("UI-12") ? "request" : title.includes("UI-14") ? "outward" : title.includes("without date") ? "undated" : title.includes("future request") ? "overdue_request" : title.includes("overdue") ? "overdue" : title.includes("pagination") || title.includes("UI-04") ? "many" : "base";
+		const scenario = title.includes("UI-20") ? "pnl" : title.includes("zero rows") ? "zero" : (title.includes("UI-10") || title.includes("UI-11")) ? "standalone" : title.includes("UI-12") ? "request" : (title.includes("UI-14") || title.includes("BG-04")) ? "outward" : title.includes("without date") ? "undated" : title.includes("future request") ? "overdue_request" : title.includes("overdue") ? "overdue" : title.includes("pagination") || title.includes("UI-04") ? "many" : "base";
 		return cy.seedLiquidity(scenario).then((data) => { context = data; });
 	});
 	after(() => {
 		cy.login("operator");
 		cy.visit("/app");
 		cy.call("dinext_projects_pl.tests.liquidity_ui_helpers.cleanup");
+	});
+
+	testCase("BG-01 balances share the period columns without additive totals", () => {
+		cy.openLiquidity(context);
+		cy.get(".liquidity-balances").should("not.exist");
+		cy.get(grid).contains("Начальный остаток").should("be.visible");
+		cy.get(grid).contains("Конечный остаток").should("be.visible");
+		cy.window().then((win) => {
+			const view = win.frappe.query_report.__liquidityView;
+			const rows = view.grid.summaryRowData;
+			expect(rows.map((r) => r.id)).to.deep.eq(["balance-opening", "net", "balance-closing"]);
+			for (const period of view.payload.balances.periods) {
+				for (const [metric, prefix] of [["actual", "actual"], ["forecast", "projected"]]) {
+					for (const [row, kind] of [[rows[0], "opening"], [rows[2], "closing"]]) {
+						expect(row[period.key + "__" + metric]).to.eq(period[prefix + "_" + kind]);
+					}
+				}
+			}
+			const key = view.payload.periods[0].key;
+			cy.get(grid + ` .liquidity-balance-row [col-id='${key}__actual']`).first().should("have.text", view.format(view.payload.balances.periods[0].actual_opening));
+		});
+		cy.get(grid + " .liquidity-balance-row [col-id$='__plan']").each(($cell) => expect($cell.text()).to.eq("—"));
+		cy.liquidityScrollRight();
+		for (const field of ["total__forecast", "undated__forecast"]) {
+			cy.get(grid + ` .liquidity-balance-row [col-id='${field}']`).should("have.length", 2).each(($cell) => expect($cell.text()).to.eq("—"));
+		}
+	});
+
+	testCase("BG-02 balance cells open the exact balance detail and blanks do not request", () => {
+		cy.openLiquidity(context);
+		cy.intercept("**/api/method/dinext_projects_pl.liquidity.api.get_cell_details*").as("balanceDetail");
+		cy.get(grid + " .liquidity-balance-row [col-id$='__actual']").first().click();
+		cy.wait("@balanceDetail").then(({ request, response }) => {
+			expect(new URLSearchParams(request.body).get("metric")).to.eq("actual_opening");
+			expect(response.statusCode).to.eq(200);
+		});
+		cy.get("[data-testid=liquidity-details]").should("be.visible");
+		cy.get(".modal:visible").should(($modal) => expect($modal.data("bs.modal")._isTransitioning).to.eq(false));
+		cy.get(".modal:visible .modal-header .btn-modal-close").click();
+		cy.get(".modal:visible").should("not.exist");
+		cy.get(grid + " .ag-floating-bottom-container .liquidity-balance-row").last().find("[col-id$='__forecast']").first().click();
+		cy.wait("@balanceDetail").then(({ request, response }) => {
+			expect(new URLSearchParams(request.body).get("metric")).to.eq("projected_closing");
+			expect(response.statusCode).to.eq(200);
+		});
+		cy.get(".modal:visible").should(($modal) => expect($modal.data("bs.modal")._isTransitioning).to.eq(false));
+		cy.get(".modal:visible .modal-header .btn-modal-close").click();
+		cy.get(".modal:visible").should("not.exist");
+		cy.get(grid + " .liquidity-balance-row [col-id$='__plan']").first().click();
+		cy.get("@balanceDetail.all").should("have.length", 2);
+		cy.get(".modal:visible").should("not.exist");
+	});
+
+	testCase("BG-03 balance rows follow visible metrics and period granularity", () => {
+		cy.openLiquidity(context);
+		cy.liquidityFilter("metrics", ["plan"]);
+		cy.get(grid + " .liquidity-balance-row").should("not.exist");
+		cy.liquidityFilter("metrics", ["forecast"]);
+		for (const grain of ["day", "month", "week"]) {
+			cy.liquidityFilter("grain", grain);
+			cy.get(grid).contains("Конечный остаток").should("be.visible");
+			cy.get(grid + " .liquidity-balance-row [col-id$='__actual']").should("not.exist");
+		}
+		cy.liquidityFilter("accounts", [context.bank_b]);
+		cy.get(grid + " .liquidity-balance-row").should("not.exist");
+		cy.liquidityFilter("metrics", ["actual"]);
+		cy.get(grid).contains("Конечный остаток").should("be.visible");
+	});
+
+	testCase("BG-04 negative balances remain highlighted in Russian in both themes", () => {
+		cy.openLiquidity(context);
+		cy.liquidityFilter("grain", "month");
+		for (const theme of ["dark", "light"]) {
+			cy.window().then((win) => win.document.documentElement.setAttribute("data-theme", theme));
+			cy.get(grid).scrollIntoView().contains("Конечный остаток").should("be.visible");
+			cy.get(grid + " .liquidity-negative-balance").should("be.visible").and("contain", "-100,00");
+			cy.get(grid + " .liquidity-negative-balance").first().scrollIntoView().should(($cell) => {
+				expect($cell.css("color")).not.to.eq($cell.closest(".liquidity-calendar").css("color"));
+			});
+			cy.screenshot("liquidity-balances-" + theme, { capture: "viewport" });
+		}
 	});
 
 	testCase("UI-01 opens the report with the default table, chart and filters", () => {
@@ -73,11 +154,11 @@ describe("Liquidity Payment Calendar", () => {
 
 	testCase("UI-06 analytic filters hide company balances and reset restores them", () => {
 		cy.openLiquidity(context);
-		cy.get(".liquidity-balances").should("be.visible");
+		cy.get(grid + " .liquidity-balance-row").should("be.visible");
 		cy.liquidityFilter("projects", [context.project]);
-		cy.get(".liquidity-balances").should("not.exist");
+		cy.get(grid + " .liquidity-balance-row").should("not.exist");
 		cy.liquidityFilter("projects", []);
-		cy.get(".liquidity-balances").should("be.visible");
+		cy.get(grid + " .liquidity-balance-row").should("be.visible");
 	});
 
 	testCase("UI-06 selects a project from its visible dropdown and filters portfolio and party", () => {
@@ -86,7 +167,7 @@ describe("Liquidity Payment Calendar", () => {
 		cy.get("[data-fieldname=projects] .selectable-item").contains(context.project).click();
 		cy.wait("@calendar");
 		cy.get("[data-testid=liquidity-kpis]").click();
-		cy.get(".liquidity-balances").should("not.exist");
+		cy.get(grid + " .liquidity-balance-row").should("not.exist");
 		cy.liquidityFilter("projects", []);
 		cy.liquidityFilter("portfolios", [context.portfolio]);
 		cy.get("[data-testid=liquidity-kpis]").should("contain", "40,00");
@@ -96,17 +177,17 @@ describe("Liquidity Payment Calendar", () => {
 		cy.get("[data-fieldname=parties] .selectable-item").contains("_Test Liquidity Customer").click();
 		cy.wait("@calendar");
 		cy.get("[data-testid=liquidity-kpis]").click().should("contain", "40,00");
-		cy.get(".liquidity-balances").should("not.exist");
+		cy.get(grid + " .liquidity-balance-row").should("not.exist");
 	});
 
 	testCase("UI-07 account selection filters actual only and hides projected balances", () => {
 		cy.openLiquidity(context);
 		cy.liquidityFilter("accounts", [context.bank_b]);
 		cy.get(".liquidity-account-note").should("be.visible");
-		cy.get(".liquidity-balances").should("not.contain", "Конечный прогнозный остаток");
+		cy.get(grid + " .liquidity-balance-row [col-id$='__forecast']").each(($cell) => expect($cell.text()).to.eq("—"));
 		cy.get("[data-testid=liquidity-kpis]").should("contain", "40,00");
 		cy.liquidityFilter("accounts", []);
-		cy.get(".liquidity-balances").should("contain", "Конечный прогнозный остаток");
+		cy.get(grid + " .liquidity-balance-row [col-id$='__forecast']").first().should("not.have.text", "—");
 	});
 
 	testCase("UI-08 opens a cell's exact source documents", () => {
@@ -149,7 +230,7 @@ describe("Liquidity Payment Calendar", () => {
 
 	testCase("UI-15 a project manager sees permitted analytics without company balances", () => {
 		cy.openLiquidity(context, {}, "manager");
-		cy.get(".liquidity-balances").should("not.exist");
+		cy.get(grid + " .liquidity-balance-row").should("not.exist");
 		cy.call(API + "get_calendar", { filters: { company: context.company } }).its("body.message.balances").should("eq", null);
 	});
 

@@ -17,7 +17,7 @@
 .liquidity-calendar .liquidity-overdue { text-decoration: underline dotted; text-underline-offset: 4px; }
 .liquidity-calendar .liquidity-warnings { padding: 12px; border-left: 3px solid var(--orange-500); background: var(--control-bg); margin-bottom: 12px; }
 .liquidity-calendar .liquidity-warnings p:last-child { margin-bottom: 0; }
-.liquidity-calendar .liquidity-balances, .liquidity-detail-scroll { overflow-x: auto; margin-top: 16px; }
-.liquidity-calendar .liquidity-balances td, .liquidity-calendar .liquidity-balances th { white-space: nowrap; min-width: 145px; }
-.liquidity-calendar .liquidity-balances th:first-child { position: sticky; left: 0; background: var(--card-bg); min-width: 240px; }
+.liquidity-detail-scroll { overflow-x: auto; margin-top: 16px; }
 .liquidity-details td { vertical-align: top; }
+.liquidity-calendar .liquidity-negative-balance { color: var(--alert-text-danger); }
+.liquidity-calendar .liquidity-unavailable-balance { cursor: default; color: var(--text-muted); }
