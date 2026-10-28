@@ -904,10 +904,15 @@ describe("Liquidity Payment Calendar", () => {
 			});
 			cy.get("[data-fieldname=company]").should("be.visible");
 			cy.get(".budget-report-chart-container").should("be.visible");
-			cy.window().then((win) => win.frappe.set_route("query-report", "Liquidity Payment Calendar", { company: context.company, from_date: context.from_date, to_date: context.to_date }));
+			cy.window().then((win) => {
+				win.__previousPnlTable = win.frappe.query_report.datatable;
+				win.frappe.set_route("query-report", "Liquidity Payment Calendar", { company: context.company, from_date: context.from_date, to_date: context.to_date });
+			});
 			cy.wait("@calendar");
 			cy.get("[data-testid=liquidity-calendar]").should("have.length", 1);
 			cy.get(grid + " .ag-root").should("be.visible");
+			cy.get(".liquidity-report-active .report-wrapper .datatable").should("not.exist");
+			cy.window().should((win) => expect(win.__previousPnlTable._sm._destroyed, "previous table observers released").to.eq(true));
 		}
 	});
 });

@@ -513,6 +513,10 @@ br.install_budget_page_cleanup_hook = function () {
 	frappe.router.on("change", function () {
 		var route = frappe.get_route();
 		if (route[0] !== "query-report" || route[1] !== "Project Budget Plan vs Forecast") {
+			// A Form visit retains the report's table for the standard return path.
+			if (route[0] === "query-report" && typeof br.destroy_budget_datatable === "function") {
+				br.destroy_budget_datatable();
+			}
 			if (typeof br.destroy_budget_chart === "function") {
 				br.destroy_budget_chart();
 			}

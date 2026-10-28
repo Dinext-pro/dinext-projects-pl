@@ -633,6 +633,11 @@
 			}
 			report.get_filter("metrics").$wrapper.hide();
 			report.__liquidityView?.destroy();
+			// QueryReport is shared across routes; its standard table owns resize observers.
+			report.last_ajax?.abort?.();
+			report.datatable?.destroy();
+			report.datatable = null;
+			report.$report.empty().removeClass("dt-sticky-table");
 			report.__liquidityView = new CalendarView(report);
 			if (!report.__liquidityWrapped) {
 				const previous = report.refresh;
