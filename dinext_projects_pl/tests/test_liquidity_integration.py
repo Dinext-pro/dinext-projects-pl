@@ -39,7 +39,7 @@ class TestLiquidityIntegration(FrappeTestCase):
 		from frappe.share import add
 
 		for dt, name in (("Company", fixtures.COMPANY), ("Project", cls.context["project"])):
-			add(dt, name, user=cls.manager, read=1, flags={"ignore_share_permission": True})
+			add(dt, name, user=cls.manager, read=1)
 		frappe.get_doc(
 			{
 				"doctype": "User Permission",
@@ -389,7 +389,7 @@ class TestLiquidityIntegration(FrappeTestCase):
 		# A separate non-project order must not leak through the same company.
 		hidden = fixtures.sales_order(self.context, amount=47, project=False)
 		for doc in (order, invoice):
-			add(doc.doctype, doc.name, user=self.manager, read=1, flags={"ignore_share_permission": True})
+			add(doc.doctype, doc.name, user=self.manager, read=1)
 		frappe.set_user(self.manager)
 		try:
 			result = calendar(self.filters)

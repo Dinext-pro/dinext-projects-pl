@@ -257,7 +257,7 @@ def seed(scenario="base"):
 		("Payment Request", context.get("request")),
 	]:
 		if name:
-			add(dt, name, user=MANAGER, read=1, flags={"ignore_share_permission": True})
+			add(dt, name, user=MANAGER, read=1)
 	return context
 
 
