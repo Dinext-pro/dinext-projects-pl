@@ -298,7 +298,7 @@
 			{ fieldname: "grain", label: __("Period granularity"), fieldtype: "Select", options: [{ value: "day", label: __("Day") }, { value: "week", label: __("Week") }, { value: "month", label: __("Month") }], default: "week" },
 			{ fieldname: "projects", label: __("Projects"), fieldtype: "MultiSelectList", get_data: options("project") },
 			{ fieldname: "portfolios", label: __("Project portfolios"), fieldtype: "MultiSelectList", get_data: options("portfolio") },
-			{ fieldname: "party_type", label: __("Party Type"), fieldtype: "Select", options: "\nCustomer\nSupplier\nEmployee" },
+			{ fieldname: "party_type", label: __("Counterparty type"), fieldtype: "Select", options: "\nCustomer\nSupplier\nEmployee" },
 			{ fieldname: "parties", label: __("Counterparties"), fieldtype: "MultiSelectList", get_data: (txt) => options("party", { party_type: frappe.query_report.get_filter_value("party_type") })(txt) },
 			{ fieldname: "accounts", label: __("Cash accounts"), fieldtype: "MultiSelectList", get_data: options("account") },
 			{ fieldname: "direction", label: __("Direction"), fieldtype: "Select", options: [{ value: "", label: __("All") }, { value: "in", label: __("Receipts") }, { value: "out", label: __("Payments") }] },
