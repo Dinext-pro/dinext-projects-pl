@@ -333,7 +333,11 @@ describe("Liquidity Payment Calendar", () => {
 		cy.get(grid + " .ag-root").should("not.exist");
 		cy.get("[data-testid=liquidity-calendar]").should("have.attr", "aria-busy", "false");
 		cy.get("body").then(($body) => { if ($body.find(".modal:visible .btn-modal-close").length) cy.get(".modal:visible .btn-modal-close").click(); });
-		cy.get("[data-testid=liquidity-calendar]").contains("button", "Повторить").click();
+		cy.window().then((win) => {
+			// Retry is a framework translation (wording differs between pinned
+			// Frappe versions); still click the real visible localized button.
+			cy.get("[data-testid=liquidity-calendar]").contains("button", win.__("Retry")).click();
+		});
 		cy.wait("@calendar");
 		cy.get(grid + " .ag-root").should("be.visible");
 		cy.liquidityFilter("direction", "out");
