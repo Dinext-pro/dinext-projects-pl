@@ -1,3 +1,4 @@
+import json
 from io import BytesIO
 from unittest.mock import patch
 
@@ -59,6 +60,32 @@ class TestLiquidityIntegration(FrappeTestCase):
 
 	def totals(self):
 		return get_calendar(self.filters)["directions"]["in"]
+
+	def test_depth_api_calculates_once_and_rejects_invalid_depth_before_loading(self):
+		order = fixtures.sales_order(self.context)
+		fixtures.sales_invoice(order)
+		with patch("dinext_projects_pl.liquidity.api.calendar", wraps=calendar) as calculate_calendar:
+			result = get_calendar(dict(self.filters, grouping="party_only"), depth="6")
+			calculate_calendar.assert_called_once()
+		self.assertEqual(result["rows"][0]["children"][0]["level"], "party")
+		for depth in (0, 8, True, None, [], "2.5", "2.0"):
+			with self.subTest(depth=depth), patch("dinext_projects_pl.liquidity.api.calendar") as calculate_calendar:
+				with self.assertRaises(frappe.ValidationError):
+					get_calendar(self.filters, depth=depth)
+				calculate_calendar.assert_not_called()
+
+	def test_party_only_batch_respects_denied_project(self):
+		order = fixtures.sales_order(self.context)
+		fixtures.sales_invoice(order)
+		frappe.set_user(self.manager)
+		try:
+			ordinary = get_calendar(self.filters, depth=7)
+			party_only = get_calendar(dict(self.filters, grouping="party_only"), depth=6)
+			self.assertIsNone(party_only["balances"])
+			self.assertEqual(party_only["directions"], ordinary["directions"])
+			self.assertNotIn('"level": "project"', json.dumps(party_only["rows"]))
+		finally:
+			frappe.set_user("Administrator")
 
 	def test_real_order_invoice_payment_and_contract(self):
 		order = fixtures.sales_order(self.context)
@@ -182,7 +209,7 @@ class TestLiquidityIntegration(FrappeTestCase):
 		frappe.set_user("Guest")
 		try:
 			with self.assertRaises(frappe.PermissionError):
-				get_calendar(self.filters)
+				get_calendar(dict(self.filters, grouping="party_only"), depth=7)
 		finally:
 			frappe.set_user("Administrator")
 
@@ -392,8 +419,8 @@ class TestLiquidityIntegration(FrappeTestCase):
 			add(doc.doctype, doc.name, user=self.manager, read=1)
 		frappe.set_user(self.manager)
 		try:
-			result = calendar(self.filters)
-			payload = result.payload()
+			result = calendar(dict(self.filters, grouping="party_only"))
+			payload = get_calendar(dict(self.filters, grouping="party_only"), depth=6)
 			self.assertIsNone(payload["balances"])
 			self.assertEqual(payload["directions"]["in"]["total__forecast"], 60)
 			self.assertNotIn(hidden.name, str(result.all_rows()))

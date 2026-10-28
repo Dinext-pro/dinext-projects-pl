@@ -13,6 +13,7 @@
 		constructor(report) {
 			this.report = report;
 			this.sequence = 0;
+			this.expansionSequence = 0;
 			this.disposed = false;
 			this.depth = 2;
 			this.filterForm = report.page.page_form;
@@ -99,7 +100,7 @@
 				}
 				if (!filters?.company) throw new Error(__("Company is required"));
 				const [payload] = await Promise.all([
-					call("get_calendar", { filters }),
+					call("get_calendar", { filters, depth: 2 }),
 					frappe.require(["dinext-table.bundle.js", "/assets/dinext_common/js/echarts.min.js", "/assets/dinext_projects_pl/css/liquidity_payment_calendar.css"]),
 				]);
 				if (!this.valid(sequence)) return;
@@ -119,31 +120,21 @@
 			}
 		}
 
-		format(value) {
-			return value == null ? "—" : Number(value).toLocaleString(frappe.boot.lang || "ru", { minimumFractionDigits: this.payload.precision, maximumFractionDigits: this.payload.precision });
+		format(value, exact = false) {
+			if (value == null) return "—";
+			const digits = exact ? this.payload.precision : 0;
+			return Number(value).toLocaleString("ru-RU", { minimumFractionDigits: digits, maximumFractionDigits: digits }).replace(/[\u00a0\u202f]/g, " ").replace(/^-0$/, "0");
 		}
 
 		async render(sequence) {
 			const p = this.payload;
 			this.depth = 2;
+			this.treeRows = p.rows;
+			this.loadedDepth = 2;
 			this.accountFilter = this.report.get_filter("accounts").$wrapper;
 			this.accountFilter.attr({ title: p.account_filter_note, "aria-description": p.account_filter_note });
-			if (p.warnings.length) {
-				const warnings = $("<div class='liquidity-warnings' role='status'></div>").appendTo(this.root);
-				p.warnings.forEach((warning) => $("<p></p>").text(warning).appendTo(warnings));
-			}
-			const kpis = $("<div class='liquidity-kpis' data-testid='liquidity-kpis'></div>").appendTo(this.root);
-			const cards = [[__("Expected receipts"), p.kpis.expected_receipts], [__("Expected payments"), p.kpis.expected_payments]];
-			if (p.balances) {
-				cards.unshift([__("Current cash balance"), p.balances.current_cash]);
-				if (p.balances.minimum != null) cards.push([__("Minimum projected balance"), p.balances.minimum]);
-			}
-			cards.forEach(([label, value]) => {
-				const card = $("<div class='liquidity-kpi'></div>").appendTo(kpis);
-				$("<span class='text-muted'></span>").text(label).appendTo(card);
-				$("<strong></strong>").toggleClass("text-danger", value < 0).text(this.format(value)).appendTo(card);
-			});
-			if (p.balances?.minimum != null) $("<p data-testid='liquidity-gap'></p>").text(__("First cash shortfall") + ": " + (p.balances.first_gap_date || __("None in selected range"))).appendTo(this.root);
+			this.indicators = $("<div class='liquidity-indicators'></div>").appendTo(this.root);
+			this.renderIndicators();
 
 			const chart = $("<div class='liquidity-chart' data-testid='liquidity-chart' role='img'></div>").attr("aria-label", __("Cash movements and balances")).appendTo(this.root);
 			this.chart = echarts.init(chart[0], null, { renderer: "svg" });
@@ -160,20 +151,27 @@
 				container: host[0], data: p.rows, columns: this.columns(), edit: false,
 				rowIdField: "id", childrenField: "children", expandedIds: [],
 				filter: { enabled: false }, sort: { enabled: false },
-				toolbar: { enabled: true, defaultPinned: true, presets: ["tree"], items: this.toolbarItems(sequence) },
+				toolbar: { enabled: true, defaultPinned: true, presets: ["tree", "fullscreen"], items: this.toolbarItems(sequence) },
 				layout: { height: "auto", maxHeight: 440 },
 				defaultColDef: { minWidth: 80 },
 				summaryRows: this.summaryRows(),
-				summary: { pin: "bottom" },
+				summary: { pin: "bottom", selection: false },
+				selection: { enabled: true }, clipboard: { enabled: false }, fillHandle: { enabled: false },
+				selectionStatus: { enabled: true, format: (stats) => [
+					...(stats.numericCount ? [__("Average") + ": " + this.format(stats.average, true)] : []),
+					__("Count") + ": " + stats.cellCount,
+					...(stats.numericCount ? [__("Sum") + ": " + this.format(stats.sum, true)] : []),
+				].join(" | ") },
 				onExpandRow: async ({ rowId, row, table }) => {
+					const expansion = this.expansionSequence;
 					try {
 						const children = await call("get_children", { filters: this.filters, node_key: row.id });
-						if (this.valid(sequence)) table.setRowChildren(rowId, children);
+						if (this.valid(sequence) && expansion === this.expansionSequence) table.setRowChildren(rowId, children);
 					} catch (error) { if (this.valid(sequence)) frappe.msgprint(__("Unable to load this branch. Collapse and retry.")); }
 				},
-				gridOptions: { rowHeight: 28, headerHeight: 28, groupHeaderHeight: 28,
+				gridOptions: { rowHeight: 26, headerHeight: 24, groupHeaderHeight: 24,
 					getRowClass: (params) => params.data?.balanceKind ? "liquidity-balance-row" : "",
-					onCellClicked: (event) => {
+					onCellDoubleClicked: (event) => {
 						const field = event.colDef.field;
 						if (!field?.includes("__")) return;
 						const [period, metric] = field.split("__");
@@ -187,7 +185,46 @@
 			});
 			if (!this.valid(sequence)) { grid.destroy(); return; }
 			this.grid = grid;
+			// Keep the shared toolbar actions, but use the report's batched tree loader.
+			grid.expandAll = () => this.expandDepth(this.maxDepth(), sequence);
+			const collapse = grid.collapseAll.bind(grid);
+			grid.collapseAll = () => {
+				this.expansionSequence++;
+				this.depth = 1;
+				this.root.find('[data-testid="liquidity-depth"]').val("1");
+				this.root.find('.liquidity-grid').attr("aria-busy", "false");
+				grid.clearCellSelection();
+				return collapse();
+			};
+			const collapseRow = grid.collapseRow.bind(grid);
+			grid.collapseRow = (id) => {
+				this.expansionSequence++;
+				this.root.find('.liquidity-grid').attr("aria-busy", "false");
+				grid.clearCellSelection();
+				return collapseRow(id);
+			};
 			await this.expandDepth(2, sequence);
+		}
+
+		renderIndicators() {
+			const p = this.payload;
+			const host = this.indicators.empty();
+			if (p.warnings.length) {
+				const warnings = $("<div class='liquidity-warnings' role='status'></div>").appendTo(host);
+				p.warnings.forEach((warning) => $("<p></p>").text(warning).appendTo(warnings));
+			}
+			const kpis = $("<div class='liquidity-kpis' data-testid='liquidity-kpis'></div>").appendTo(host);
+			const cards = [[__("Expected receipts"), p.kpis.expected_receipts], [__("Expected payments"), p.kpis.expected_payments]];
+			if (p.balances) {
+				cards.unshift([__("Current cash balance"), p.balances.current_cash]);
+				if (p.balances.minimum != null) cards.push([__("Minimum projected balance"), p.balances.minimum]);
+			}
+			cards.forEach(([label, value]) => {
+				const card = $("<div class='liquidity-kpi'></div>").appendTo(kpis);
+				$("<span class='text-muted'></span>").text(label).appendTo(card);
+				$("<strong></strong>").toggleClass("text-danger", value < 0).text(this.format(value)).appendTo(card);
+			});
+			if (p.balances?.minimum != null) $("<p data-testid='liquidity-gap'></p>").text(__("First cash shortfall") + ": " + (p.balances.first_gap_date || __("None in selected range"))).appendTo(host);
 		}
 
 		viewMode() {
@@ -205,7 +242,7 @@
 			return [
 				{ id: "liquidity-depth", type: "custom", render: ({ host }) => {
 					$(host).empty();
-					this.select($(host), "liquidity-depth", __("Expand to level"), Array.from({ length: 7 }, (_, i) => [String(i + 1), String(i + 1)]), String(this.depth), (value) => {
+					this.select($(host), "liquidity-depth", __("Expand to level"), Array.from({ length: this.maxDepth() }, (_, i) => [String(i + 1), String(i + 1)]), String(this.depth), (value) => {
 						this.depth = Number(value); this.expandDepth(this.depth, sequence);
 					});
 				} },
@@ -218,7 +255,7 @@
 				} },
 				{ id: "liquidity-display", type: "custom", render: ({ host }) => {
 					$(host).empty();
-					this.select($(host), "liquidity-display", __("Display"), [["combined", __("Forecast and actual")], ["actual", __("Actual only")], ["forecast", __("Forecast only")]], this.viewMode(), (value) => this.setMetrics(value, this.filters.metrics.includes("plan")));
+					this.select($(host), "liquidity-display", "", [["combined", __("Forecast and actual")], ["actual", __("Actual only")], ["forecast", __("Forecast only")]], this.viewMode(), (value) => this.setMetrics(value, this.filters.metrics.includes("plan")));
 				} },
 				{ id: "liquidity-export", type: "custom", align: "end", render: ({ host }) => {
 					const link = $("<a class='dinext-table-toolbar-item' data-testid='liquidity-export' download='liquidity-payment-calendar.xlsx'></a>")
@@ -231,14 +268,14 @@
 
 		select(host, id, label, values, initial, onChange) {
 			const wrapper = $("<label class='liquidity-select'></label>").text(label).appendTo(host);
-			const select = $("<select class='form-control input-sm'></select>").attr("data-testid", id).appendTo(wrapper);
+			const select = $("<select class='form-control input-sm'></select>").attr({ "data-testid": id, "aria-label": label || __("Display") }).appendTo(wrapper);
 			values.forEach(([value, text]) => $("<option></option>").val(value).text(text).appendTo(select));
 			select.val(initial).on("change", () => onChange(select.val()));
 		}
 
 		periodLabel(period) {
 			const start = moment(period.start);
-			if (this.filters.grain === "week") return __("Week {0}", [start.isoWeek()]) + " · " + start.isoWeekYear();
+			if (this.filters.grain === "week") return String(start.isoWeek()).padStart(2, "0") + " · " + start.isoWeekYear();
 			if (this.filters.grain === "month") return start.format("MM.YYYY");
 			return start.format("DD.MM.YYYY");
 		}
@@ -256,18 +293,18 @@
 		}
 
 		columns() {
-			const columns = [{ field: "label", headerName: __("Direction / Project / Counterparty / Contract / Documents"), pinned: "left", width: 280, minWidth: 180,
+			const columns = [{ field: "label", headerName: this.filters.grouping === "party_only" ? __("Direction / Counterparty / Contract / Documents") : __("Direction / Project / Counterparty / Contract / Documents"), pinned: "left", width: 280, minWidth: 180,
 				render: (params) => { const span = document.createElement("span"); span.textContent = params.value || ""; span.title = params.value || ""; return span; } }];
 			const periods = [["undated", __("Without date")], ...this.payload.periods.map((p) => [p.key, this.periodLabel(p), `${p.start} — ${p.end}`]), ["total", __("Total")]];
 			const metrics = [...(this.filters.metrics.includes("plan") ? ["plan"] : []), this.viewMode() === "combined" ? "combined" : this.viewMode()];
 			periods.forEach(([key, title, range]) => columns.push({ headerName: title, headerTooltip: range || title, marryChildren: true, pinned: key === "total" ? "right" : undefined, children: metrics.map((metric) => ({
 				field: key + "__" + metric, headerName: labels[metric], type: "number", width: 96, minWidth: 80, pinned: key === "total" ? "right" : undefined,
-				valueGetter: (params) => this.cellValue(params.data, key, metric),
+				valueGetter: (params) => params.data?.balanceKind ? this.cellValue(params.data, key, metric) : (this.cellValue(params.data, key, metric) ?? 0),
 				valueFormatter: (params) => this.format(params.data?.balanceKind ? params.value : (params.value ?? 0)),
 				cellClass: "liquidity-money", tooltipValueGetter: (params) => {
 					const overdue = this.cellValue(params.data, key, metric, "__overdue");
 					const contractual = this.cellValue(params.data, key, metric, "__contract_overdue");
-					return [this.format(params.data?.balanceKind ? params.value : (params.value ?? 0)), overdue ? __("Overdue portion") + ": " + this.format(overdue) : "", contractual ? __("Original due date overdue") + ": " + this.format(contractual) : ""].filter(Boolean).join(" · ");
+					return [this.format(params.data?.balanceKind ? params.value : (params.value ?? 0), true), __("Double-click for details"), overdue ? __("Overdue portion") + ": " + this.format(overdue) : "", contractual ? __("Original due date overdue") + ": " + this.format(contractual) : ""].filter(Boolean).join(" · ");
 				},
 				cellClassRules: {
 					"liquidity-zero": (params) => params.data?.balanceKind ? params.value === 0 : !params.value,
@@ -278,13 +315,45 @@
 			return columns;
 		}
 
-		async expandDepth(depth, sequence) {
+		maxDepth() { return this.filters.grouping === "party_only" ? 6 : 7; }
+
+		async expandDepth(depth, sequence = this.sequence) {
 			if (!this.grid || !this.valid(sequence)) return;
-			await this.grid.collapseAll();
-			for (let level = 0; level < depth - 1 && this.valid(sequence); level++) {
-				const pending = [];
-				this.grid.api.forEachNode((node) => { if (node.data?.depth === level && node.data.hasChildren) pending.push(node.id); });
-				for (const id of pending) { if (this.valid(sequence)) await this.grid.expandRow(id); }
+			depth = Math.max(1, Math.min(this.maxDepth(), depth));
+			const expansion = ++this.expansionSequence;
+			const valid = () => this.valid(sequence) && expansion === this.expansionSequence;
+			this.root.find('.liquidity-grid').attr("aria-busy", "true");
+			try {
+				if (depth > this.loadedDepth) {
+					const payload = await call("get_calendar", { filters: this.filters, depth });
+					if (!valid()) return;
+					this.payload = payload;
+					this.treeRows = payload.rows;
+					this.loadedDepth = depth;
+					this.grid.setSummaryRows(this.summaryRows());
+					this.renderIndicators();
+					this.drawChart();
+				}
+				if (!valid()) return;
+				const expanded = [];
+				const visit = (rows, parent = "") => rows.forEach((row) => {
+					const id = parent ? parent + ":" + row.id : row.id;
+					if (row.depth < depth - 1 && row.children?.length) {
+						expanded.push(id);
+						visit(row.children, id);
+					}
+				});
+				visit(this.treeRows);
+				this.depth = depth;
+				this.grid.expandedIds = new Set(expanded);
+				this.grid.refresh(this.treeRows);
+				this.grid.refreshAllTreeToggles();
+				this.grid.clearCellSelection();
+				this.root.find('[data-testid="liquidity-depth"]').val(String(depth));
+			} catch (error) {
+				if (valid()) frappe.msgprint(__("Unable to load this branch. Collapse and retry."));
+			} finally {
+				if (valid()) this.root.find('.liquidity-grid').attr("aria-busy", "false");
 			}
 		}
 
@@ -419,7 +488,7 @@
 			{ fieldname: "parties", label: __("Counterparties"), fieldtype: "MultiSelectList", get_data: (txt) => options("party", { party_type: frappe.query_report.get_filter_value("party_type") })(txt) },
 			{ fieldname: "accounts", label: __("Cash accounts"), fieldtype: "MultiSelectList", get_data: options("account") },
 			{ fieldname: "direction", label: __("Direction"), fieldtype: "Select", options: [{ value: "", label: __("All") }, { value: "in", label: __("Receipts") }, { value: "out", label: __("Payments") }] },
-			{ fieldname: "grouping", label: __("Grouping"), fieldtype: "Select", default: "project_party", options: [{ value: "project_party", label: __("Project → Counterparty") }, { value: "party_project", label: __("Counterparty → Project") }] },
+			{ fieldname: "grouping", label: __("Grouping"), fieldtype: "Select", default: "project_party", options: [{ value: "project_party", label: __("Project → Counterparty") }, { value: "party_project", label: __("Counterparty → Project") }, { value: "party_only", label: __("Only Counterparty") }] },
 			{ fieldname: "metrics", label: __("Metrics"), fieldtype: "MultiSelectList", default: ["forecast", "actual"], get_data: () => ["plan", "forecast", "actual"].map((value) => ({ value, label: labels[value], description: "" })) },
 			{ fieldname: "show_zero", label: __("Show zero rows"), fieldtype: "Check", default: 0 },
 		],

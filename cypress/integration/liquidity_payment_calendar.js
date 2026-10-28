@@ -14,6 +14,114 @@ describe("Liquidity Payment Calendar", () => {
 	});
 	after(() => cy.cleanupLiquidity());
 
+	testCase("TA-01 keeps native Fullscreen last with XLSX immediately before it", () => {
+		cy.openLiquidity(context);
+		cy.get(".liquidity-plan").should("have.text", "План");
+		cy.get("[data-testid=liquidity-display]").parent().should(($label) => expect($label.clone().children().remove().end().text()).to.eq(""));
+		cy.get(grid + " .dinext-table-toolbar-group--end").should(($group) => {
+			const items = $group.find("a, button").filter(":visible");
+			expect(items.eq(-2).attr("data-testid")).to.eq("liquidity-export");
+			expect(items.last().attr("title")).to.match(/Fullscreen|Полноэкран|Полный экран|Весь экран/i);
+		});
+		cy.get(grid + " .dinext-table-toolbar-group--end button").last().realClick();
+		cy.window().should((win) => expect(win.frappe.query_report.__liquidityView.grid.isFullscreen()).to.eq(true));
+		cy.get(grid + " .dinext-table-toolbar-group--end button").last().realClick();
+		cy.window().should((win) => expect(win.frappe.query_report.__liquidityView.grid.isFullscreen()).to.eq(false));
+	});
+
+	testCase("TA-02 shows six compact filters centered headers and integer spaced amounts in both themes", () => {
+		cy.openLiquidity(context);
+		for (const theme of ["dark", "light"]) {
+			cy.window().then((win) => win.document.documentElement.setAttribute("data-theme", theme));
+			cy.get(".liquidity-filters .page-form > .frappe-control:visible").should(($fields) => {
+				const top = $fields[0].getBoundingClientRect().top;
+				expect([...$fields].filter((field) => Math.abs(field.getBoundingClientRect().top - top) < 2)).to.have.length(6);
+			});
+			cy.get(grid + " .ag-header-cell-label, " + grid + " .ag-header-group-cell-label").each(($label) => {
+				cy.wrap($label).should("have.css", "justify-content", "center").and("have.css", "align-items", "center");
+			});
+			cy.get(grid + " .liquidity-money").first().should("have.css", "text-align", "center").and("have.css", "align-items", "center");
+		}
+		cy.window().then((win) => {
+			const view = win.frappe.query_report.__liquidityView;
+			expect(view.format(1234567.89)).to.eq("1 234 568");
+			expect(view.format(-1234567.89)).to.eq("-1 234 568");
+			expect(view.format(-0.5)).to.eq("-1");
+			expect(view.format(-0.1)).to.eq("0");
+			expect(view.format(1234567.89, true)).to.eq("1 234 567,89");
+		});
+		cy.get(grid + " .ag-pinned-right-cols-container [col-id=total__combined]").first().should("have.text", "40");
+		cy.viewport(800, 900);
+		cy.get(".liquidity-filters .page-form").should(($form) => expect($form.css("grid-template-columns").split(" ")).to.have.length(3));
+	});
+
+	testCase("TA-03 groups Only Counterparty without project levels and preserves totals export and restrictions", () => {
+		cy.openLiquidity(context);
+		cy.liquidityFilter("grouping", "party_only");
+		cy.get("[data-testid=liquidity-depth] option").should("have.length", 6);
+		cy.get(grid).contains("_Test Liquidity Customer").should("be.visible");
+		cy.get("[data-testid=liquidity-depth]").select("6");
+		cy.get(grid).contains(context.payment).should("be.visible");
+		cy.window().then((win) => {
+			const view = win.frappe.query_report.__liquidityView;
+			const levels = [];
+			view.grid.api.forEachNode((node) => levels.push(node.data.level));
+			expect(levels).not.to.include("project");
+			expect(view.payload.directions.in.total__forecast).to.eq(40);
+		});
+		cy.task("clearLiquidityWorkbook");
+		cy.get("[data-testid=liquidity-export]").click();
+		cy.readFile("cypress/downloads/liquidity-payment-calendar.xlsx", "binary").should("have.length.greaterThan", 1000);
+		cy.task("readLiquidityWorkbook").then((book) => {
+			const rows = book.rows;
+			expect(rows.some((row) => row[0] === context.project)).to.eq(false);
+			expect(rows[1].at(-1)).to.eq(40);
+		});
+		cy.openLiquidity(context, { grouping: "party_only" }, "manager");
+		cy.get(grid + " .liquidity-balance-row").should("not.exist");
+	});
+
+	testCase("TA-04 selects multiple cells with accurate statistics and opens details on double click", () => {
+		cy.openLiquidity(context);
+		cy.liquidityPlan(true);
+		const plan = grid + " .ag-pinned-right-cols-container [row-index='0'] [col-id=total__plan]";
+		const cash = grid + " .ag-pinned-right-cols-container [row-index='0'] [col-id=total__combined]";
+		cy.get(plan).click();
+		cy.get(cash).click({ shiftKey: true });
+		cy.get(".modal:visible").should("not.exist");
+		cy.get(grid + " .dinext-table-status-bar").should("be.visible").and("contain", "120,00").and("contain", "60,00");
+		cy.window().then((win) => {
+			const stats = win.frappe.query_report.__liquidityView.grid.getSelectionStats();
+			expect(stats.cellCount).to.eq(2); expect(stats.sum).to.eq(120); expect(stats.average).to.eq(60);
+		});
+		cy.get(grid + " .ag-pinned-right-cols-container [row-index='1'] [col-id=total__combined]").click({ ctrlKey: true });
+		cy.window().then((win) => {
+			const stats = win.frappe.query_report.__liquidityView.grid.getSelectionStats();
+			expect(stats.cellCount).to.eq(3); expect(stats.sum).to.eq(160); expect(stats.average).to.be.closeTo(160 / 3, 0.000001);
+		});
+		cy.get(cash).dblclick();
+		cy.get("[data-testid=liquidity-details]").should("contain", context.invoice);
+	});
+
+	testCase("TA-05 batches all branches once and discards late expansion after collapse", () => {
+		let childRequests = 0;
+		cy.intercept("**/api/method/" + API + "get_children*", () => { childRequests++; });
+		cy.openLiquidity(context);
+		cy.intercept("**/api/method/" + API + "get_calendar*", (req) => { req.on("response", (res) => res.setDelay(700)); }).as("depthRequest");
+		cy.get("[data-testid=liquidity-depth]").select("7");
+		cy.get("[data-testid=liquidity-depth]").select("1");
+		cy.wait("@depthRequest");
+		cy.get(grid).should("have.attr", "aria-busy", "false");
+		cy.window().should((win) => expect(win.frappe.query_report.__liquidityView.grid.api.getDisplayedRowCount()).to.eq(1));
+		cy.get("[data-testid=liquidity-depth]").select("7");
+		cy.wait("@depthRequest");
+		cy.get(grid).contains(context.payment).should("be.visible");
+		cy.get("[data-testid=liquidity-depth]").select("2").select("7");
+		cy.get(grid).contains(context.payment).should("be.visible");
+		cy.get("@depthRequest.all").should("have.length", 2);
+		cy.then(() => expect(childRequests).to.eq(0));
+	});
+
 	testCase("CT-01 synchronizes all display modes and plan with chart table URL and export", () => {
 		cy.openLiquidity(context);
 		cy.get("[data-testid=liquidity-plan]").should("not.be.checked");
@@ -77,12 +185,15 @@ describe("Liquidity Payment Calendar", () => {
 		}
 		// Locate the rendered toolbox path by its position; ZRender normalizes path data.
 		cy.window().then((win) => cy.spy(win.HTMLAnchorElement.prototype, "dispatchEvent").as("imageDownload"));
-		cy.get("[data-testid=liquidity-chart] svg path").filter((_index, path) => {
+		const downloadIcon = () => cy.get("[data-testid=liquidity-chart] svg path").filter((_index, path) => {
 			const bounds = path.closest(".liquidity-chart").getBoundingClientRect();
 			const box = path.getBoundingClientRect();
 			return box.width > 5 && box.width < 30 && box.height > 5 && box.height < 30
 				&& box.top >= bounds.top && box.top < bounds.top + 30 && box.right > bounds.right - 45;
-		}).should("have.length", 1).click();
+		}).should("have.length", 1);
+		// ECharts needs pointer hover before click and may replace the SVG path on hover.
+		downloadIcon().realHover();
+		downloadIcon().realClick();
 		cy.window().then((win) => {
 			const view = win.frappe.query_report.__liquidityView;
 			cy.get("@imageDownload").should((spy) => {
@@ -112,7 +223,7 @@ describe("Liquidity Payment Calendar", () => {
 			const view = win.frappe.query_report.__liquidityView;
 			const columns = view.grid.api.getAllDisplayedColumns();
 			expect(columns.find((col) => !col.getPinned()).getColId()).to.eq("undated__plan");
-			expect(view.grid.api.getDisplayedRowAtIndex(0).rowHeight).to.eq(28);
+			expect(view.grid.api.getDisplayedRowAtIndex(0).rowHeight).to.eq(26);
 		});
 		cy.liquidityScrollRight();
 		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__combined']").first().should("be.visible");
@@ -141,7 +252,7 @@ describe("Liquidity Payment Calendar", () => {
 	testCase("CT-06 selects forecast for the current period and keeps short period labels", () => {
 		cy.openLiquidity(context);
 		cy.liquidityPlan(true);
-		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__combined']").first().should("contain", "40,00").click();
+		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__combined']").first().should("contain", "40").dblclick();
 		cy.get("[data-testid=liquidity-details]").should("contain", context.invoice);
 		cy.get("[data-testid=liquidity-details] tbody tr").should("have.length", 1);
 		cy.get(".modal:visible").should(($modal) => expect($modal.data("bs.modal")._isTransitioning).to.eq(false));
@@ -151,7 +262,7 @@ describe("Liquidity Payment Calendar", () => {
 			const view = win.frappe.query_report.__liquidityView;
 			const groups = view.columns();
 			expect(groups[2].children.map((col) => col.headerName)).to.deep.eq(["План", "Прогноз / факт"]);
-			expect(groups[2].headerName).to.match(/Неделя \d+ · \d{4}/);
+			expect(groups[2].headerName).to.match(/\d{2} · \d{4}/);
 		});
 		cy.liquidityFilter("grain", "month");
 		cy.window().then((win) => expect(win.frappe.query_report.__liquidityView.columns()[2].headerName).to.match(/\d{2}\.\d{4}/));
@@ -196,7 +307,7 @@ describe("Liquidity Payment Calendar", () => {
 		cy.intercept("**/api/method/dinext_projects_pl.liquidity.api.get_cell_details*").as("balanceDetail");
 		cy.window().then((win) => {
 			const key = win.frappe.query_report.__liquidityView.payload.periods[0].key;
-			cy.get(grid + ` .liquidity-balance-row [col-id='${key}__combined']`).first().click();
+			cy.get(grid + ` .liquidity-balance-row [col-id='${key}__combined']`).first().dblclick();
 		});
 		cy.wait("@balanceDetail").then(({ request, response }) => {
 			expect(new URLSearchParams(request.body).get("metric")).to.eq("projected_opening");
@@ -208,7 +319,7 @@ describe("Liquidity Payment Calendar", () => {
 		cy.get(".modal:visible").should("not.exist");
 		cy.window().then((win) => {
 			const key = win.frappe.query_report.__liquidityView.payload.periods[0].key;
-			cy.get(grid + ` .ag-floating-bottom-container .liquidity-balance-row [col-id='${key}__combined']`).last().click();
+			cy.get(grid + ` .ag-floating-bottom-container .liquidity-balance-row [col-id='${key}__combined']`).last().dblclick();
 		});
 		cy.wait("@balanceDetail").then(({ request, response }) => {
 			expect(new URLSearchParams(request.body).get("metric")).to.eq("projected_closing");
@@ -217,7 +328,7 @@ describe("Liquidity Payment Calendar", () => {
 		cy.get(".modal:visible").should(($modal) => expect($modal.data("bs.modal")._isTransitioning).to.eq(false));
 		cy.get(".modal:visible .modal-header .btn-modal-close").click();
 		cy.get(".modal:visible").should("not.exist");
-		cy.get(grid + " .liquidity-balance-row [col-id$='__plan']").first().click();
+		cy.get(grid + " .liquidity-balance-row [col-id$='__plan']").first().dblclick();
 		cy.get("@balanceDetail.all").should("have.length", 2);
 		cy.get(".modal:visible").should("not.exist");
 	});
@@ -242,7 +353,7 @@ describe("Liquidity Payment Calendar", () => {
 		for (const theme of ["dark", "light"]) {
 			cy.window().then((win) => win.document.documentElement.setAttribute("data-theme", theme));
 			cy.get(grid).scrollIntoView().contains("Конечный остаток").should("be.visible");
-			cy.get(grid + " .liquidity-negative-balance").should("be.visible").and("contain", "-100,00");
+			cy.get(grid + " .liquidity-negative-balance").should("be.visible").and("contain", "-100");
 			cy.get(grid + " .liquidity-negative-balance").first().scrollIntoView().should(($cell) => {
 				expect($cell.css("color")).not.to.eq($cell.closest(".liquidity-calendar").css("color"));
 			});
@@ -321,13 +432,13 @@ describe("Liquidity Payment Calendar", () => {
 		cy.get(grid + " .liquidity-balance-row").should("not.exist");
 		cy.liquidityFilter("projects", []);
 		cy.liquidityFilter("portfolios", [context.portfolio]);
-		cy.get("[data-testid=liquidity-kpis]").should("contain", "40,00");
+		cy.get("[data-testid=liquidity-kpis]").should("contain", "40");
 		cy.liquidityFilter("portfolios", []);
 		cy.liquidityFilter("party_type", "Customer");
 		cy.get("[data-fieldname=parties] [data-toggle=dropdown]").click();
 		cy.get("[data-fieldname=parties] .selectable-item").contains("_Test Liquidity Customer").click();
 		cy.wait("@calendar");
-		cy.get("[data-testid=liquidity-kpis]").click().should("contain", "40,00");
+		cy.get("[data-testid=liquidity-kpis]").click().should("contain", "40");
 		cy.get(grid + " .liquidity-balance-row").should("not.exist");
 	});
 
@@ -342,7 +453,7 @@ describe("Liquidity Payment Calendar", () => {
 			expect(actualLine.data[0].value).to.eq(view.payload.balances.periods[0].actual_closing);
 			expect(rows.flatMap((row) => Object.values(row.balanceMetrics)).filter(Boolean).every((metric) => metric.startsWith("actual_"))).to.eq(true);
 		});
-		cy.get("[data-testid=liquidity-kpis]").should("contain", "40,00");
+		cy.get("[data-testid=liquidity-kpis]").should("contain", "40");
 		cy.liquidityFilter("accounts", []);
 		cy.window().then((win) => expect(win.frappe.query_report.__liquidityView.payload.balances.minimum).not.to.eq(null));
 	});
@@ -351,7 +462,7 @@ describe("Liquidity Payment Calendar", () => {
 		cy.openLiquidity(context);
 		cy.liquidityMode("forecast");
 		cy.liquidityScrollRight();
-		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__forecast']").first().click();
+		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__forecast']").first().dblclick();
 		cy.get("[data-testid=liquidity-details]").should("be.visible").and("contain", context.invoice);
 		cy.get("[data-testid=liquidity-details] a").first().should("have.attr", "href").and("include", "sales-invoice/");
 		cy.get("[data-testid=liquidity-details] a").first().click();
@@ -370,8 +481,9 @@ describe("Liquidity Payment Calendar", () => {
 			const bar = [...$paths].find((el) => el.getBoundingClientRect().height > 20);
 			expect(bar, "actual cash bar").to.exist;
 			cy.wrap(bar).trigger("mousemove", "center");
-			cy.get(".liquidity-chart-tooltip").should("be.visible").and("contain", "20,00");
-			cy.wrap(bar).click();
+			cy.get(".liquidity-chart-tooltip").should("be.visible").and("contain", "20");
+			// Click beside the tooltip axis pointer, which overlays the bar center.
+			cy.wrap(bar).click(4, 10);
 		});
 		cy.get("[data-testid=liquidity-details]").should("contain", context.payment);
 	});
@@ -384,7 +496,7 @@ describe("Liquidity Payment Calendar", () => {
 			cy.wrap(points.at(-1)).click();
 		});
 		cy.get("[data-testid=liquidity-details]").should("contain", context.invoice);
-		cy.get(".modal:visible").should("contain", "20,00").and("contain", "60,00");
+		cy.get(".modal:visible").should("contain", "20").and("contain", "60");
 	});
 
 	testCase("UI-15 a project manager sees permitted analytics without company balances", () => {
@@ -431,14 +543,14 @@ describe("Liquidity Payment Calendar", () => {
 		cy.get("[data-fieldname=show_zero] .input-area input[type=checkbox]").check();
 		cy.wait("@calendar");
 		cy.get(grid).contains("Поступления").should("be.visible");
-		cy.get("[data-testid=liquidity-kpis]").should("contain", "0,00");
+		cy.get("[data-testid=liquidity-kpis]").should("contain", "0");
 	});
 
 	testCase("UI-08 pagination keeps the exact total and source links", () => {
 		cy.openLiquidity(context);
 		cy.liquidityPlan(true);
 		cy.liquidityScrollRight();
-		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__plan']").first().click();
+		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__plan']").first().dblclick();
 		cy.get("[data-testid=liquidity-details] tbody tr").should("have.length", 50);
 		cy.get(".modal:visible").contains("button", "Далее").click();
 		cy.get("[data-testid=liquidity-details] tbody tr").should("have.length", 6);
@@ -449,15 +561,15 @@ describe("Liquidity Payment Calendar", () => {
 
 	testCase("UI-10 standalone request becomes forecast 70 and actual 30 after payment", () => {
 		cy.openLiquidity(context, {}, "operator");
-		cy.get("[data-testid=liquidity-kpis]").should("contain", "100,00");
+		cy.get("[data-testid=liquidity-kpis]").should("contain", "100");
 		cy.get("[data-testid=liquidity-depth]").select("7");
 		cy.get(grid).contains("Без инвойса").should("be.visible");
 		cy.get(grid).contains(context.request).should("be.visible");
 		cy.call("dinext_projects_pl.tests.liquidity_ui_helpers.pay_standalone", { request_name: context.request });
 		cy.window().then((win) => win.frappe.query_report.refresh());
 		cy.wait("@calendar");
-		cy.get("[data-testid=liquidity-kpis]").should("contain", "70,00");
-		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__combined']").first().should("contain", "70,00");
+		cy.get("[data-testid=liquidity-kpis]").should("contain", "70");
+		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__combined']").first().should("contain", "70");
 	});
 
 	testCase("UI-12 request transaction_date moves its forecast slice on refresh", () => {
@@ -466,9 +578,9 @@ describe("Liquidity Payment Calendar", () => {
 		cy.call("dinext_projects_pl.tests.liquidity_ui_helpers.move_request", { request_name: context.request, days: 35 });
 		cy.window().then((win) => win.frappe.query_report.refresh());
 		cy.wait("@calendar");
-		cy.get("[data-testid=liquidity-kpis]").should("contain", "80,00");
+		cy.get("[data-testid=liquidity-kpis]").should("contain", "80");
 		cy.liquidityScrollRight();
-		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__forecast']").first().click();
+		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__forecast']").first().dblclick();
 		cy.get("[data-testid=liquidity-details]").should("contain", context.request);
 		cy.window().then((win) => {
 			const date = win.moment(context.from_date).add(35, "days").format("YYYY-MM-DD");
@@ -479,28 +591,28 @@ describe("Liquidity Payment Calendar", () => {
 	testCase("UI-11 partial then full explicit invoice coverage keeps forecast 100", () => {
 		cy.openLiquidity(context, {}, "operator");
 		cy.liquidityMode("forecast");
-		cy.get("[data-testid=liquidity-kpis]").should("contain", "100,00");
+		cy.get("[data-testid=liquidity-kpis]").should("contain", "100");
 		cy.call("dinext_projects_pl.tests.liquidity_ui_helpers.cover_request", { request_name: context.request, amount: 60 });
 		cy.window().then((win) => win.frappe.query_report.refresh());
 		cy.wait("@calendar");
 		cy.get("[data-testid=liquidity-calendar]").should("have.attr", "aria-busy", "false");
 		cy.liquidityScrollRight();
-		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__forecast']").first().click();
+		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__forecast']").first().dblclick();
 		cy.get("[data-testid=liquidity-details] tbody tr").should("have.length", 2);
-		cy.get("[data-testid=liquidity-details]").should("contain", "60,00").and("contain", "40,00");
+		cy.get("[data-testid=liquidity-details]").should("contain", "60").and("contain", "40");
 		cy.call("dinext_projects_pl.tests.liquidity_ui_helpers.cover_request", { request_name: context.request, amount: 40 });
 		cy.window().then((win) => win.frappe.query_report.refresh());
 		cy.wait("@calendar");
 		cy.get("[data-testid=liquidity-calendar]").should("have.attr", "aria-busy", "false");
-		cy.get("[data-testid=liquidity-kpis]").should("contain", "100,00");
+		cy.get("[data-testid=liquidity-kpis]").should("contain", "100");
 		cy.liquidityScrollRight();
-		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__forecast']").first().click();
+		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__forecast']").first().dblclick();
 		cy.get("[data-testid=liquidity-details] tbody tr td:first-child").should("have.length", 2).each(($cell) => cy.wrap($cell).should("contain", "Sales Invoice"));
 	});
 
 	testCase("UI-13 overdue dates remain visible while cash is expected today", () => {
 		cy.openLiquidity(context);
-		cy.get(grid + " .liquidity-overdue").first().click();
+		cy.get(grid + " .liquidity-overdue").first().dblclick();
 		cy.get("[data-testid=liquidity-details]").should("contain", context.from_date);
 		cy.window().then((win) => {
 			cy.get("[data-testid=liquidity-details]").should("contain", win.moment(context.from_date).subtract(7, "days").format("YYYY-MM-DD"));
@@ -511,8 +623,8 @@ describe("Liquidity Payment Calendar", () => {
 		cy.openLiquidity(context);
 		cy.liquidityMode("forecast");
 		cy.liquidityScrollRight();
-		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__forecast']").first().click();
-		cy.get("[data-testid=liquidity-details]").should("contain", context.request).and("contain", "40,00");
+		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__forecast']").first().dblclick();
+		cy.get("[data-testid=liquidity-details]").should("contain", context.request).and("contain", "40");
 		cy.window().then((win) => {
 			cy.get("[data-testid=liquidity-details]")
 				.should("contain", win.moment(context.from_date).subtract(7, "days").format("YYYY-MM-DD"))
@@ -523,19 +635,19 @@ describe("Liquidity Payment Calendar", () => {
 	testCase("UI-13 obligations without date stay outside projected balance", () => {
 		cy.openLiquidity(context);
 		cy.liquidityMode("forecast");
-		cy.get("[data-testid=liquidity-kpis]").should("contain", "20,00");
-		cy.get(grid + " .ag-center-cols-container [col-id='undated__forecast']").first().should("contain", "40,00").click();
+		cy.get("[data-testid=liquidity-kpis]").should("contain", "20");
+		cy.get(grid + " .ag-center-cols-container [col-id='undated__forecast']").first().should("contain", "40").dblclick();
 		cy.get("[data-testid=liquidity-details]").should("contain", "Без даты");
 	});
 
 	for (const via of ["entry", "journal"]) {
 		testCase(`UI-14 executes Payment Order through ${via} without duplicate forecast`, () => {
 			cy.openLiquidity(context, {}, "operator");
-			cy.get("[data-testid=liquidity-kpis]").should("contain", "100,00");
+			cy.get("[data-testid=liquidity-kpis]").should("contain", "100");
 			cy.call("dinext_projects_pl.tests.liquidity_ui_helpers.execute_order", { order_name: context.payment_order, via });
 			cy.window().then((win) => win.frappe.query_report.refresh());
 			cy.wait("@calendar");
-			cy.get("[data-testid=liquidity-kpis]").should("contain", "70,00");
+			cy.get("[data-testid=liquidity-kpis]").should("contain", "70");
 			cy.get("[data-testid=liquidity-depth]").select("7");
 			cy.get(grid).contains(context.payment_order).should("be.visible");
 		});
@@ -563,7 +675,7 @@ describe("Liquidity Payment Calendar", () => {
 		cy.get("[data-fieldname=direction] select").select("out").select("in");
 		cy.wait("@raced"); cy.wait("@raced");
 		cy.get(grid).contains("Поступления").should("be.visible");
-		cy.get("[data-testid=liquidity-kpis]").should("contain", "40,00");
+		cy.get("[data-testid=liquidity-kpis]").should("contain", "40");
 	});
 
 	testCase("UI-18 distinguishes a failed request from an empty result and retries", () => {

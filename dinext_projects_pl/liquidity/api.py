@@ -15,6 +15,11 @@ from .presentation import Calendar, wire
 from .sources import Loader, load, require_access
 
 
+class CalendarFormInput(TypedDict, total=False):
+	filters: dict | str | None
+	depth: int | str
+
+
 class CalendarResponse(TypedDict):
 	filters: dict
 	as_of: str
@@ -51,8 +56,17 @@ def calendar(filters) -> Calendar:
 
 
 @frappe.whitelist()
-def get_calendar(filters=None) -> CalendarResponse:
-	result = calendar(filters).payload()
+def get_calendar(filters=None, depth=1) -> CalendarResponse:
+	"""Calculate the authorized calendar and load all branches through the requested depth."""
+	try:
+		if isinstance(depth, bool) or str(depth) not in {str(i) for i in range(1, 8)}:
+			raise ValueError
+		depth = int(depth)
+	except (ValueError, TypeError):
+		frappe.throw(_("Invalid calendar depth"))
+	calculated = calendar(filters)
+	result = calculated.payload()
+	result["rows"] = calculated.tree(depth)
 	result["calculated_at"] = now()
 	return result
 
@@ -103,7 +117,7 @@ def make_workbook(result: Calendar) -> bytes:
 	for period in result.periods:
 		if result.filters.grain == "week":
 			year, week, _weekday = period.start.isocalendar()
-			period_labels[period.key] = _("Week {0}").format(week) + f" · {year}"
+			period_labels[period.key] = f"{week:02d} · {year}"
 		elif result.filters.grain == "month":
 			period_labels[period.key] = period.start.strftime("%m.%Y")
 		else:

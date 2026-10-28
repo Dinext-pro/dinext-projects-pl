@@ -1,3 +1,5 @@
+// Frappe installs this plugin alongside Cypress; use native input for Fullscreen/toolbox.
+import "../../../frappe/node_modules/cypress-real-events/support";
 import "./commands";
 
 beforeEach(() => {

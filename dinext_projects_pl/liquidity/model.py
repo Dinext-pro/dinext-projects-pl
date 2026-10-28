@@ -106,7 +106,7 @@ class Filters:
 		values = {"company": company, "from_date": start, "to_date": end}
 		for name, allowed, default in (
 			("grain", ("day", "week", "month"), "week"),
-			("grouping", ("project_party", "party_project"), "project_party"),
+			("grouping", ("project_party", "party_project", "party_only"), "project_party"),
 			("direction", ("", "in", "out"), ""),
 			("party_type", ("", "Customer", "Supplier", "Employee"), ""),
 		):

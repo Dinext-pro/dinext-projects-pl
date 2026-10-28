@@ -62,7 +62,10 @@ def path_of(flow, grouping):
 	# An order's own plan stops at the order; an invoice's own forecast stops
 	# at the invoice. Only actual payments or request/order stages add a payment node.
 	depth = 5 if flow.metric == "plan" else 6 if flow.metric == "forecast" and not flow.payment else 7
-	return values[:depth]
+	values = values[:depth]
+	if grouping == "party_only":
+		del values[1]
+	return values
 
 
 class Calendar:
@@ -84,6 +87,8 @@ class Calendar:
 		levels = list(LEVELS)
 		if filters.grouping == "party_project":
 			levels[1], levels[2] = levels[2], levels[1]
+		if filters.grouping == "party_only":
+			levels.remove("project")
 		self.levels = levels
 		for i, flow in enumerate(self.visible):
 			path = path_of(flow, filters.grouping)
@@ -137,6 +142,18 @@ class Calendar:
 
 	def row(self, key):
 		return wire({**self.nodes[key], **self.values[key]})
+
+	def tree(self, depth=1):
+		"""Return all branches through depth from this calculation, preserving lazy leaves."""
+		def descend(key, remaining):
+			rows = self.children(key)
+			if remaining > 1:
+				for row in rows:
+					if row["hasChildren"]:
+						row["children"] = descend(row["id"], remaining - 1)
+			return rows
+
+		return descend("root", depth)
 
 	def all_rows(self):
 		def descend(key):
