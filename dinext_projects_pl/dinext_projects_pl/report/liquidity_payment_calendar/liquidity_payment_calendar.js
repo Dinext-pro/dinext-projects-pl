@@ -79,6 +79,10 @@
 		}
 
 		async refresh() {
+			const requested = this.report.get_filter_values();
+			const scope = JSON.stringify(Object.keys(requested || {}).filter((key) => key !== "metrics").sort().map((key) => [key, requested[key]]));
+			if (this.grid && this.filterScope === scope) return this.refreshData(requested);
+			this.dataSequence = (this.dataSequence || 0) + 1;
 			const sequence = ++this.sequence;
 			// Keep the page height stable while its table/chart are replaced.
 			this.root.css("min-height", this.root.outerHeight());
@@ -106,6 +110,7 @@
 				if (!this.valid(sequence)) return;
 				this.payload = payload;
 				this.filters = payload.filters;
+				this.filterScope = scope;
 				this.root.empty();
 				await this.render(sequence);
 				if (!this.valid(sequence)) return;
@@ -120,10 +125,55 @@
 			}
 		}
 
+		async refreshData(filters) {
+			const sequence = this.sequence;
+			const request = this.dataSequence = (this.dataSequence || 0) + 1;
+			const valid = () => this.valid(sequence) && request === this.dataSequence;
+			this.expansionSequence++;
+			this.detailSequence = (this.detailSequence || 0) + 1;
+			this.root.attr("aria-busy", "true");
+			this.root.find(".liquidity-refresh-error").remove();
+			let depth = this.loadedDepth;
+			this.grid.api.forEachNode((node) => { depth = Math.max(depth, (node.data?.depth || 0) + 1); });
+			try {
+				await this.closeDialog();
+				const payload = await call("get_calendar", { filters, depth });
+				if (!valid()) return;
+				this.payload = payload;
+				this.filters = payload.filters;
+				this.treeRows = payload.rows;
+				this.loadedDepth = depth;
+				this.grid.setOption("columns", this.columns());
+				this.grid.refresh(this.treeRows);
+				this.grid.setSummaryRows(this.summaryRows());
+				this.grid.refreshAllTreeToggles();
+				this.grid.clearCellSelection();
+				this.grid.refreshToolbar();
+				this.renderIndicators();
+				this.drawChart();
+				this.root.find('[data-testid="liquidity-empty"]').remove();
+				if (!payload.rows.length) $("<p data-testid='liquidity-empty'></p>").text(__("No movements in the selected range")).insertBefore(this.grid.container);
+				this.report.update_url_with_filters();
+			} catch (error) {
+				if (!valid()) return;
+				const alert = $("<div class='liquidity-refresh-error text-danger' role='alert' data-testid='liquidity-error'></div>").prependTo(this.grid.container);
+				$("<span></span>").text(__("Unable to load payment calendar. Please retry.")).appendTo(alert);
+				$("<button class='btn btn-default'></button>").text(__("Retry")).on("click", () => this.refresh()).appendTo(alert);
+			} finally {
+				if (valid()) this.root.attr("aria-busy", "false").find('.liquidity-grid').attr("aria-busy", "false");
+			}
+		}
+
 		format(value, exact = false) {
 			if (value == null) return "—";
 			const digits = exact ? this.payload.precision : 0;
 			return Number(value).toLocaleString("ru-RU", { minimumFractionDigits: digits, maximumFractionDigits: digits }).replace(/[\u00a0\u202f]/g, " ").replace(/^-0$/, "0");
+		}
+
+		currencySymbol() {
+			try {
+				return new Intl.NumberFormat(frappe.boot.lang || "ru", { style: "currency", currency: this.payload.currency, currencyDisplay: "narrowSymbol" }).formatToParts(0).find((part) => part.type === "currency")?.value || this.payload.currency;
+			} catch (error) { return this.payload.currency; }
 		}
 
 		async render(sequence) {
@@ -217,14 +267,14 @@
 			const cards = [[__("Expected receipts"), p.kpis.expected_receipts], [__("Expected payments"), p.kpis.expected_payments]];
 			if (p.balances) {
 				cards.unshift([__("Current cash balance"), p.balances.current_cash]);
-				if (p.balances.minimum != null) cards.push([__("Minimum projected balance"), p.balances.minimum]);
+				if (p.balances.minimum != null) cards.push([__("Minimum projected balance"), p.balances.minimum, true]);
 			}
-			cards.forEach(([label, value]) => {
+			cards.forEach(([label, value, minimum]) => {
 				const card = $("<div class='liquidity-kpi'></div>").appendTo(kpis);
 				$("<span class='text-muted'></span>").text(label).appendTo(card);
-				$("<strong></strong>").toggleClass("text-danger", value < 0).text(this.format(value)).appendTo(card);
+				$("<strong></strong>").toggleClass("text-danger", value < 0).text(this.format(value) + " " + this.currencySymbol()).appendTo(card);
+				if (minimum) $("<span data-testid='liquidity-gap'></span>").text(__("First cash shortfall") + ": " + (p.balances.first_gap_date || __("None in selected range"))).appendTo(card);
 			});
-			if (p.balances?.minimum != null) $("<p data-testid='liquidity-gap'></p>").text(__("First cash shortfall") + ": " + (p.balances.first_gap_date || __("None in selected range"))).appendTo(host);
 		}
 
 		viewMode() {
@@ -268,7 +318,9 @@
 
 		select(host, id, label, values, initial, onChange) {
 			const wrapper = $("<label class='liquidity-select'></label>").text(label).appendTo(host);
-			const select = $("<select class='form-control input-sm'></select>").attr({ "data-testid": id, "aria-label": label || __("Display") }).appendTo(wrapper);
+			const control = $("<span class='liquidity-select-control'></span>").appendTo(wrapper);
+			const select = $("<select class='form-control input-sm'></select>").attr({ "data-testid": id, "aria-label": label || __("Display") }).appendTo(control);
+			$("<svg class='liquidity-select-arrow' viewBox='0 0 12 12' aria-hidden='true'><path d='m3 4 3 3 3-3' fill='none' stroke='currentColor' stroke-width='1.5'/></svg>").appendTo(control);
 			values.forEach(([value, text]) => $("<option></option>").val(value).text(text).appendTo(select));
 			select.val(initial).on("change", () => onChange(select.val()));
 		}
@@ -285,6 +337,13 @@
 			return period && period.end < this.payload.as_of ? "actual" : "forecast";
 		}
 
+		metricLabel(key, metric) {
+			if (metric !== "combined") return labels[metric];
+			if (key !== "total") return labels[this.periodMetric(key)];
+			const kinds = new Set(this.payload.periods.map((period) => this.periodMetric(period.key)));
+			return kinds.size === 1 ? labels[[...kinds][0]] : __("Cash movement");
+		}
+
 		cellValue(row, key, metric, suffix = "") {
 			if (!row) return null;
 			if (metric !== "combined" || row.balanceKind || row.detailMetric) return row[key + "__" + metric + suffix];
@@ -297,16 +356,18 @@
 				render: (params) => { const span = document.createElement("span"); span.textContent = params.value || ""; span.title = params.value || ""; return span; } }];
 			const periods = [["undated", __("Without date")], ...this.payload.periods.map((p) => [p.key, this.periodLabel(p), `${p.start} — ${p.end}`]), ["total", __("Total")]];
 			const metrics = [...(this.filters.metrics.includes("plan") ? ["plan"] : []), this.viewMode() === "combined" ? "combined" : this.viewMode()];
-			periods.forEach(([key, title, range]) => columns.push({ headerName: title, headerTooltip: range || title, marryChildren: true, pinned: key === "total" ? "right" : undefined, children: metrics.map((metric) => ({
-				field: key + "__" + metric, headerName: labels[metric], type: "number", width: 96, minWidth: 80, pinned: key === "total" ? "right" : undefined,
+			periods.forEach(([key, title, range]) => columns.push({ headerName: title, headerTooltip: range || title, headerClass: "liquidity-period-header", marryChildren: true, pinned: key === "total" ? "right" : undefined, children: metrics.map((metric, index) => ({
+				field: key + "__" + metric, headerName: this.metricLabel(key, metric), headerClass: index === 0 ? "liquidity-period-start" : "", type: "number", width: 96, minWidth: 80, pinned: key === "total" ? "right" : undefined,
 				valueGetter: (params) => params.data?.balanceKind ? this.cellValue(params.data, key, metric) : (this.cellValue(params.data, key, metric) ?? 0),
 				valueFormatter: (params) => this.format(params.data?.balanceKind ? params.value : (params.value ?? 0)),
-				cellClass: "liquidity-money", tooltipValueGetter: (params) => {
+				cellClass: "liquidity-money" + (index === 0 ? " liquidity-period-start" : ""), tooltipValueGetter: (params) => {
 					const overdue = this.cellValue(params.data, key, metric, "__overdue");
 					const contractual = this.cellValue(params.data, key, metric, "__contract_overdue");
 					return [this.format(params.data?.balanceKind ? params.value : (params.value ?? 0), true), __("Double-click for details"), overdue ? __("Overdue portion") + ": " + this.format(overdue) : "", contractual ? __("Original due date overdue") + ": " + this.format(contractual) : ""].filter(Boolean).join(" · ");
 				},
 				cellClassRules: {
+					"liquidity-net-positive": (params) => params.data?.id === "net" && params.value > 0,
+					"liquidity-net-negative": (params) => params.data?.id === "net" && params.value < 0,
 					"liquidity-zero": (params) => params.data?.balanceKind ? params.value === 0 : !params.value,
 					"liquidity-negative-balance": (params) => !!params.data?.balanceKind && params.value < 0,
 					"liquidity-unavailable-balance": (params) => !!params.data?.balanceKind && params.value == null,
@@ -363,13 +424,13 @@
 			const color = getComputedStyle(this.root[0]).getPropertyValue("--text-color").trim() || "#555";
 			const background = getComputedStyle(this.root[0]).getPropertyValue("--card-bg").trim() || "#fff";
 			const metrics = this.filters.metrics;
-			const gridColor = getComputedStyle(this.root[0]).getPropertyValue("--border-color").trim() || color;
+			const gridColor = getComputedStyle(this.root[0]).getPropertyValue("--liquidity-chart-grid").trim() || color;
 			const series = [];
 			for (const direction of ["in", "out"]) {
 				const node = p.rows.find((r) => r.path[0] === direction);
 				for (const metric of metrics) series.push({
 					name: `${direction === "in" ? __("Receipts") : __("Payments")} · ${labels[metric]}`,
-					type: "bar", stack: metric === "plan" ? direction + "-plan" : direction, itemStyle: { color: direction === "in" ? "#37a077" : "#d16a69", opacity: metric === "plan" ? 0.3 : metric === "forecast" ? 0.6 : 1 },
+					type: "bar", stack: metric === "plan" ? "plan" : "cash", stackStrategy: "samesign", itemStyle: { color: direction === "in" ? "#37a077" : "#d16a69", opacity: metric === "plan" ? 0.3 : metric === "forecast" ? 0.6 : 1 },
 					data: p.periods.map((period) => ({ value: (this.viewMode() === "combined" && metric !== "plan" && metric !== this.periodMetric(period.key) ? 0 : p.directions[direction][period.key + "__" + metric] || 0) * (direction === "in" ? 1 : -1), metric, period_key: period.key, node_key: node?.id || "root" })),
 					markLine: { silent: true, symbol: "none", data: [{ yAxis: 0 }], lineStyle: { color, type: "solid", opacity: 0.5 } },
 				});
@@ -392,12 +453,12 @@
 						data: [{ xAxis: todayPeriod + (day + 0.5) / length }] } });
 			}
 			this.chart.setOption({ animation: false, textStyle: { color }, backgroundColor: background,
-				tooltip: { trigger: "axis", className: "liquidity-chart-tooltip", backgroundColor: background, textStyle: { color }, formatter: (entries) => `${esc(entries[0]?.axisValueLabel)}<br>` + entries.filter((e) => e.value != null).map((e) => `${esc(e.seriesName)}: ${esc(this.format(e.value))}`).join("<br>") },
+				tooltip: { trigger: "axis", axisPointer: { type: "none" }, className: "liquidity-chart-tooltip", backgroundColor: background, textStyle: { color }, formatter: (entries) => `${esc(entries[0]?.axisValueLabel)}<br>` + entries.filter((e) => e.value != null).map((e) => `${esc(e.seriesName)}: ${esc(this.format(e.value))}`).join("<br>") },
 				toolbox: { right: 8, top: 0, iconStyle: { borderColor: color }, feature: { saveAsImage: { type: "svg", name: "liquidity-calendar-" + p.as_of, title: __("Download as image"), backgroundColor: background, excludeComponents: ["toolbox"] } } },
 				legend: { type: "scroll", right: 50, textStyle: { color } }, grid: { left: 80, right: 25, top: 48, bottom: 55 },
-				xAxis: [{ type: "category", data: p.periods.map((period) => period.start), axisLabel: { color } },
+				xAxis: [{ type: "category", data: p.periods.map((period) => period.start), axisLabel: { color }, splitLine: { show: true, lineStyle: { color: gridColor, width: 1 } } },
 					{ type: "value", min: 0, max: p.periods.length, show: false }],
-				yAxis: { type: "value", name: p.currency, axisLabel: { color }, splitLine: { lineStyle: { color: gridColor, opacity: 0.45 } } }, series,
+				yAxis: { type: "value", name: p.currency, axisLabel: { color, formatter: (value) => this.format(value) }, splitLine: { show: true, lineStyle: { color: gridColor, width: 1 } } }, series,
 			}, true);
 		}
 

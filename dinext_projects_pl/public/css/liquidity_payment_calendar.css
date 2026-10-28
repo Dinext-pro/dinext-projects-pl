@@ -1,7 +1,7 @@
 .liquidity-calendar { color: var(--text-color); background: var(--card-bg); padding: 6px; }
 .liquidity-calendar .liquidity-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
 .liquidity-calendar .liquidity-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 6px; margin: 6px 0; }
-.liquidity-calendar .liquidity-kpi { border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; }
+.liquidity-calendar .liquidity-kpi { border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 6px 8px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; }
 .liquidity-calendar .liquidity-kpi strong { font-size: 18px; font-variant-numeric: tabular-nums; }
 .liquidity-calendar .liquidity-select { display: flex; align-items: center; gap: 8px; margin: 0; }
 .liquidity-calendar .liquidity-select select { width: auto; }
@@ -20,7 +20,8 @@
 .liquidity-details td { vertical-align: top; }
 .liquidity-calendar .liquidity-negative-balance { color: var(--alert-text-danger); }
 .liquidity-calendar .liquidity-unavailable-balance { cursor: default; color: var(--text-muted); }
-.liquidity-calendar .liquidity-zero { color: var(--text-muted); }
+.liquidity-calendar .liquidity-zero,
+.liquidity-calendar .liquidity-zero .ag-cell-value { color: var(--liquidity-zero-color) !important; }
 .liquidity-calendar .liquidity-plan { display: flex; align-items: center; gap: 5px; margin: 0; white-space: nowrap; }
 .liquidity-calendar .liquidity-select { font-size: 12px; white-space: nowrap; gap: 5px; }
 .liquidity-calendar .liquidity-select select { height: 26px; font-size: 12px; padding: 2px 6px; }
@@ -32,7 +33,7 @@
 .liquidity-calendar .liquidity-filters .page-form { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0; background: var(--card-bg); border: 0; }
 .liquidity-calendar .liquidity-filters .page-form > .frappe-control { margin: 0; padding: 0; width: 100%; min-width: 0; max-width: none; }
 
-.liquidity-calendar [data-testid="liquidity-gap"] { margin: 4px 0; }
+.liquidity-calendar [data-testid="liquidity-gap"] { margin: 2px 0 0; font-size: 11px; color: var(--text-muted); }
 .liquidity-calendar .liquidity-filters .form-group { margin-bottom: 0; }
 .liquidity-calendar .liquidity-filters .control-label { margin-bottom: 2px; }
 .liquidity-calendar .liquidity-filters .input-with-feedback { min-width: 0; }
@@ -52,3 +53,25 @@
 }
 
 .liquidity-calendar .ag-header { font-size: 11px; }
+.liquidity-calendar {
+    --liquidity-period-border: var(--gray-400, #ced4da);
+    --liquidity-chart-grid: var(--border-color, #e8e8e8);
+    --liquidity-zero-color: color-mix(in srgb, var(--text-muted) 55%, var(--card-bg));
+}
+[data-theme="dark"] .liquidity-calendar {
+    --liquidity-period-border: var(--gray-600, #6c757d);
+    --liquidity-chart-grid: rgba(255, 255, 255, 0.08);
+}
+.liquidity-calendar .ag-header-group-cell.liquidity-period-header,
+.liquidity-calendar .ag-header-cell.liquidity-period-start,
+.liquidity-calendar .ag-cell.liquidity-period-start { border-left: 1px solid var(--liquidity-period-border) !important; }
+.liquidity-calendar .ag-header-cell:not([col-id="label"]),
+.liquidity-calendar .liquidity-period-header { font-size: 10px; }
+.liquidity-calendar .liquidity-net-positive,
+.liquidity-calendar .liquidity-net-positive .ag-cell-value { color: var(--green-600, #28a745) !important; }
+.liquidity-calendar .liquidity-net-negative,
+.liquidity-calendar .liquidity-net-negative .ag-cell-value { color: var(--red-500, #e03636) !important; }
+.liquidity-calendar .liquidity-select-control { position: relative; display: inline-flex; align-items: center; }
+.liquidity-calendar .liquidity-select-control select { appearance: none; background-image: none; padding-right: 22px; }
+.liquidity-calendar .liquidity-select-arrow { position: absolute; right: 6px; width: 12px; height: 12px; pointer-events: none; color: var(--text-color); }
+.liquidity-calendar .liquidity-refresh-error { padding: 6px; }

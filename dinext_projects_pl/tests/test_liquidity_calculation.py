@@ -73,6 +73,25 @@ def filters(**kwargs):
 
 
 class TestLiquidityCalculation(unittest.TestCase):
+	def test_export_labels_follow_each_period_and_mixed_total(self):
+		from unittest.mock import patch
+		from openpyxl import load_workbook
+		from dinext_projects_pl.liquidity.api import make_workbook
+		from io import BytesIO
+
+		snapshot = Snapshot(TODAY, "USD", invoices=[invoice(60, 40)], actual=[actual(20)])
+		for metrics in (("actual", "forecast"), ("actual",), ("forecast",)):
+			result = Calendar(replace(filters(), from_date=TODAY - timedelta(days=14), metrics=metrics), snapshot, calculate(snapshot))
+			with patch("dinext_projects_pl.liquidity.api._", lambda text: text):
+				headers = list(load_workbook(BytesIO(make_workbook(result))).active.values)[0][2:]
+			if len(metrics) == 2:
+				self.assertEqual(headers[0], "Without date / Forecast")
+				self.assertTrue(any(label.endswith(" / Actual") for label in headers))
+				self.assertTrue(any(label.endswith(" / Forecast") for label in headers))
+				self.assertEqual(headers[-1], "Total / Cash movement")
+			else:
+				self.assertTrue(all(label.endswith(" / " + metrics[0].title()) for label in headers))
+
 	def test_party_only_combines_projects_without_changing_flow_shares(self):
 		flows = [actual("20.25"), replace(actual("30.75"), id="GL-2", analytic=replace(ANALYTIC, project="Other"))]
 		snapshot = Snapshot(TODAY, "USD")
@@ -153,8 +172,8 @@ class TestLiquidityCalculation(unittest.TestCase):
 		with patch("dinext_projects_pl.liquidity.api._", side_effect=lambda text: text):
 			book = load_workbook(BytesIO(make_workbook(result)))
 		rows = list(book.worksheets[0].values)
-		self.assertEqual(rows[0][2:4], ("Without date / Plan", "Without date / Forecast / actual"))
-		self.assertEqual(rows[0][-2:], ("Total / Plan", "Total / Forecast / actual"))
+		self.assertEqual(rows[0][2:4], ("Without date / Plan", "Without date / Forecast"))
+		self.assertEqual(rows[0][-2:], ("Total / Plan", "Total / Forecast"))
 		self.assertEqual(rows[1][-1], 40)
 		self.assertIn("44 · 2026", rows[0][4])
 		components = list(book.worksheets[1].values)[1:]

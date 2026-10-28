@@ -127,16 +127,24 @@ def make_workbook(result: Calendar) -> bytes:
 	value = result.display_value
 
 	metric_labels = {
-		"combined": _("Forecast / actual"),
+		"combined": _("Cash movement"),
 		"plan": _("Plan"),
 		"forecast": _("Forecast"),
 		"actual": _("Actual"),
 		"transfer": _("Internal transfers"),
 		"adjustment": _("Balance adjustments"),
 	}
+
+	def column_label(key, metric):
+		if metric == "combined":
+			kinds = {result.period_metric(p.key) for p in result.periods} if key == "total" else {result.period_metric(key)}
+			if len(kinds) == 1:
+				metric = kinds.pop()
+		return metric_labels[metric]
+
 	ws.append(
 		[_("Name"), _("Level")]
-		+ [f"{period_labels[key]} / {metric_labels[metric]}" for key, metric in columns]
+		+ [f"{period_labels[key]} / {column_label(key, metric)}" for key, metric in columns]
 	)
 	for row in result.all_rows():
 		ws.append(

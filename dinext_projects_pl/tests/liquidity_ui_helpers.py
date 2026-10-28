@@ -177,6 +177,7 @@ def seed(scenario="base"):
 	guard()
 	if scenario not in (
 		"base",
+		"visual",
 		"standalone",
 		"request",
 		"empty",
@@ -250,6 +251,8 @@ def seed(scenario="base"):
 			invoice.db_set("due_date", due)
 			for row in invoice.payment_schedule:
 				frappe.db.set_value("Payment Schedule", row.name, "due_date", due)
+	if scenario == "visual":
+		context["purchase_invoice"] = fixtures.purchase_invoice(context).name
 	if scenario == "many":
 		for i in range(55):
 			fixtures.sales_order(context, amount=i + 1)
