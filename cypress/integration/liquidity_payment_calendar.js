@@ -55,7 +55,11 @@ describe("Liquidity Payment Calendar", () => {
 		cy.get(grid + " .dinext-table-toolbar [data-testid=liquidity-depth]").select("7");
 		cy.get(grid).contains(context.payment).should("be.visible");
 		cy.get(grid + " .dinext-table-toolbar-group--end [data-testid=liquidity-export]").should("have.attr", "aria-label").and("include", "XLSX");
-		cy.get("[data-testid=liquidity-export]").should(($button) => expect($button.text().trim()).to.eq("")).find("svg").should("exist");
+		cy.get("[data-testid=liquidity-export]").should(($button) => expect($button.text().trim()).to.eq("")).find("svg use").should(($use) => {
+			const use = $use[0];
+			expect(use.ownerDocument.querySelector(use.getAttribute("href")), "icon symbol exists").to.exist;
+			expect(use.getBBox().width, "icon has visible geometry").to.be.greaterThan(0);
+		});
 		cy.task("clearLiquidityWorkbook");
 		cy.get("[data-testid=liquidity-export]").click();
 		cy.readFile("cypress/downloads/liquidity-payment-calendar.xlsx", "binary").should("have.length.greaterThan", 1000);

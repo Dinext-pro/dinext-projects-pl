@@ -223,7 +223,7 @@
 				{ id: "liquidity-export", type: "custom", align: "end", render: ({ host }) => {
 					const link = $("<a class='dinext-table-toolbar-item' data-testid='liquidity-export' download='liquidity-payment-calendar.xlsx'></a>")
 						.attr({ title: __("Export XLSX"), "aria-label": __("Export XLSX"), href: "/api/method/" + API + "export_liquidity_calendar?filters=" + encodeURIComponent(JSON.stringify(this.filters)) })
-						.html(frappe.utils.icon("download", "sm"));
+						.html(frappe.utils.icon("es-line-download", "sm"));
 					$(host).empty().append(link);
 				} },
 			];
