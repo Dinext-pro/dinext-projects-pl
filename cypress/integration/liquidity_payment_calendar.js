@@ -46,7 +46,7 @@ describe("Liquidity Payment Calendar", () => {
 			win.document.body.append(definitions);
 			const view = win.frappe.query_report.__liquidityView;
 			view.treeRows[0].children[0].icon = "es-solid-liquidity-test";
-			view.grid.refresh(view.treeRows);
+			return view.expandDepth(7);
 		});
 		cy.get(grid + ' .liquidity-record-icon.es-solid use').should("have.attr", "href", "#es-solid-liquidity-test");
 		for (const grouping of ["party_project", "party_only"]) {
