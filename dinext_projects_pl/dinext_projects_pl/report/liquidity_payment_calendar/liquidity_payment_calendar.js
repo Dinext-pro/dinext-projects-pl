@@ -225,6 +225,10 @@
 					getRowClass: (params) => params.data?.balanceKind ? "liquidity-balance-row" : "",
 					onCellDoubleClicked: (event) => {
 						const field = event.colDef.field;
+						if (field === "label") {
+							if (!event.event?.target?.closest?.(".dinext-table-tree-lead")) this.openRecord(event.data);
+							return;
+						}
 						if (!field?.includes("__")) return;
 						const [period, metric] = field.split("__");
 						if (event.data.balanceKind) {
@@ -353,9 +357,71 @@
 			return row[key + "__" + this.periodMetric(key) + suffix] || 0;
 		}
 
+		openRecord(row) {
+			if (!this.disposed && row?.document?.doctype && row.document.name) {
+				frappe.set_route("Form", row.document.doctype, row.document.name);
+			}
+		}
+
+		recordIcon(row) {
+			const fallback = {
+				project: "fa fa-puzzle-piece", party: "fa fa-users", contract: "fa fa-file-text-o",
+				order: "fa fa-shopping-cart", invoice: "fa fa-file-text", payment: "fa fa-credit-card",
+				direction: row.path?.[0] === "in" ? "fa fa-arrow-down" : "fa fa-arrow-up",
+			}[row.level] || (row.balanceKind ? "fa fa-bank" : "fa fa-exchange");
+			const candidate = String(row.icon || "").trim();
+			this.recordIcons ||= new Map();
+			const key = candidate + "|" + fallback;
+			if (!this.recordIcons.has(key)) {
+				let icon;
+				if (/^(?:fa )?fa-[a-z0-9-]+$/.test(candidate)) {
+					const probe = document.createElement("i");
+					probe.className = "liquidity-icon-probe fa " + candidate.replace(/^fa /, "");
+					this.root[0].append(probe);
+					const glyph = getComputedStyle(probe, "::before").content;
+					if (glyph && !["none", "normal", '""'].includes(glyph)) icon = probe.cloneNode();
+					probe.remove();
+					icon?.classList.remove("liquidity-icon-probe");
+				} else if (/^[a-z][a-z0-9-]*$/.test(candidate)) {
+					const id = /^(es-|icon-)/.test(candidate) ? candidate : "icon-" + candidate;
+					if (document.getElementById(id)) {
+						icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+						icon.setAttribute("class", candidate.startsWith("es-") ? `es-icon ${candidate.startsWith("es-solid-") ? "es-solid" : "es-line"} icon-sm` : "icon icon-sm");
+						const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+						use.setAttribute("href", "#" + id); icon.append(use);
+					}
+				}
+				if (!icon) { icon = document.createElement("i"); icon.className = fallback; }
+				icon.setAttribute("aria-hidden", "true");
+				icon.classList.add("liquidity-record-icon");
+				this.recordIcons.set(key, icon);
+			}
+			return this.recordIcons.get(key).cloneNode(true);
+		}
+
+		recordLabel(params) {
+			const row = params.data || {};
+			const span = document.createElement("span");
+			span.className = "liquidity-record";
+			span.append(this.recordIcon(row));
+			const text = document.createElement("span");
+			text.className = "liquidity-record-label";
+			text.textContent = params.value || "";
+			span.append(text);
+			span.title = params.value || "";
+			if (row.document) {
+				span.classList.add("liquidity-record-link");
+				span.setAttribute("role", "link"); span.tabIndex = 0;
+				span.title += " · " + __(row.document.doctype) + " · " + __("Double-click to open document");
+				span.onkeydown = (event) => { if (event.key === "Enter") { event.stopPropagation(); this.openRecord(row); } };
+			}
+			return span;
+		}
+
 		columns() {
 			const columns = [{ field: "label", headerName: this.filters.grouping === "party_only" ? __("Direction / Counterparty / Contract / Documents") : __("Direction / Project / Counterparty / Contract / Documents"), pinned: "left", width: 280, minWidth: 180,
-				render: (params) => { const span = document.createElement("span"); span.textContent = params.value || ""; span.title = params.value || ""; return span; } }];
+				render: (params) => this.recordLabel(params),
+				treeContentKey: (params) => JSON.stringify([params.data?.icon, params.data?.document]), }];
 			const periods = [["undated", __("Without date")], ...this.payload.periods.map((p) => [p.key, this.periodLabel(p), `${p.start} — ${p.end}`]), ["total", __("Total")]];
 			const metrics = [...(this.filters.metrics.includes("plan") ? ["plan"] : []), this.viewMode() === "combined" ? "combined" : this.viewMode()];
 			periods.forEach(([key, title, range]) => columns.push({ headerName: title, headerTooltip: range || title, headerClass: "liquidity-period-header", marryChildren: true, pinned: key === "total" ? "right" : undefined, children: metrics.map((metric, index) => ({

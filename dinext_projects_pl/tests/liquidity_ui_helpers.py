@@ -221,6 +221,7 @@ def seed(scenario="base"):
 		return context
 	order = fixtures.sales_order(context)
 	context["order"] = order.name
+	context["customer"] = order.customer
 	context["contract"] = fixtures.contract(order).name
 	if scenario == "standalone":
 		context["request"] = fixtures.payment_request(order, 100, add_days(today(), 14)).name

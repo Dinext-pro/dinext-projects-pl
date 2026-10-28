@@ -17,6 +17,51 @@ def deny_test_project(doc, **kwargs):
 
 
 class TestLiquidityIntegration(FrappeTestCase):
+	def test_tree_navigation_targets_metadata_and_lazy_children(self):
+		from dinext_projects_pl.liquidity.api import get_children
+
+		order = fixtures.sales_order(self.context)
+		contract = fixtures.contract(order)
+		invoice = fixtures.sales_invoice(order)
+		payment = fixtures.pay(self.context, invoice, 20)
+		expected = {("Project", self.context["project"]), ("Customer", order.customer),
+			("Contract", contract.name), (order.doctype, order.name),
+			(invoice.doctype, invoice.name), (payment.doctype, payment.name)}
+
+		def flatten(rows):
+			return [node for row in rows for node in [row, *flatten(row.get("children", []))]]
+
+		for grouping in ("project_party", "party_project", "party_only"):
+			filters = dict(self.filters, grouping=grouping)
+			rows = flatten(get_calendar(filters, depth=7)["rows"])
+			links = {(r["document"]["doctype"], r["document"]["name"]) for r in rows if r.get("document")}
+			self.assertEqual(links, expected - ({("Project", self.context["project"])} if grouping == "party_only" else set()))
+			for row in rows:
+				if row.get("document"):
+					self.assertEqual(row["icon"], frappe.get_meta(row["document"]["doctype"]).get("icon") or "")
+				else:
+					self.assertEqual(row["level"], "direction")
+			root = get_calendar(filters)["rows"][0]
+			lazy = get_children(filters, root["id"])
+			self.assertTrue(lazy[0].get("document"))
+
+	def test_tree_navigation_does_not_link_unreadable_counterparty(self):
+		order = fixtures.sales_order(self.context)
+		fixtures.sales_invoice(order)
+		fixtures.sales_order(self.context, project=False)
+		baseline = get_calendar(self.filters, depth=3)
+		permission = frappe.has_permission
+		with patch("frappe.has_permission", side_effect=lambda dt, *a, **kw: False if dt == "Customer" else permission(dt, *a, **kw)):
+			result = get_calendar(self.filters, depth=3)
+		self.assertEqual(result["directions"], baseline["directions"])
+		projects = result["rows"][0]["children"]
+		self.assertTrue(any(not row["path"][-1] and "document" not in row for row in projects))
+		for project in projects:
+			party = project["children"][0]
+			self.assertEqual(party["label"], order.customer)
+			self.assertNotIn("document", party)
+			self.assertNotIn("icon", party)
+
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()

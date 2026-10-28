@@ -14,6 +14,71 @@ describe("Liquidity Payment Calendar", () => {
 	});
 	after(() => cy.cleanupLiquidity());
 
+	testCase("TN-01 renders metadata icons and safe fallbacks in all tree groupings and themes", () => {
+		cy.intercept("**/api/method/" + API + "get_calendar*", (req) => req.continue((res) => {
+			const visit = (rows) => rows.forEach((row) => {
+				if (row.level === "project") row.icon = "fa fa-star";
+				if (row.level === "party") row.icon = "fa fa-liquidity-unknown";
+				if (row.level === "contract") row.icon = '<img src=x onerror="window.badIcon=true">';
+				visit(row.children || []);
+			});
+			visit(res.body.message.rows);
+		}));
+		cy.openLiquidity(context, {}, "operator");
+		cy.get(grid + " .liquidity-record-icon.fa-star").should("be.visible");
+		cy.get("[data-testid=liquidity-depth]").select("7");
+		cy.get(grid).contains(context.payment).should("be.visible");
+		for (const theme of ["light", "dark"]) {
+			cy.window().then((win) => win.document.documentElement.setAttribute("data-theme", theme));
+			cy.get(grid + " .ag-pinned-left-cols-container .liquidity-record").each(($record) => {
+				cy.wrap($record).find(".liquidity-record-icon").should("be.visible");
+			});
+			cy.get(grid + " .liquidity-record-icon.fa-users").should("be.visible");
+			cy.get(grid + " .liquidity-record-icon.fa-file-text-o").should("be.visible");
+			cy.get(grid + " .liquidity-record img").should("not.exist");
+			cy.window().then((win) => expect(win.badIcon).to.eq(undefined));
+			cy.screenshot("liquidity-tree-icons-" + theme, { capture: "fullPage" });
+		}
+		cy.window().then((win) => {
+			const definitions = win.document.createElementNS("http://www.w3.org/2000/svg", "svg");
+			definitions.setAttribute("width", "0"); definitions.setAttribute("height", "0");
+			definitions.innerHTML = '<symbol id="es-solid-liquidity-test" viewBox="0 0 16 16"><path d="M2 2h12v12H2z"/></symbol>';
+			win.document.body.append(definitions);
+			const view = win.frappe.query_report.__liquidityView;
+			view.treeRows[0].children[0].icon = "es-solid-liquidity-test";
+			view.grid.refresh(view.treeRows);
+		});
+		cy.get(grid + ' .liquidity-record-icon.es-solid use').should("have.attr", "href", "#es-solid-liquidity-test");
+		for (const grouping of ["party_project", "party_only"]) {
+			cy.liquidityFilter("grouping", grouping);
+			cy.get(grid + " .liquidity-record-icon.fa-users").should("be.visible");
+		}
+	});
+
+	testCase("TN-02 opens real record cards on label double click and keeps money drill-down", () => {
+		const records = [
+			["Project", context.project], ["Customer", context.customer], ["Contract", context.contract],
+			["Sales Order", context.order], ["Sales Invoice", context.invoice], ["Payment Entry", context.payment],
+		];
+		for (const [doctype, name] of records) {
+			cy.openLiquidity(context, {}, "operator");
+			cy.get("[data-testid=liquidity-depth]").select("7");
+			cy.get(grid).contains(context.payment).should("be.visible");
+			cy.get(grid + " .liquidity-record-link").filter((_i, el) => el.textContent === name).first().dblclick();
+			cy.window().should((win) => {
+				expect(win.frappe.get_route()).to.deep.eq(["Form", doctype, name]);
+				expect(win.cur_frm?.doc?.doctype).to.eq(doctype);
+				expect(win.cur_frm?.doc?.name).to.eq(name);
+			});
+		}
+		cy.openLiquidity(context, {}, "operator");
+		cy.get(grid + " .ag-pinned-left-cols-container .liquidity-record").first().should(($record) => expect($record).not.to.have.attr("role")).dblclick();
+		cy.get(grid + " .dinext-table-tree-toggle").first().dblclick();
+		cy.window().should((win) => expect(win.frappe.get_route()[0]).to.eq("query-report"));
+		cy.get(grid + " .ag-pinned-right-cols-container [col-id=total__combined]").first().dblclick();
+		cy.get("[data-testid=liquidity-details]").should("be.visible").and("contain", context.invoice);
+	});
+
 	testCase("VF-01 aligns receipts and payments with visible grids and no hover pointer", () => {
 		cy.openLiquidity(context);
 		for (const theme of ["dark", "light"]) {

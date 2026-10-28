@@ -11,6 +11,7 @@ from frappe.utils import now, today
 
 from .calculation import calculate
 from .model import Filters, as_date
+from .navigation import decorate_tree
 from .presentation import Calendar, wire
 from .sources import Loader, load, require_access
 
@@ -66,7 +67,7 @@ def get_calendar(filters=None, depth=1) -> CalendarResponse:
 		frappe.throw(_("Invalid calendar depth"))
 	calculated = calendar(filters)
 	result = calculated.payload()
-	result["rows"] = calculated.tree(depth)
+	result["rows"] = decorate_tree(calculated.tree(depth), calculated.filters)
 	result["calculated_at"] = now()
 	return result
 
@@ -74,7 +75,8 @@ def get_calendar(filters=None, depth=1) -> CalendarResponse:
 @frappe.whitelist()
 def get_children(filters, node_key="root") -> list[dict]:
 	try:
-		return calendar(filters).children(node_key)
+		calculated = calendar(filters)
+		return decorate_tree(calculated.children(node_key), calculated.filters)
 	except ValueError as exc:
 		frappe.throw(_(str(exc)))
 
