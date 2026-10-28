@@ -12,11 +12,7 @@ describe("Liquidity Payment Calendar", () => {
 		const scenario = title.includes("UI-20") ? "pnl" : title.includes("zero rows") ? "zero" : (title.includes("UI-10") || title.includes("UI-11")) ? "standalone" : title.includes("UI-12") ? "request" : (title.includes("UI-14") || title.includes("BG-04")) ? "outward" : title.includes("without date") ? "undated" : title.includes("future request") ? "overdue_request" : title.includes("overdue") ? "overdue" : title.includes("pagination") || title.includes("UI-04") ? "many" : "base";
 		return cy.seedLiquidity(scenario).then((data) => { context = data; });
 	});
-	after(() => {
-		cy.login("operator");
-		cy.visit("/app");
-		cy.call("dinext_projects_pl.tests.liquidity_ui_helpers.cleanup");
-	});
+	after(() => cy.cleanupLiquidity());
 
 	testCase("CT-01 synchronizes all display modes and plan with chart table URL and export", () => {
 		cy.openLiquidity(context);
@@ -55,10 +51,10 @@ describe("Liquidity Payment Calendar", () => {
 		cy.get(grid + " .dinext-table-toolbar [data-testid=liquidity-depth]").select("7");
 		cy.get(grid).contains(context.payment).should("be.visible");
 		cy.get(grid + " .dinext-table-toolbar-group--end [data-testid=liquidity-export]").should("have.attr", "aria-label").and("include", "XLSX");
-		cy.get("[data-testid=liquidity-export]").should(($button) => expect($button.text().trim()).to.eq("")).find("svg use").should(($use) => {
-			const use = $use[0];
-			expect(use.ownerDocument.querySelector(use.getAttribute("href")), "icon symbol exists").to.exist;
-			expect(use.getBBox().width, "icon has visible geometry").to.be.greaterThan(0);
+		cy.get("[data-testid=liquidity-export]").should(($button) => expect($button.text().trim()).to.eq("")).find("svg path").should(($path) => {
+			const path = $path[0];
+			expect(path.getBBox().width, "icon has visible geometry").to.be.greaterThan(0);
+			expect(path.ownerDocument.defaultView.getComputedStyle(path).stroke).to.eq($path.closest("a").css("color"));
 		});
 		cy.task("clearLiquidityWorkbook");
 		cy.get("[data-testid=liquidity-export]").click();
@@ -128,7 +124,7 @@ describe("Liquidity Payment Calendar", () => {
 		cy.openLiquidity(context);
 		cy.get("[data-testid=liquidity-depth]").should("have.value", "2");
 		cy.get(grid).contains(context.project).should("be.visible");
-		cy.get(".liquidity-report-active .actions-btn-group").should("not.be.visible");
+		cy.get(".liquidity-report-active .actions-btn-group, .liquidity-report-active .custom-actions").each(($group) => cy.wrap($group).should("not.be.visible"));
 		cy.get("[data-testid=liquidity-filters] [data-fieldname=company]").should("be.visible");
 		cy.get("[data-fieldname=metrics]").should("not.be.visible");
 		cy.window().then((win) => {

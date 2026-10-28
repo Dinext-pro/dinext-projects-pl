@@ -26,7 +26,8 @@
 .liquidity-calendar .liquidity-select select { height: 26px; font-size: 12px; padding: 2px 6px; }
 .liquidity-calendar .liquidity-grid .ag-cell { padding-left: 6px; padding-right: 6px; }
 
-.liquidity-report-active .actions-btn-group { display: none !important; }
+.liquidity-report-active .actions-btn-group,
+.liquidity-report-active .custom-actions { display: none !important; }
 .liquidity-calendar .liquidity-filters { margin: 12px 0; }
 .liquidity-calendar .liquidity-filters .page-form { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0; background: var(--card-bg); border: 0; }
 .liquidity-calendar .liquidity-filters .page-form > .frappe-control { margin: 0; }

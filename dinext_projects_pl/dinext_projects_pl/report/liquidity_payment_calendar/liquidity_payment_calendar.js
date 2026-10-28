@@ -223,7 +223,7 @@
 				{ id: "liquidity-export", type: "custom", align: "end", render: ({ host }) => {
 					const link = $("<a class='dinext-table-toolbar-item' data-testid='liquidity-export' download='liquidity-payment-calendar.xlsx'></a>")
 						.attr({ title: __("Export XLSX"), "aria-label": __("Export XLSX"), href: "/api/method/" + API + "export_liquidity_calendar?filters=" + encodeURIComponent(JSON.stringify(this.filters)) })
-						.html(frappe.utils.icon("es-line-download", "sm"));
+						.html('<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M8 2v8m-3-3 3 3 3-3M3 11v3h10v-3"/></svg>');
 					$(host).empty().append(link);
 				} },
 			];

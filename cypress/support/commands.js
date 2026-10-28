@@ -64,3 +64,18 @@ Cypress.Commands.add("liquidityPlan", (value) => {
 	cy.wait("@calendar").its("response.statusCode").should("eq", 200);
 	cy.get("[data-testid=liquidity-calendar]").should("have.attr", "aria-busy", "false");
 });
+
+Cypress.Commands.add("cleanupLiquidity", () => {
+	cy.login("operator");
+	cy.visit("/app");
+	cy.window().its("frappe.csrf_token").then((csrf) => {
+		// Leave Desk before deleting the logged-in fixture user: background
+		// requests must not race the teardown and report expired-session errors.
+		cy.window().then((win) => win.location.replace("about:blank"));
+		cy.location("href").should("eq", "about:blank");
+		cy.request({
+			method: "POST", url: "/api/method/dinext_projects_pl.tests.liquidity_ui_helpers.cleanup",
+			body: {}, headers: { "X-Frappe-CSRF-Token": csrf }, log: false,
+		}).its("body.message.cleared").should("eq", true);
+	});
+});
