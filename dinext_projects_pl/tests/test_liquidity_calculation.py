@@ -73,6 +73,65 @@ def filters(**kwargs):
 
 
 class TestLiquidityCalculation(unittest.TestCase):
+	def test_combined_details_page_and_total_keep_each_source_once(self):
+		s = Snapshot(TODAY, "USD", invoices=[invoice(60, 40)], actual=[actual(20), replace(actual(10, TODAY - timedelta(days=7)), id="GL-past")])
+		result = Calendar(replace(filters(), from_date=TODAY - timedelta(days=14)), s, calculate(s))
+		first = result.details("root", "total", "combined", 0, 1)
+		second = result.details("root", "total", "combined", 1, 1)
+		self.assertEqual(first["total"], 50)
+		self.assertEqual(first["count"], 2)
+		self.assertNotEqual(first["rows"][0]["id"], second["rows"][0]["id"])
+		self.assertEqual({first["rows"][0]["metric"], second["rows"][0]["metric"]}, {"actual", "forecast"})
+		self.assertEqual(result.details("net", "total", "combined")["total"], 50)
+
+	def test_combined_selection_across_day_week_and_month_boundaries(self):
+		for grain in ("day", "week", "month"):
+			with self.subTest(grain=grain):
+				past_day = TODAY - timedelta(days=40)
+				future_day = TODAY + timedelta(days=40)
+				flows = [
+					replace(actual(10, past_day), id="past"),
+					replace(actual(20), id="current"),
+					replace(actual(40), id="current-forecast", metric="forecast"),
+					replace(actual(60, future_day), id="future-forecast", metric="forecast"),
+				]
+				result = Calendar(replace(filters(grain=grain), from_date=past_day), Snapshot(TODAY, "USD"), flows)
+				for day, amount in ((past_day, 10), (TODAY, 40), (future_day, 60)):
+					key = result.period_by_day[day]
+					self.assertEqual(result.details("net", key, "combined")["total"], amount)
+					self.assertEqual(result.display_value(result.values["root"], key, "combined"), amount)
+				self.assertEqual(result.details("net", "total", "combined")["total"], 110)
+				self.assertEqual(result.display_value(result.values["root"], "total", "combined"), 110)
+
+	def test_combined_adjustments_details_match_only_completed_periods(self):
+		for metric in ("transfer", "adjustment"):
+			past = replace(actual(10, TODAY - timedelta(days=7)), id="past", metric=metric)
+			current = replace(actual(20), metric=metric)
+			s = Snapshot(TODAY, "USD")
+			result = Calendar(replace(filters(), from_date=TODAY - timedelta(days=14)), s, [past, current])
+			self.assertEqual(result.details("net", "total", "combined_" + metric)["total"], 10)
+			self.assertEqual(result.details("net", result.period_by_day[TODAY], "combined_" + metric)["count"], 0)
+			self.assertEqual(result.details("net", "total", metric)["total"], 30)
+
+	def test_combined_export_has_plan_then_cash_with_undated_first(self):
+		from io import BytesIO
+		from unittest.mock import patch
+		from openpyxl import load_workbook
+		from dinext_projects_pl.liquidity.api import make_workbook
+
+		s = Snapshot(TODAY, "USD", invoices=[invoice(60, 40)], actual=[actual(20)])
+		result = Calendar(filters(), s, calculate(s))
+		with patch("dinext_projects_pl.liquidity.api._", side_effect=lambda text: text):
+			book = load_workbook(BytesIO(make_workbook(result)))
+		rows = list(book.worksheets[0].values)
+		self.assertEqual(rows[0][2:4], ("Without date / Plan", "Without date / Forecast / actual"))
+		self.assertEqual(rows[0][-2:], ("Total / Plan", "Total / Forecast / actual"))
+		self.assertEqual(rows[1][-1], 40)
+		self.assertIn("Week 44", rows[0][4])
+		components = list(book.worksheets[1].values)[1:]
+		self.assertEqual({row[1] for row in components}, {"forecast"})
+		self.assertEqual(sum(row[3] for row in components), 40)
+
 	def test_current_negative_balance_is_not_hidden_by_same_day_receipt(self):
 		s = Snapshot(TODAY, "USD", current_cash=D(-10), can_balance=True, invoices=[invoice(20, 20)])
 		result = Calendar(filters(), s, calculate(s))

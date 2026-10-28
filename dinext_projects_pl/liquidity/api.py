@@ -91,16 +91,29 @@ def make_workbook(result: Calendar) -> bytes:
 	wb = Workbook()
 	ws = wb.active
 	ws.title = _("Calendar")[:31]
-	keys = [p.key for p in result.periods] + ["total", "undated"]
-	metrics = list(result.filters.metrics)
-	if any(f.metric == "transfer" for f in result.visible):
-		metrics.append("transfer")
-	if any(f.metric == "adjustment" for f in result.visible):
-		metrics.append("adjustment")
+	keys = ["undated"] + [p.key for p in result.periods] + ["total"]
+	selected = result.filters.metrics
+	if {"actual", "forecast"}.issubset(selected):
+		cash_metric = "combined"
+	else:
+		cash_metric = next((metric for metric in ("actual", "forecast") if metric in selected), None)
+	metrics = (["plan"] if "plan" in selected else []) + ([cash_metric] if cash_metric else [])
 	columns = [(key, metric) for key in keys for metric in metrics]
-	period_labels = {p.key: f"{p.start} — {p.end}" for p in result.periods}
-	period_labels.update(total=_("Selected period total"), undated=_("Without date"))
+	period_labels = {}
+	for period in result.periods:
+		if result.filters.grain == "week":
+			year, week, _weekday = period.start.isocalendar()
+			period_labels[period.key] = _("Week {0}").format(week) + f" · {year}"
+		elif result.filters.grain == "month":
+			period_labels[period.key] = period.start.strftime("%m.%Y")
+		else:
+			period_labels[period.key] = period.start.strftime("%d.%m.%Y")
+	period_labels.update(total=_("Total"), undated=_("Without date"))
+
+	value = result.display_value
+
 	metric_labels = {
+		"combined": _("Forecast / actual"),
 		"plan": _("Plan"),
 		"forecast": _("Forecast"),
 		"actual": _("Actual"),
@@ -114,7 +127,7 @@ def make_workbook(result: Calendar) -> bytes:
 	for row in result.all_rows():
 		ws.append(
 			[safe_text(row["label"]), row["depth"]]
-			+ [row.get(key + "__" + metric, 0) for key, metric in columns]
+			+ [value(row, key, metric) for key, metric in columns]
 		)
 		ws.row_dimensions[ws.max_row].outlineLevel = row["depth"]
 		for cell in ws[ws.max_row][2:]:
@@ -123,7 +136,21 @@ def make_workbook(result: Calendar) -> bytes:
 	ws.column_dimensions["A"].width = 48
 	payload = result.payload()
 	for label, values in ((_("Net cash movement"), payload["net"]),):
-		ws.append([label, 0] + [values.get(k + "__" + m, 0) for k, m in columns])
+		ws.append([label, 0] + [value(values, k, m) for k, m in columns])
+	if "actual" in selected:
+		for metric in ("transfer", "adjustment"):
+			if not any(f.metric == metric for f in result.visible):
+				continue
+			values = {}
+			for period in result.periods:
+				visible = cash_metric != "combined" or result.period_metric(period.key) == "actual"
+				values[period.key] = payload["net"].get(period.key + "__" + metric, 0) if visible else 0
+			values["total"] = sum(values.values())
+			ws.append(
+				[metric_labels[metric], 0]
+				+ [values.get(key, 0) if col_metric == cash_metric else None for key, col_metric in columns]
+			)
+
 	detail = wb.create_sheet(_("Components")[:31])
 	detail.append(
 		[
@@ -153,7 +180,15 @@ def make_workbook(result: Calendar) -> bytes:
 			)
 		]
 	)
+	detail_metrics = list(metrics)
+	if "actual" in selected:
+		detail_metrics += [
+			("combined_" if cash_metric == "combined" else "") + metric
+			for metric in ("transfer", "adjustment")
+		]
 	for f in result.visible:
+		if not any(result.matches_metric(f, metric) for metric in detail_metrics):
+			continue
 		a = f.analytic
 		values = [
 			f.id,

@@ -332,3 +332,11 @@ Original due date overdue,Просрочен исходный срок опла�
 Counterparty type,Тип контрагента
 Opening balance,Начальный остаток
 Closing balance,Конечный остаток
+Display,Отображение
+Forecast and actual,Прогноз и факт
+Actual only,Только факт
+Forecast only,Только прогноз
+Download as image,Скачать как рисунок
+Today,Сегодня
+Forecast / actual,Прогноз / факт
+Week {0},Неделя {0}

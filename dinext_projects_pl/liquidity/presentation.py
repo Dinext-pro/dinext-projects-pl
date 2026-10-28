@@ -146,10 +146,32 @@ class Calendar:
 
 		return list(descend("root"))
 
+	def period_metric(self, key):
+		period = next((p for p in self.periods if p.key == key), None)
+		return "actual" if period and period.end < self.snapshot.today else "forecast"
+
+	def display_value(self, values, key, metric):
+		if metric != "combined":
+			return values.get(key + "__" + metric, 0)
+		if key == "total":
+			return sum((self.display_value(values, p.key, metric) for p in self.periods), 0)
+		return values.get(key + "__" + self.period_metric(key), 0)
+
+	def matches_metric(self, flow, metric):
+		selected = self.period_metric(self.period_by_day.get(flow.date, "undated"))
+		if metric == "combined":
+			return flow.metric == selected
+		if metric in ("combined_transfer", "combined_adjustment"):
+			return selected == "actual" and flow.metric == metric.removeprefix("combined_")
+		return flow.metric == metric
+
 	def details(self, key, period, metric, start=0, page_length=50):
 		self.validate_node("root" if key == "net" else key)
 		if period not in {"undated", "total", *(p.key for p in self.periods)} or metric not in (
 			*ALL_METRICS,
+			"combined",
+			"combined_transfer",
+			"combined_adjustment",
 			*BALANCE_METRICS,
 		):
 			raise ValueError("Invalid calendar cell")
@@ -165,10 +187,11 @@ class Calendar:
 			raise ValueError("Invalid pagination")
 		if metric in BALANCE_METRICS:
 			return self.balance_details(key, period, metric, start, page_length)
+
 		rows = [
 			self.visible[i]
 			for i in self.members.get("root" if key == "net" else key, [])
-			if self.visible[i].metric == metric
+			if self.matches_metric(self.visible[i], metric)
 			and (
 				(period == "total" and self.visible[i].date is not None)
 				or self.period_by_day.get(self.visible[i].date, "undated") == period

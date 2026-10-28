@@ -52,3 +52,15 @@ Cypress.Commands.add("liquidityScrollRight", () => {
 	cy.get("[data-testid=liquidity-grid] .ag-center-cols-viewport").scrollTo("right");
 	cy.get("[data-testid=liquidity-grid] .ag-center-cols-viewport").should(($viewport) => expect($viewport[0].scrollLeft).to.be.greaterThan(0));
 });
+
+Cypress.Commands.add("liquidityMode", (value) => {
+	cy.get("[data-testid=liquidity-display]").select(value);
+	cy.wait("@calendar").its("response.statusCode").should("eq", 200);
+	cy.get("[data-testid=liquidity-calendar]").should("have.attr", "aria-busy", "false");
+	cy.get("[data-testid=liquidity-display]").should("have.value", value);
+});
+Cypress.Commands.add("liquidityPlan", (value) => {
+	cy.get("[data-testid=liquidity-plan]")[value ? "check" : "uncheck"]();
+	cy.wait("@calendar").its("response.statusCode").should("eq", 200);
+	cy.get("[data-testid=liquidity-calendar]").should("have.attr", "aria-busy", "false");
+});
