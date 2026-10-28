@@ -125,7 +125,7 @@ br.bind_budget_detail_project_links = function (dialog) {
 			dinext_projects_pl.navigate_to_project_pl(project);
 			return;
 		}
-		frappe.require("/assets/dinext_projects_pl/js/project_pl_navigation.js", function () {
+		frappe.require("/assets/dinext_projects_pl/js/project_budget_navigation.js", function () {
 			if (typeof dinext_projects_pl.navigate_to_project_pl === "function") {
 				dinext_projects_pl.navigate_to_project_pl(project);
 				return;

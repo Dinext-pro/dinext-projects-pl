@@ -1,0 +1,23 @@
+.liquidity-calendar { color: var(--text-color); background: var(--card-bg); padding: 12px; }
+.liquidity-calendar .liquidity-meta, .liquidity-calendar .liquidity-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.liquidity-calendar .liquidity-meta { justify-content: space-between; }
+.liquidity-calendar .liquidity-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 16px 0; }
+.liquidity-calendar .liquidity-kpi { border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.liquidity-calendar .liquidity-kpi strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+.liquidity-calendar .liquidity-select { display: flex; align-items: center; gap: 8px; margin: 0; }
+.liquidity-calendar .liquidity-select select { width: auto; }
+.liquidity-calendar .liquidity-chart { height: 340px; width: 100%; min-width: 0; }
+.liquidity-calendar .liquidity-grid { height: 540px; width: 100%; min-width: 0; }
+/* Reserve the shared table's top scrollbar gutter during its first measurement.
+   Toggling display:none inside its observer otherwise resizes the observed body. */
+.liquidity-calendar .dinext-table-hscroll-top.is-idle { display: flex; visibility: hidden; }
+.liquidity-calendar .dinext-table-hscroll-top { height: 16px; }
+.liquidity-calendar .dinext-table-hscroll-top-viewport { height: 16px; }
+.liquidity-calendar .liquidity-money { cursor: pointer; font-variant-numeric: tabular-nums; }
+.liquidity-calendar .liquidity-overdue { text-decoration: underline dotted; text-underline-offset: 4px; }
+.liquidity-calendar .liquidity-warnings { padding: 12px; border-left: 3px solid var(--orange-500); background: var(--control-bg); margin-bottom: 12px; }
+.liquidity-calendar .liquidity-warnings p:last-child { margin-bottom: 0; }
+.liquidity-calendar .liquidity-balances, .liquidity-detail-scroll { overflow-x: auto; margin-top: 16px; }
+.liquidity-calendar .liquidity-balances td, .liquidity-calendar .liquidity-balances th { white-space: nowrap; min-width: 145px; }
+.liquidity-calendar .liquidity-balances th:first-child { position: sticky; left: 0; background: var(--card-bg); min-width: 240px; }
+.liquidity-details td { vertical-align: top; }

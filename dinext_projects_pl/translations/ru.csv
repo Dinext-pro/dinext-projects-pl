@@ -240,3 +240,92 @@ Rate Category,Тариф,
 "Project Rate Control","Контроль ставок по проектам",""
 "T&M Project Rate Control V2","Контроль ставок по T&M проектам_V2",""
 "Realization Rate","Ставка реализации",""
+Liquidity Payment Calendar,Платежный календарь
+Liquidity,Ликвидность
+Balance adjustments,Корректировки остатка
+Internal transfers,Внутренние переводы
+Actual opening,Начальный фактический остаток
+Actual closing,Конечный фактический остаток
+Projected opening,Начальный прогнозный остаток
+Projected closing,Конечный прогнозный остаток
+Loading payment calendar…,Загрузка платежного календаря…
+Unable to load payment calendar. Please retry.,Не удалось загрузить платежный календарь. Повторите запрос.
+Calculation date,Дата расчета
+Export XLSX,Экспорт XLSX
+Expected receipts,Ожидаемые поступления
+Expected payments,Ожидаемые выплаты
+Current cash balance,Текущий остаток денежных средств
+Minimum projected balance,Минимальный прогнозный остаток
+First cash shortfall,Первая дата кассового разрыва
+None in selected range,Нет в выбранном периоде
+Chart mode,Режим графика
+Actual + forecast,Факт + прогноз
+Expand to level,Раскрыть до уровня
+Cash movements and balances,Денежные движения и остатки
+No movements in the selected range,Нет движений в выбранном периоде
+Net cash movement,Чистое движение денег
+Unable to load this branch. Collapse and retry.,Не удалось загрузить ветку. Сверните ее и повторите попытку.
+Direction / Project / Counterparty / Contract / Documents,Направление / Проект / Контрагент / Контракт / Документы
+Selected period total,Итого за выбранный период
+Without date,Без даты
+Overdue portion,Просроченная часть
+Receipts,Поступления
+Payments,Выплаты
+Actual balance,Фактический остаток
+Projected balance,Прогнозный остаток
+Balances,Остатки
+Opening anchor,Опорный остаток
+Original due date,Исходный срок оплаты
+Expected date,Расчетная дата
+Original amount,Сумма в исходной валюте
+Linked documents,Связанные документы
+Unable to load details. Refresh and retry.,Не удалось загрузить детализацию. Обновите отчет и повторите попытку.
+Period granularity,Детализация периода
+Project portfolios,Портфели проектов
+Counterparties,Контрагенты
+Cash accounts,Денежные счета
+Project → Counterparty,Проект → Контрагент
+Counterparty → Project,Контрагент → Проект
+Show zero rows,Показывать нулевые строки
+Without project,Без проекта
+Without counterparty,Без контрагента
+Without contract,Без контракта
+Without order,Без заказа
+Without invoice,Без инвойса
+Without payment document,Без платежного документа
+Cash accounts filter actual movements and actual balances only; plan and forecast remain company-wide,Денежные счета ограничивают только факт и фактические остатки. План и прогноз остаются общими по компании.
+Some financial sources are not accessible; balances are hidden,Часть финансовых источников недоступна. Остатки компании скрыты.
+Multiple contracts require an explicit allocation,Несколько контрактов требуют явного распределения суммы.
+Missing exchange rate; forecast is incomplete,Отсутствует курс пересчета. Прогноз неполон.
+Invoice payment ledger is incomplete,Данные погашений инвойсов неполны.
+Advance settlement sources are incomplete,Источники зачета авансов неполны.
+Payment order execution requires an explicit allocation,Исполнение платежного поручения требует явного распределения.
+Payment request outstanding differs from linked settlements,Остаток заявки отличается от расчета по связанным погашениям.
+Payment request exceeds invoice outstanding,Заявка превышает остаток инвойса.
+Order request and invoice overlap requires an explicit allocation,Пересечение заявки по заказу и инвойса требует явного распределения.
+Some cash source documents are not accessible,Часть документов денежных движений недоступна.
+Only permitted analytical shares are shown; balances are hidden,Показаны только разрешенные аналитические доли. Остатки компании скрыты.
+Overlapping payment requests: invoice schedule retained,Заявки перекрываются: сохранен график оплаты инвойса.
+Unreconciled request coverage,Покрытие заявки не сверено.
+Payment request has no accessible invoice coverage,Для заявки нет доступного покрытия инвойсом.
+Unknown calendar node; refresh the report,Узел календаря недоступен. Обновите отчет.
+Invalid calendar cell,Некорректная ячейка календаря
+Invalid pagination,Некорректные параметры страницы
+Balances are not available for this selection,Остатки недоступны для этой выборки
+Invalid calendar filters,Некорректные фильтры календаря
+Invalid calendar selection,Некорректный выбор в календаре
+Calendar,Календарь
+Components,Составляющие
+Component,Составляющая
+Metric,Показатель
+Direction,Направление
+Contract,Контракт
+Invoice,Инвойс
+Company currency,Валюта компании
+plan,План
+transfer,Внутренний перевод
+adjustment,Корректировка
+undated,Без даты
+total,Итого
+Date source,Источник даты
+Original due date overdue,Просрочен исходный срок оплаты

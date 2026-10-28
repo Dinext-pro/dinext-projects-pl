@@ -4,7 +4,7 @@ const REPORT_NAME = "Project Budget Plan vs Forecast";
 
 const _budget_report_files = [
 	"/assets/dinext_common/js/sticky-datatable.js",
-	"/assets/dinext_projects_pl/js/project_pl_navigation.js",
+	"/assets/dinext_projects_pl/js/project_budget_navigation.js",
 	"/assets/dinext_projects_pl/js/budget_report/filters.js",
 	"/assets/dinext_projects_pl/js/budget_report/presentation.js",
 	"/assets/dinext_projects_pl/js/budget_report/datatable_options.js",

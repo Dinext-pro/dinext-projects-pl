@@ -7,11 +7,17 @@ class TestAppBootstrap(unittest.TestCase):
 
         self.assertEqual(
             hooks.after_install,
-            "dinext_projects_pl.install.after_install",
+            [
+                "dinext_projects_pl.install.after_install",
+                "dinext_projects_pl.liquidity.setup.after_migrate",
+            ],
         )
         self.assertEqual(
             hooks.after_migrate,
-            "dinext_projects_pl.install.sync_accounting_dimensions",
+            [
+                "dinext_projects_pl.install.sync_accounting_dimensions",
+                "dinext_projects_pl.liquidity.setup.after_migrate",
+            ],
         )
         fixture_doctypes = {
             entry.get("doctype")

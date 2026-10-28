@@ -142,8 +142,14 @@ fixtures = [
 
 required_apps = ["dinext_common", "doctype_permission", "dinext_projects"]
 
-after_install = "dinext_projects_pl.install.after_install"
-after_migrate = "dinext_projects_pl.install.sync_accounting_dimensions"
+after_install = [
+	"dinext_projects_pl.install.after_install",
+	"dinext_projects_pl.liquidity.setup.after_migrate",
+]
+after_migrate = [
+	"dinext_projects_pl.install.sync_accounting_dimensions",
+	"dinext_projects_pl.liquidity.setup.after_migrate",
+]
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
