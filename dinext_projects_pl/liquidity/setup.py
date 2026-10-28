@@ -40,8 +40,12 @@ def install_report(export=False):
 	return {"name": doc.name, "is_standard": doc.is_standard}
 
 
-def install_workspace_links():
-	for name in ("Аналитика", "Фин. контроль"):
+def install_workspace_links(workspaces=("Аналитика", "Фин. контроль")):
+	# Validate our only new document link. Existing standard workspaces can have
+	# links to optional apps/cards; preserve those already-imported references.
+	if not frappe.db.exists("Report", REPORT):
+		frappe.throw("Install Liquidity Payment Calendar before adding workspace links")
+	for name in workspaces:
 		if not frappe.db.exists("Workspace", name):
 			continue
 		doc = frappe.get_doc("Workspace", name)
@@ -65,6 +69,7 @@ def install_workspace_links():
 		old = frappe.conf.developer_mode
 		try:
 			frappe.conf.developer_mode = 0
+			doc.flags.ignore_links = True
 			doc.save()
 		finally:
 			frappe.conf.developer_mode = old

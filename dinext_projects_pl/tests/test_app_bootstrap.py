@@ -7,11 +7,9 @@ class TestAppBootstrap(unittest.TestCase):
 
         self.assertEqual(
             hooks.after_install,
-            [
-                "dinext_projects_pl.install.after_install",
-                "dinext_projects_pl.liquidity.setup.after_migrate",
-            ],
+            "dinext_projects_pl.install.after_install",
         )
+        self.assertEqual(hooks.after_sync, "dinext_projects_pl.liquidity.setup.after_migrate")
         self.assertEqual(
             hooks.after_migrate,
             [

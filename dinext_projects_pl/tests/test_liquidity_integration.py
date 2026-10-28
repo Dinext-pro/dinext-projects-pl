@@ -143,6 +143,41 @@ class TestLiquidityIntegration(FrappeTestCase):
 		self.assertNotIn(request.name, str(rows))
 		self.assertNotIn(draft.name, str(rows))
 
+	def test_workspace_install_preserves_optional_links_and_custom_content(self):
+		import json
+
+		from dinext_projects_pl.liquidity.setup import REPORT, install_report, install_workspace_links
+
+		install_report()
+		content = [{"id": "keep", "type": "header", "data": {"text": "Keep custom content", "col": 12}}]
+		workspace = frappe.get_doc(
+			{
+				"doctype": "Workspace",
+				"label": "_Test Liquidity Workspace",
+				"title": "_Test Liquidity Workspace",
+				"module": "Dinext Projects Pl",
+				"public": 1,
+				"content": json.dumps(content),
+				"number_cards": [{"label": "Optional", "number_card_name": "_Test Absent Optional Card"}],
+			}
+		)
+		old = frappe.conf.developer_mode
+		try:
+			frappe.conf.developer_mode = 0
+			workspace.flags.ignore_links = True
+			workspace.insert()
+			install_workspace_links([workspace.name])
+			workspace.reload()
+			self.assertEqual(workspace.number_cards[0].number_card_name, "_Test Absent Optional Card")
+			self.assertEqual(json.loads(workspace.content)[0], content[0])
+			self.assertEqual(sum(r.link_to == REPORT for r in workspace.links), 1)
+			first = workspace.content
+			install_workspace_links([workspace.name])
+			workspace.reload()
+			self.assertEqual(workspace.content, first)
+		finally:
+			frappe.conf.developer_mode = old
+
 	def test_direct_guest_access_denied(self):
 		frappe.set_user("Guest")
 		try:

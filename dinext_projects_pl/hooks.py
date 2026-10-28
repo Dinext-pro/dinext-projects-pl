@@ -142,10 +142,9 @@ fixtures = [
 
 required_apps = ["dinext_common", "doctype_permission", "dinext_projects"]
 
-after_install = [
-	"dinext_projects_pl.install.after_install",
-	"dinext_projects_pl.liquidity.setup.after_migrate",
-]
+after_install = "dinext_projects_pl.install.after_install"
+# Workspace references are available only after fixtures and dashboards have synced.
+after_sync = "dinext_projects_pl.liquidity.setup.after_migrate"
 after_migrate = [
 	"dinext_projects_pl.install.sync_accounting_dimensions",
 	"dinext_projects_pl.liquidity.setup.after_migrate",
