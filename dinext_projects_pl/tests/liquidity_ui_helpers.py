@@ -45,6 +45,7 @@ def fixture_action(function):
 
 def bootstrap():
 	guard()
+	fixtures.setup_company()
 	# The local P&L source has no existing non-Administrator report permission.
 	# This temporary role belongs only to our UI operator and is deleted by cleanup.
 	fixtures.ensure({"doctype": "Role", "name": PNL_TEST_ROLE, "role_name": PNL_TEST_ROLE})
@@ -91,6 +92,11 @@ def bootstrap():
 				"Purchase User",
 				"Dinext_Financier",
 				"Dinext_Management",
+				# Existing source permissions in a clean Dinext installation:
+				# Company and Journal Entry respectively. Only this test user
+				# receives these roles; no DocPerm or production user is changed.
+				"Dinext_Sales_Select_DocTypes",
+				"Dinext_Projects_Admin",
 				"Dinext_User",
 			],
 		),

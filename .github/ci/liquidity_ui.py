@@ -15,7 +15,7 @@ def main():
     app = bench / "apps/dinext_projects_pl"
     credentials = Path("/tmp/liquidity-ui-context.json")
     site = "ci.test"
-    env = dict(os.environ, DEV_SERVER="1", LIQUIDITY_TEST_URL="http://127.0.0.1:8001")
+    env = dict(os.environ, DEV_SERVER="1", FRAPPE_SITE=site, LIQUIDITY_TEST_URL="http://127.0.0.1:8001")
     env.pop("ELECTRON_RUN_AS_NODE", None)
     env.pop("CYPRESS_liquidityTestPattern", None)
     env["CYPRESS_reporter"] = "junit"
@@ -27,35 +27,49 @@ def main():
         subprocess.run(args, cwd=bench, env=env, check=True, timeout=1200)
 
     run("bench", "use", site)
+    common = bench / "sites/common_site_config.json"
+    config = json.loads(common.read_text())
+    config.update(socketio_port=9000, webserver_port=8001, default_site=site)
+    common.write_text(json.dumps(config))
     run("bench", "--site", site, "set-config", "developer_mode", "1")
     run("bench", "--site", site, "execute", "dinext_projects_pl.tests.liquidity_ui_helpers.bootstrap")
     log_path = Path(os.environ["RUNNER_TEMP"]) / "liquidity-web.log"
-    with log_path.open("w") as log:
+    socket_log = Path(os.environ["RUNNER_TEMP"]) / "liquidity-socketio.log"
+    with log_path.open("w") as log, socket_log.open("w") as realtime_log:
         server = subprocess.Popen(
             ["bench", "--site", site, "serve", "--port", "8001", "--noreload"],
             cwd=bench, env=env, stdout=log, stderr=subprocess.STDOUT,
         )
+        realtime = subprocess.Popen(
+            ["node", "apps/frappe/socketio.js"], cwd=bench, env=env,
+            stdout=realtime_log, stderr=subprocess.STDOUT,
+        )
         try:
             deadline = time.monotonic() + 60
             while True:
-                if server.poll() is not None:
-                    raise RuntimeError("Development server exited before becoming ready")
+                if any(process.poll() is not None for process in (server, realtime)):
+                    raise RuntimeError("Development HTTP/Socket.IO server exited before becoming ready")
                 try:
-                    with urllib.request.urlopen(env["LIQUIDITY_TEST_URL"] + "/api/method/ping", timeout=2) as response:
-                        if response.status == 200:
-                            break
+                    for url in (
+                        env["LIQUIDITY_TEST_URL"] + "/api/method/frappe.ping",
+                        "http://127.0.0.1:9000/socket.io/?EIO=4&transport=polling",
+                    ):
+                        with urllib.request.urlopen(url, timeout=2) as response:
+                            assert response.status == 200
+                    break
                 except (urllib.error.URLError, TimeoutError):
                     if time.monotonic() > deadline:
                         raise RuntimeError("Development server did not become ready") from None
                     time.sleep(1)
             run("bench", "--site", site, "run-ui-tests", "dinext_projects_pl", "--headless", "--browser", "electron")
         finally:
-            server.terminate()
-            try:
-                server.wait(timeout=15)
-            except subprocess.TimeoutExpired:
-                server.kill()
-                server.wait()
+            for process in (server, realtime):
+                process.terminate()
+                try:
+                    process.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
             credentials.unlink(missing_ok=True)
 
     reports = sorted((app / "cypress/results").glob("liquidity-*.xml"))
