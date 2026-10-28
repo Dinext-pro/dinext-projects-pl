@@ -81,7 +81,9 @@
 		async refresh() {
 			const requested = this.report.get_filter_values();
 			const scope = JSON.stringify(Object.keys(requested || {}).filter((key) => key !== "metrics").sort().map((key) => [key, requested[key]]));
-			if (this.grid && this.filterScope === scope) return this.refreshData(requested);
+			const metricsChanged = JSON.stringify([...(requested?.metrics || [])].sort()) !== JSON.stringify([...(this.filters?.metrics || [])].sort());
+			// Ordinary refresh retains its existing loading/error state; display changes preserve the grid.
+			if (this.grid && this.filterScope === scope && (metricsChanged || document.fullscreenElement?.contains(this.grid.container))) return this.refreshData(requested);
 			this.dataSequence = (this.dataSequence || 0) + 1;
 			const sequence = ++this.sequence;
 			// Keep the page height stable while its table/chart are replaced.
