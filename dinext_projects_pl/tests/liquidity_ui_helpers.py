@@ -92,11 +92,10 @@ def bootstrap():
 				"Purchase User",
 				"Dinext_Financier",
 				"Dinext_Management",
-				# Existing source permissions in a clean Dinext installation:
-				# Company and Journal Entry respectively. Only this test user
-				# receives these roles; no DocPerm or production user is changed.
-				"Dinext_Sales_Select_DocTypes",
-				"Dinext_Projects_Admin",
+				# The clean Dinext fixtures grant Company/Account/Journal Entry
+				# read to this existing role. Accounts Manager keeps this user
+				# in finance mode; the separate MANAGER has no finance roles.
+				"Dinext_Project_Manager",
 				"Dinext_User",
 			],
 		),
@@ -120,6 +119,22 @@ def bootstrap():
 		doc.save()
 		update_password(email, password)
 		frappe.defaults.set_user_default("Company", fixtures.COMPANY, user=email)
+	previous = frappe.session.user
+	try:
+		frappe.set_user(FINANCIER)
+		missing = [
+			doctype
+			for doctype in (
+				"Company", "Account", "GL Entry", "Sales Order", "Purchase Order",
+				"Sales Invoice", "Purchase Invoice", "Payment Request", "Payment Order",
+				"Payment Entry", "Journal Entry", "Project", "Contract",
+			)
+			if not frappe.has_permission(doctype, "read")
+		]
+		if missing:
+			raise AssertionError(f"Test financier lacks source read permissions: {missing}; roles={frappe.get_roles()}")
+	finally:
+		frappe.set_user(previous)
 	from dinext_projects_pl.liquidity.setup import install_report, install_workspace_links
 
 	install_report()
