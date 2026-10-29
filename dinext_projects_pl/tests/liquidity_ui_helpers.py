@@ -125,14 +125,26 @@ def bootstrap():
 		missing = [
 			doctype
 			for doctype in (
-				"Company", "Account", "GL Entry", "Sales Order", "Purchase Order",
-				"Sales Invoice", "Purchase Invoice", "Payment Request", "Payment Order",
-				"Payment Entry", "Journal Entry", "Project", "Contract",
+				"Company",
+				"Account",
+				"GL Entry",
+				"Sales Order",
+				"Purchase Order",
+				"Sales Invoice",
+				"Purchase Invoice",
+				"Payment Request",
+				"Payment Order",
+				"Payment Entry",
+				"Journal Entry",
+				"Project",
+				"Contract",
 			)
 			if not frappe.has_permission(doctype, "read")
 		]
 		if missing:
-			raise AssertionError(f"Test financier lacks source read permissions: {missing}; roles={frappe.get_roles()}")
+			raise AssertionError(
+				f"Test financier lacks source read permissions: {missing}; roles={frappe.get_roles()}"
+			)
 	finally:
 		frappe.set_user(previous)
 	from dinext_projects_pl.liquidity.setup import install_report, install_workspace_links

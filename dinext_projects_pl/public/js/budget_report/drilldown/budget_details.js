@@ -1,3 +1,4 @@
+/* global dinext_projects_pl */
 frappe.provide("dinext_projects_pl.budget_plan_vs_forecast");
 
 var br = dinext_projects_pl.budget_plan_vs_forecast;
@@ -112,27 +113,37 @@ br.bind_budget_detail_project_links = function (dialog) {
 		return;
 	}
 	dialog._budget_project_links_bound = true;
-	dialog.$wrapper.on("click.budget-detail-project", ".budget-detail-project-link", function (event) {
-		event.preventDefault();
-		var project = $(this).attr("data-project");
-		if (!project) {
-			return;
-		}
-		if (dialog && typeof dialog.hide === "function") {
-			dialog.hide();
-		}
-		if (typeof dinext_projects_pl !== "undefined" && typeof dinext_projects_pl.navigate_to_project_pl === "function") {
-			dinext_projects_pl.navigate_to_project_pl(project);
-			return;
-		}
-		frappe.require("/assets/dinext_projects_pl/js/project_budget_navigation.js", function () {
-			if (typeof dinext_projects_pl.navigate_to_project_pl === "function") {
+	dialog.$wrapper.on(
+		"click.budget-detail-project",
+		".budget-detail-project-link",
+		function (event) {
+			event.preventDefault();
+			var project = $(this).attr("data-project");
+			if (!project) {
+				return;
+			}
+			if (dialog && typeof dialog.hide === "function") {
+				dialog.hide();
+			}
+			if (
+				typeof dinext_projects_pl !== "undefined" &&
+				typeof dinext_projects_pl.navigate_to_project_pl === "function"
+			) {
 				dinext_projects_pl.navigate_to_project_pl(project);
 				return;
 			}
-			frappe.set_route("Form", "Project", project);
-		});
-	});
+			frappe.require(
+				"/assets/dinext_projects_pl/js/project_budget_navigation.js",
+				function () {
+					if (typeof dinext_projects_pl.navigate_to_project_pl === "function") {
+						dinext_projects_pl.navigate_to_project_pl(project);
+						return;
+					}
+					frappe.set_route("Form", "Project", project);
+				}
+			);
+		}
+	);
 };
 
 br.loadBudgetDetails = function (account, periodInfo, dialog) {
@@ -234,8 +245,7 @@ br.renderBudgetDetails = function (details, dialog) {
 			'" class="budget-detail-table__total-label">' +
 			__("Total") +
 			":</td>";
-		html +=
-			'<td class="budget-detail-table__amount">' + br.formatCurrency(total) + "</td>";
+		html += '<td class="budget-detail-table__amount">' + br.formatCurrency(total) + "</td>";
 		html += "</tr></tbody></table></div>";
 
 		html += '<div class="budget-detail-table__meta">';
@@ -263,11 +273,11 @@ br.exportBudgetDetailsToExcel = function (dialog) {
 
 	var $htmlContainer = $dialog.find('[data-fieldname="html_details"] .form-control');
 	if ($htmlContainer.length > 0) {
-		var htmlContent = $htmlContainer.html();
+		const htmlContent = $htmlContainer.html();
 		if (htmlContent) {
-			var tempDiv = document.createElement("div");
+			const tempDiv = document.createElement("div");
 			tempDiv.innerHTML = htmlContent;
-			var table = tempDiv.querySelector(".budget-detail-table");
+			const table = tempDiv.querySelector(".budget-detail-table");
 			if (table) {
 				br.extractTableToCSV(table);
 				return;
@@ -279,11 +289,11 @@ br.exportBudgetDetailsToExcel = function (dialog) {
 	if (htmlField && htmlField.$wrapper) {
 		var $fieldContainer = htmlField.$wrapper.find(".html-content");
 		if ($fieldContainer.length > 0) {
-			var htmlContent = $fieldContainer.html();
+			const htmlContent = $fieldContainer.html();
 			if (htmlContent) {
-				var tempDiv = document.createElement("div");
+				const tempDiv = document.createElement("div");
 				tempDiv.innerHTML = htmlContent;
-				var table = tempDiv.querySelector(".budget-detail-table");
+				const table = tempDiv.querySelector(".budget-detail-table");
 				if (table) {
 					br.extractTableToCSV(table);
 					return;
@@ -413,9 +423,9 @@ br.renderTotalBudgetDetails = function (details, dialog, type) {
 		});
 
 		html += '<tr class="budget-detail-table__total-row">';
-		html += '<td colspan="4" class="budget-detail-table__total-label">' + __("Total") + ":</td>";
 		html +=
-			'<td class="budget-detail-table__amount">' + br.formatCurrency(total) + "</td>";
+			'<td colspan="4" class="budget-detail-table__total-label">' + __("Total") + ":</td>";
+		html += '<td class="budget-detail-table__amount">' + br.formatCurrency(total) + "</td>";
 		html += "</tr></tbody></table></div>";
 
 		html += '<div class="budget-detail-table__meta budget-detail-table__meta--split">';

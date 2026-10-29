@@ -1,33 +1,34 @@
+/* global dinext_projects_pl */
 frappe.provide("dinext_projects_pl.budget_plan_vs_forecast");
 
 var br = dinext_projects_pl.budget_plan_vs_forecast;
 
 br.ru_fallback_translations = {
-	"Account": "Счет",
+	Account: "Счет",
 	"Accumulated Values": "Накопленные значения",
 	"Apply Cost Center Allocation": "Применять распределение МВЗ",
 	"Business Area": "Бизнес-сфера",
-	"Company": "Компания",
-	"Controls": "Управление",
+	Company: "Компания",
+	Controls: "Управление",
 	"Cost Center": "МВЗ",
-	"Disabled": "отключена",
-	"Deviation": "Отклонение",
+	Disabled: "отключена",
+	Deviation: "Отклонение",
 	"Enable Drill Down": "Включить детализацию",
-	"Enabled": "включена",
+	Enabled: "включена",
 	"Exp and Fact": "Прогноз и факт",
 	"Exp Only": "Только прогноз",
-	"Fact": "Факт",
+	Fact: "Факт",
 	"Fact Only": "Только факт",
-	"Forecast": "Прогноз",
+	Forecast: "Прогноз",
 	"From Period": "Период с",
 	"Gross Profit": "Валовая прибыль",
-	"Month": "Месяц",
+	Month: "Месяц",
 	"Period Granularity": "Детализация периода",
-	"Plan": "План",
-	"pp": "п.п.",
-	"Profitability": "Рентабельность",
+	Plan: "План",
+	pp: "п.п.",
+	Profitability: "Рентабельность",
 	"Profitability (%)": "Рентабельность (%)",
-	"Project": "Проект",
+	Project: "Проект",
 	"Project Budget Plan vs Forecast": "План-Факт-Прогноз Бюджета",
 	"Project Portfolio": "Портфель проекта",
 	"Show Future Fact": "Показывать будущий факт",
@@ -45,18 +46,19 @@ br.ru_fallback_translations = {
 	"Cumulative profit - plan": "Накопленная прибыль - план",
 	"Cumulative profit": "Накопленная прибыль",
 	"To Period": "Период по",
-	"To view GL entries, select Fact Only and disable Show Plan.": "Для просмотра проводок выберите режим «Только факт» и отключите «Показывать план».",
-	"Quarter": "Квартал",
+	"To view GL entries, select Fact Only and disable Show Plan.":
+		"Для просмотра проводок выберите режим «Только факт» и отключите «Показывать план».",
+	Quarter: "Квартал",
 	"Toggle Drill Down": "Переключить детализацию",
 	"Toggle Plan": "Переключить план",
 	"Total Fact": "Итого факт",
 	"Total Forecast": "Итого прогноз",
 	"Total Forecast/Fact": "Итого прогноз/факт",
 	"Total Plan": "Итого план",
-	"Total": "Итого",
+	Total: "Итого",
 	"Forecast/Fact": "Прогноз/факт",
 	"View Type": "Режим отображения",
-	"Year": "Год",
+	Year: "Год",
 };
 
 br.__ = function (text) {
@@ -378,7 +380,9 @@ dinext_projects_pl.budget_plan_vs_forecast.setup_period_month_pickers = function
 					return "";
 				}
 				var year_only = br.is_year_only_period_granularity(report);
-				var input_formats = year_only ? YEAR_PERIOD_INPUT_FORMATS : MONTH_PERIOD_INPUT_FORMATS;
+				var input_formats = year_only
+					? YEAR_PERIOD_INPUT_FORMATS
+					: MONTH_PERIOD_INPUT_FORMATS;
 				if (moment(value, input_formats, true).isValid()) {
 					return value;
 				}
@@ -404,7 +408,9 @@ dinext_projects_pl.budget_plan_vs_forecast.setup_period_month_pickers = function
 				}
 
 				var year_only = br.is_year_only_period_granularity(report);
-				var input_formats = year_only ? YEAR_PERIOD_INPUT_FORMATS : MONTH_PERIOD_INPUT_FORMATS;
+				var input_formats = year_only
+					? YEAR_PERIOD_INPUT_FORMATS
+					: MONTH_PERIOD_INPUT_FORMATS;
 				var system_value = value;
 				if (moment(value, input_formats, true).isValid()) {
 					system_value = budget_report_parse_period_input(
@@ -432,9 +438,7 @@ dinext_projects_pl.budget_plan_vs_forecast.setup_period_month_pickers = function
 		if (current_value) {
 			control.set_formatted_input(current_value);
 		} else if (is_year_only) {
-			control.set_value(
-				is_end ? frappe.datetime.year_end() : frappe.datetime.year_start()
-			);
+			control.set_value(is_end ? frappe.datetime.year_end() : frappe.datetime.year_start());
 		}
 	});
 };
@@ -495,7 +499,9 @@ br.cleanup_budget_report_page_layout = function (options) {
 		.removeClass(BUDGET_REPORT_FILTER_LAYOUT_CLASSES);
 
 	if (options.remove_summary !== false) {
-		$page.find(".budget-pl-summary, .budget-summary-overlay, .budget-report-insights").remove();
+		$page
+			.find(".budget-pl-summary, .budget-summary-overlay, .budget-report-insights")
+			.remove();
 		var report = frappe.query_report;
 		if (report) {
 			report.$budget_pl_summary = null;
@@ -548,9 +554,10 @@ dinext_projects_pl.budget_plan_vs_forecast.setup_filter_layout = function (repor
 	var $page = report.page.wrapper.closest("#page-query-report");
 	$page.addClass("budget-plan-vs-forecast-page");
 
-	var $form = report.page.page_form && report.page.page_form.length
-		? report.page.page_form
-		: report.page.wrapper.find(".page-form");
+	var $form =
+		report.page.page_form && report.page.page_form.length
+			? report.page.page_form
+			: report.page.wrapper.find(".page-form");
 
 	$form.addClass("budget-report-filters-form");
 	br.disable_budget_report_toolbar_actions(report);
@@ -596,16 +603,16 @@ br.apply_table_header_translations = function () {
 	report.$report
 		.find(".dt-header .dt-row-header:not(.budget-period-group-row) .dt-cell__content")
 		.each(function () {
-		var $el = $(this);
-		var text = $el.text().trim();
-		if (!text) {
-			return;
-		}
-		var translated = br.__(text);
-		if (translated !== text) {
-			$el.text(translated);
-		}
-	});
+			var $el = $(this);
+			var text = $el.text().trim();
+			if (!text) {
+				return;
+			}
+			var translated = br.__(text);
+			if (translated !== text) {
+				$el.text(translated);
+			}
+		});
 };
 
 br.fix_table_horizontal_layout = function () {
@@ -652,9 +659,10 @@ br.apply_report_translations = function (report) {
 		}
 	});
 
-	var $form = report.page && report.page.page_form && report.page.page_form.length
-		? report.page.page_form
-		: report.page.wrapper.find(".page-form");
+	var $form =
+		report.page && report.page.page_form && report.page.page_form.length
+			? report.page.page_form
+			: report.page.wrapper.find(".page-form");
 
 	Object.keys(br.ru_fallback_translations).forEach(function (source) {
 		$form.find(".label-area").each(function () {

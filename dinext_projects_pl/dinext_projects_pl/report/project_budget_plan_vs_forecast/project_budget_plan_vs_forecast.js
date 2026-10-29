@@ -1,3 +1,4 @@
+/* global dinext_projects_pl */
 // Budget report modules are loaded lazily — only when this report is opened.
 // Previously these were in app_include_js which loaded them on every desk page.
 const REPORT_NAME = "Project Budget Plan vs Forecast";

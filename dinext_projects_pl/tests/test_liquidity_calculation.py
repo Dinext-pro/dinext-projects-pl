@@ -74,16 +74,22 @@ def filters(**kwargs):
 
 class TestLiquidityCalculation(unittest.TestCase):
 	def test_export_labels_follow_each_period_and_mixed_total(self):
-		from unittest.mock import patch
-		from openpyxl import load_workbook
-		from dinext_projects_pl.liquidity.api import make_workbook
 		from io import BytesIO
+		from unittest.mock import patch
+
+		from openpyxl import load_workbook
+
+		from dinext_projects_pl.liquidity.api import make_workbook
 
 		snapshot = Snapshot(TODAY, "USD", invoices=[invoice(60, 40)], actual=[actual(20)])
 		for metrics in (("actual", "forecast"), ("actual",), ("forecast",)):
-			result = Calendar(replace(filters(), from_date=TODAY - timedelta(days=14), metrics=metrics), snapshot, calculate(snapshot))
+			result = Calendar(
+				replace(filters(), from_date=TODAY - timedelta(days=14), metrics=metrics),
+				snapshot,
+				calculate(snapshot),
+			)
 			with patch("dinext_projects_pl.liquidity.api._", lambda text: text):
-				headers = list(load_workbook(BytesIO(make_workbook(result))).active.values)[0][2:]
+				headers = next(iter(load_workbook(BytesIO(make_workbook(result))).active.values))[2:]
 			if len(metrics) == 2:
 				self.assertEqual(headers[0], "Without date / Forecast")
 				self.assertTrue(any(label.endswith(" / Actual") for label in headers))
@@ -93,7 +99,10 @@ class TestLiquidityCalculation(unittest.TestCase):
 				self.assertTrue(all(label.endswith(" / " + metrics[0].title()) for label in headers))
 
 	def test_party_only_combines_projects_without_changing_flow_shares(self):
-		flows = [actual("20.25"), replace(actual("30.75"), id="GL-2", analytic=replace(ANALYTIC, project="Other"))]
+		flows = [
+			actual("20.25"),
+			replace(actual("30.75"), id="GL-2", analytic=replace(ANALYTIC, project="Other")),
+		]
 		snapshot = Snapshot(TODAY, "USD")
 		for grouping in ("project_party", "party_project", "party_only"):
 			result = Calendar(filters(grouping=grouping), snapshot, flows)
@@ -107,11 +116,17 @@ class TestLiquidityCalculation(unittest.TestCase):
 				self.assertEqual(max(r["depth"] for r in rows), 5)
 
 	def test_tree_depth_keeps_lazy_boundaries_and_all_terminal_metrics(self):
-		flows = [actual(), replace(actual(80), id="plan", metric="plan"), replace(actual(40), id="forecast", metric="forecast")]
+		flows = [
+			actual(),
+			replace(actual(80), id="plan", metric="plan"),
+			replace(actual(40), id="forecast", metric="forecast"),
+		]
 		for grouping, maximum in (("project_party", 7), ("party_only", 6)):
 			result = Calendar(filters(grouping=grouping), Snapshot(TODAY, "USD"), flows)
+
 			def flatten(rows):
 				return [item for row in rows for item in [row, *flatten(row.get("children", []))]]
+
 			for depth in (1, 2, maximum):
 				rows = flatten(result.tree(depth))
 				self.assertEqual(max(row["depth"] for row in rows), depth - 1)
@@ -122,7 +137,12 @@ class TestLiquidityCalculation(unittest.TestCase):
 					self.assertEqual({row["id"] for row in rows}, set(result.nodes))
 
 	def test_combined_details_page_and_total_keep_each_source_once(self):
-		s = Snapshot(TODAY, "USD", invoices=[invoice(60, 40)], actual=[actual(20), replace(actual(10, TODAY - timedelta(days=7)), id="GL-past")])
+		s = Snapshot(
+			TODAY,
+			"USD",
+			invoices=[invoice(60, 40)],
+			actual=[actual(20), replace(actual(10, TODAY - timedelta(days=7)), id="GL-past")],
+		)
 		result = Calendar(replace(filters(), from_date=TODAY - timedelta(days=14)), s, calculate(s))
 		first = result.details("root", "total", "combined", 0, 1)
 		second = result.details("root", "total", "combined", 1, 1)
@@ -143,7 +163,9 @@ class TestLiquidityCalculation(unittest.TestCase):
 					replace(actual(40), id="current-forecast", metric="forecast"),
 					replace(actual(60, future_day), id="future-forecast", metric="forecast"),
 				]
-				result = Calendar(replace(filters(grain=grain), from_date=past_day), Snapshot(TODAY, "USD"), flows)
+				result = Calendar(
+					replace(filters(grain=grain), from_date=past_day), Snapshot(TODAY, "USD"), flows
+				)
 				for day, amount in ((past_day, 10), (TODAY, 40), (future_day, 60)):
 					key = result.period_by_day[day]
 					self.assertEqual(result.details("net", key, "combined")["total"], amount)
@@ -158,13 +180,17 @@ class TestLiquidityCalculation(unittest.TestCase):
 			s = Snapshot(TODAY, "USD")
 			result = Calendar(replace(filters(), from_date=TODAY - timedelta(days=14)), s, [past, current])
 			self.assertEqual(result.details("net", "total", "combined_" + metric)["total"], 10)
-			self.assertEqual(result.details("net", result.period_by_day[TODAY], "combined_" + metric)["count"], 0)
+			self.assertEqual(
+				result.details("net", result.period_by_day[TODAY], "combined_" + metric)["count"], 0
+			)
 			self.assertEqual(result.details("net", "total", metric)["total"], 30)
 
 	def test_combined_export_has_plan_then_cash_with_undated_first(self):
 		from io import BytesIO
 		from unittest.mock import patch
+
 		from openpyxl import load_workbook
+
 		from dinext_projects_pl.liquidity.api import make_workbook
 
 		s = Snapshot(TODAY, "USD", invoices=[invoice(60, 40)], actual=[actual(20)])
@@ -383,7 +409,9 @@ class TestLiquidityCalculation(unittest.TestCase):
 			s = Snapshot(TODAY, "USD", requests=[r], can_balance=True)
 			c = Calendar(filters(), s, calculate(s))
 			self.assertEqual(c.children()[0]["total__forecast"], 100)
-			self.assertEqual(c.balances["periods"][0]["projected_closing"], 100 if direction == "in" else -100)
+			self.assertEqual(
+				c.balances["periods"][0]["projected_closing"], 100 if direction == "in" else -100
+			)
 			self.assertTrue(any(row["label"] == "Without invoice" for row in c.all_rows()))
 			self.assertTrue(any(row["label"] == "Without order" for row in c.all_rows()))
 

@@ -9,13 +9,15 @@ beforeEach(() => {
 	});
 });
 
-
 afterEach(() => {
 	cy.get("@consoleErrors").then((spy) => {
 		const expected = Cypress.env("liquidityExpectedConsole");
 		for (const call of spy.getCalls()) {
 			const message = call.args.map(String).join(" ");
-			expect(expected.some((text) => message.includes(text)), "unexpected console error: " + message).to.eq(true);
+			expect(
+				expected.some((text) => message.includes(text)),
+				"unexpected console error: " + message
+			).to.eq(true);
 		}
 	});
 });

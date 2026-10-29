@@ -27,7 +27,7 @@ def wire(value):
 		return float(value)
 	if isinstance(value, dict):
 		return {k: wire(v) for k, v in value.items()}
-	if isinstance(value, (list, tuple)):
+	if isinstance(value, list | tuple):
 		return [wire(v) for v in value]
 	if hasattr(value, "isoformat"):
 		return value.isoformat()
@@ -145,6 +145,7 @@ class Calendar:
 
 	def tree(self, depth=1):
 		"""Return all branches through depth from this calculation, preserving lazy leaves."""
+
 		def descend(key, remaining):
 			rows = self.children(key)
 			if remaining > 1:

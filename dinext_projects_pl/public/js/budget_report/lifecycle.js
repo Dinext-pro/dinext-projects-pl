@@ -1,3 +1,4 @@
+/* global dinext_projects_pl */
 frappe.provide("dinext_projects_pl.budget_plan_vs_forecast");
 
 var br = dinext_projects_pl.budget_plan_vs_forecast;

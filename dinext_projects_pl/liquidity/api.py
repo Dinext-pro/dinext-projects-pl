@@ -139,7 +139,11 @@ def make_workbook(result: Calendar) -> bytes:
 
 	def column_label(key, metric):
 		if metric == "combined":
-			kinds = {result.period_metric(p.key) for p in result.periods} if key == "total" else {result.period_metric(key)}
+			kinds = (
+				{result.period_metric(p.key) for p in result.periods}
+				if key == "total"
+				else {result.period_metric(key)}
+			)
 			if len(kinds) == 1:
 				metric = kinds.pop()
 		return metric_labels[metric]
@@ -150,8 +154,7 @@ def make_workbook(result: Calendar) -> bytes:
 	)
 	for row in result.all_rows():
 		ws.append(
-			[safe_text(row["label"]), row["depth"]]
-			+ [value(row, key, metric) for key, metric in columns]
+			[safe_text(row["label"]), row["depth"]] + [value(row, key, metric) for key, metric in columns]
 		)
 		ws.row_dimensions[ws.max_row].outlineLevel = row["depth"]
 		for cell in ws[ws.max_row][2:]:

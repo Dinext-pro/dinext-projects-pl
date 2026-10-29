@@ -116,7 +116,7 @@ class Filters:
 			values[name] = value
 		for name in ("projects", "portfolios", "parties", "accounts", "metrics"):
 			value = raw.get(name, list(METRICS) if name == "metrics" else [])
-			if not isinstance(value, (list, tuple)) or len(value) > 500:
+			if not isinstance(value, list | tuple) or len(value) > 500:
 				raise ValueError("Invalid calendar selection")
 			if any(not isinstance(v, str) or not v or len(v) > 200 for v in value):
 				raise ValueError("Invalid calendar selection")

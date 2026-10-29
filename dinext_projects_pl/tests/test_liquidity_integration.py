@@ -24,9 +24,14 @@ class TestLiquidityIntegration(FrappeTestCase):
 		contract = fixtures.contract(order)
 		invoice = fixtures.sales_invoice(order)
 		payment = fixtures.pay(self.context, invoice, 20)
-		expected = {("Project", self.context["project"]), ("Customer", order.customer),
-			("Contract", contract.name), (order.doctype, order.name),
-			(invoice.doctype, invoice.name), (payment.doctype, payment.name)}
+		expected = {
+			("Project", self.context["project"]),
+			("Customer", order.customer),
+			("Contract", contract.name),
+			(order.doctype, order.name),
+			(invoice.doctype, invoice.name),
+			(payment.doctype, payment.name),
+		}
 
 		def flatten(rows):
 			return [node for row in rows for node in [row, *flatten(row.get("children", []))]]
@@ -35,10 +40,15 @@ class TestLiquidityIntegration(FrappeTestCase):
 			filters = dict(self.filters, grouping=grouping)
 			rows = flatten(get_calendar(filters, depth=7)["rows"])
 			links = {(r["document"]["doctype"], r["document"]["name"]) for r in rows if r.get("document")}
-			self.assertEqual(links, expected - ({("Project", self.context["project"])} if grouping == "party_only" else set()))
+			self.assertEqual(
+				links,
+				expected - ({("Project", self.context["project"])} if grouping == "party_only" else set()),
+			)
 			for row in rows:
 				if row.get("document"):
-					self.assertEqual(row["icon"], frappe.get_meta(row["document"]["doctype"]).get("icon") or "")
+					self.assertEqual(
+						row["icon"], frappe.get_meta(row["document"]["doctype"]).get("icon") or ""
+					)
 				else:
 					self.assertEqual(row["level"], "direction")
 			root = get_calendar(filters)["rows"][0]
@@ -51,7 +61,10 @@ class TestLiquidityIntegration(FrappeTestCase):
 		fixtures.sales_order(self.context, project=False)
 		baseline = get_calendar(self.filters, depth=3)
 		permission = frappe.has_permission
-		with patch("frappe.has_permission", side_effect=lambda dt, *a, **kw: False if dt == "Customer" else permission(dt, *a, **kw)):
+		with patch(
+			"frappe.has_permission",
+			side_effect=lambda dt, *a, **kw: False if dt == "Customer" else permission(dt, *a, **kw),
+		):
 			result = get_calendar(self.filters, depth=3)
 		self.assertEqual(result["directions"], baseline["directions"])
 		projects = result["rows"][0]["children"]
@@ -114,7 +127,10 @@ class TestLiquidityIntegration(FrappeTestCase):
 			calculate_calendar.assert_called_once()
 		self.assertEqual(result["rows"][0]["children"][0]["level"], "party")
 		for depth in (0, 8, True, None, [], "2.5", "2.0"):
-			with self.subTest(depth=depth), patch("dinext_projects_pl.liquidity.api.calendar") as calculate_calendar:
+			with (
+				self.subTest(depth=depth),
+				patch("dinext_projects_pl.liquidity.api.calendar") as calculate_calendar,
+			):
 				with self.assertRaises(frappe.ValidationError):
 					get_calendar(self.filters, depth=depth)
 				calculate_calendar.assert_not_called()

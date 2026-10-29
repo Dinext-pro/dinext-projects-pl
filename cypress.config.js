@@ -19,19 +19,34 @@ module.exports = {
 		setupNodeEvents(on, config) {
 			on("task", {
 				clearLiquidityWorkbook() {
-					const filename = path.resolve(config.downloadsFolder, "liquidity-payment-calendar.xlsx");
+					const filename = path.resolve(
+						config.downloadsFolder,
+						"liquidity-payment-calendar.xlsx"
+					);
 					if (fs.existsSync(filename)) fs.unlinkSync(filename);
 					return null;
 				},
 				readLiquidityWorkbook() {
-					const filename = path.resolve(config.downloadsFolder, "liquidity-payment-calendar.xlsx");
-					const script = "import json,sys; from openpyxl import load_workbook; w=load_workbook(sys.argv[1]); print(json.dumps({'rows':[[c.value for c in r] for r in w.worksheets[0]],'numeric':sum(c.data_type=='n' for s in w for r in s for c in r),'sheets':len(w.worksheets)}))";
-					return JSON.parse(execFileSync(path.resolve(__dirname, "../../env/bin/python"), ["-c", script, filename], { encoding: "utf8" }));
+					const filename = path.resolve(
+						config.downloadsFolder,
+						"liquidity-payment-calendar.xlsx"
+					);
+					const script =
+						"import json,sys; from openpyxl import load_workbook; w=load_workbook(sys.argv[1]); print(json.dumps({'rows':[[c.value for c in r] for r in w.worksheets[0]],'numeric':sum(c.data_type=='n' for s in w for r in s for c in r),'sheets':len(w.worksheets)}))";
+					return JSON.parse(
+						execFileSync(
+							path.resolve(__dirname, "../../env/bin/python"),
+							["-c", script, filename],
+							{ encoding: "utf8" }
+						)
+					);
 				},
 			});
 			if (process.env.LIQUIDITY_TEST_URL) config.baseUrl = process.env.LIQUIDITY_TEST_URL;
-			const credentialsPath = process.env.LIQUIDITY_UI_CREDENTIALS || "/tmp/liquidity-ui-context.json";
-			if (fs.existsSync(credentialsPath)) config.env.liquidity = JSON.parse(fs.readFileSync(credentialsPath, "utf8"));
+			const credentialsPath =
+				process.env.LIQUIDITY_UI_CREDENTIALS || "/tmp/liquidity-ui-context.json";
+			if (fs.existsSync(credentialsPath))
+				config.env.liquidity = JSON.parse(fs.readFileSync(credentialsPath, "utf8"));
 			return config;
 		},
 	},
