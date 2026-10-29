@@ -55,16 +55,16 @@ class FilterInput(TypedDict, total=False):
 	company: str
 	from_date: str
 	to_date: str
-	grain: str
+	grain: Literal["day", "week", "month"]
 	projects: list[str]
 	portfolios: list[str]
-	party_type: str
+	party_type: Literal["", "Customer", "Supplier", "Employee"]
 	parties: list[str]
 	accounts: list[str]
-	direction: str
-	grouping: str
-	metrics: list[str]
-	show_zero: bool
+	direction: Literal["", "in", "out"]
+	grouping: Literal["project_party", "party_project", "party_only"]
+	metrics: list[Literal["plan", "forecast", "actual"]]
+	show_zero: bool | Literal[0, 1, "0", "1"]
 
 
 @dataclass(frozen=True)
@@ -88,7 +88,7 @@ class Filters:
 		return bool(self.projects or self.portfolios or self.party_type or self.parties or self.direction)
 
 	@classmethod
-	def parse(cls, raw: dict | str | None, today: date) -> Filters:
+	def parse(cls, raw: FilterInput | str | None, today: date) -> Filters:
 		if isinstance(raw, str):
 			raw = json.loads(raw)
 		if not isinstance(raw, dict):
@@ -111,7 +111,7 @@ class Filters:
 			("party_type", ("", "Customer", "Supplier", "Employee"), ""),
 		):
 			value = raw.get(name) or default
-			if value not in allowed:
+			if not isinstance(raw.get(name, ""), str) or value not in allowed:
 				raise ValueError("Invalid calendar filter")
 			values[name] = value
 		for name in ("projects", "portfolios", "parties", "accounts", "metrics"):

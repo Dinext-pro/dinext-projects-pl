@@ -1098,7 +1098,11 @@
 					title:
 						(labels[metric] || labels[metric.replace("combined_", "")]) +
 						" · " +
-						(period === "undated" ? __("Without date") : period),
+						(period === "undated"
+							? __("Without date")
+							: period === "total"
+							? __("Total")
+							: period),
 					size: "extra-large",
 					fields: [{ fieldname: "details", fieldtype: "HTML" }],
 				}));
@@ -1122,6 +1126,14 @@
 							)}: ${this.format(response.movement)}`
 						)
 						.appendTo(host);
+				if (response.rows.some((item) => item.payment_stages?.length))
+					$("<p class='text-muted liquidity-stage-note'></p>")
+						.text(
+							__(
+								"Payment stages are reference information; do not add their amounts to cash movements."
+							)
+						)
+						.appendTo(host);
 				const table = $(
 					"<table class='table table-bordered liquidity-details' data-testid='liquidity-details'></table>"
 				).appendTo($("<div class='liquidity-detail-scroll'></div>").appendTo(host));
@@ -1132,9 +1144,10 @@
 					__("Expected date"),
 					__("Original amount"),
 					this.payload.currency,
-					__("Paid"),
-					__("Outstanding"),
+					__("Settled amount"),
+					__("Remaining amount"),
 					__("Linked documents"),
+					__("Payment stages"),
 				].forEach((title) => $("<th></th>").text(title).appendTo(header));
 				const body = $("<tbody></tbody>").appendTo(table);
 				const link = (target, doc) =>
@@ -1146,7 +1159,7 @@
 								"/" +
 								encodeURIComponent(doc.name)
 						)
-						.text(doc.doctype + ": " + doc.name)
+						.text(__(doc.doctype) + ": " + doc.name)
 						.appendTo(target);
 				response.rows.forEach((item) => {
 					const row = $("<tr></tr>").appendTo(body);
@@ -1186,13 +1199,70 @@
 							.text(
 								__("Date source") +
 									": " +
-									item.date_source.doctype +
+									__(item.date_source.doctype) +
 									" " +
 									item.date_source.name
 							)
 							.appendTo(refs);
 					if (item.contract_overdue)
 						$("<div></div>").text(__("Original due date overdue")).appendTo(refs);
+					const stageCell = $("<td></td>").appendTo(row);
+					(item.payment_stages || []).forEach((stage) => {
+						const block = $("<div class='liquidity-payment-stage'></div>")
+							.attr("data-stage-doctype", stage.doctype)
+							.appendTo(stageCell);
+						link(block, stage);
+						const status = [__("Draft"), __("Submitted"), __("Cancelled")][
+							stage.docstatus
+						];
+						$("<div></div>")
+							.attr("data-stage-status", stage.docstatus)
+							.text(
+								[
+									...new Set(
+										[status, stage.status && __(stage.status)].filter(Boolean)
+									),
+								].join(" · ")
+							)
+							.appendTo(block);
+						$("<div class='text-muted'></div>")
+							.text(
+								stage.scope === "component"
+									? __("Current component")
+									: __("Analytical share")
+							)
+							.appendTo(block);
+						const values =
+							stage.doctype === "Payment Request"
+								? [
+										["requested", __("Requested amount")],
+										["settled", __("Settled amount")],
+										["remaining", __("Remaining amount")],
+								  ]
+								: stage.doctype === "Payment Order"
+								? [["ordered", __("Ordered amount")]]
+								: [["executed", __("Executed cash amount")]];
+						values.forEach(([field, title]) =>
+							$("<div></div>")
+								.attr("data-stage-field", field)
+								.text(
+									title +
+										": " +
+										(stage[field] == null
+											? "—"
+											: this.format(stage[field]) + " " + stage.currency)
+								)
+								.appendTo(block)
+						);
+						if (stage.amounts_reason)
+							$("<div class='text-muted'></div>")
+								.text(
+									__(
+										"The amount cannot be attributed unambiguously to this analytical share."
+									)
+								)
+								.appendTo(block);
+					});
 				});
 				const pager = $("<div class='liquidity-toolbar'></div>").appendTo(host);
 				[
@@ -1264,7 +1334,12 @@
 				fieldname: "party_type",
 				label: __("Counterparty type"),
 				fieldtype: "Select",
-				options: "\nCustomer\nSupplier\nEmployee",
+				options: [
+					{ value: "", label: "" },
+					{ value: "Customer", label: __("Customer") },
+					{ value: "Supplier", label: __("Supplier") },
+					{ value: "Employee", label: __("Employee") },
+				],
 			},
 			{
 				fieldname: "parties",
@@ -1340,6 +1415,19 @@
 			report.$report.empty().removeClass("dt-sticky-table");
 			report.__liquidityView = new CalendarView(report);
 			if (!report.__liquidityWrapped) {
+				const previousLoad = report.load;
+				report.load = function (...args) {
+					// Frappe keeps the same report on a filterless return from Form.
+					// Our observers/DOM were released on departure, so rebuild with its filters.
+					if (
+						active(this) &&
+						this.__liquidityView?.disposed &&
+						!frappe.has_route_options()
+					) {
+						return this.refresh_report(this.get_filter_values());
+					}
+					return previousLoad.apply(this, args);
+				};
 				const previous = report.refresh;
 				report.refresh = function (...args) {
 					if (!active(this) || !this.__liquidityView || this.__liquidityView.disposed)

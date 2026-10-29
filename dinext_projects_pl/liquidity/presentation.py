@@ -132,8 +132,14 @@ class Calendar:
 		if period != "undated":
 			self.values[key]["total__" + flow.metric] += flow.amount
 
+	@staticmethod
+	def validate_node_key(key):
+		if not isinstance(key, str) or not key or len(key) > 6000:
+			raise ValueError("Unknown calendar node; refresh the report")
+
 	def validate_node(self, key):
-		if not isinstance(key, str) or len(key) > 6000 or (key != "root" and key not in self.nodes):
+		self.validate_node_key(key)
+		if key != "root" and key not in self.nodes:
 			raise ValueError("Unknown calendar node; refresh the report")
 
 	def children(self, key="root"):
@@ -183,14 +189,23 @@ class Calendar:
 			return selected == "actual" and flow.metric == metric.removeprefix("combined_")
 		return flow.metric == metric
 
-	def details(self, key, period, metric, start=0, page_length=50):
-		self.validate_node("root" if key == "net" else key)
-		if period not in {"undated", "total", *(p.key for p in self.periods)} or metric not in (
-			*ALL_METRICS,
-			"combined",
-			"combined_transfer",
-			"combined_adjustment",
-			*BALANCE_METRICS,
+	@staticmethod
+	def validate_cell_input(key, period, metric, start, page_length):
+		"""Validate untrusted scalar arguments before loading any source documents."""
+		Calendar.validate_node_key(key)
+		if (
+			not isinstance(period, str)
+			or not period
+			or len(period) > 200
+			or not isinstance(metric, str)
+			or metric
+			not in (
+				*ALL_METRICS,
+				"combined",
+				"combined_transfer",
+				"combined_adjustment",
+				*BALANCE_METRICS,
+			)
 		):
 			raise ValueError("Invalid calendar cell")
 		if isinstance(start, bool) or isinstance(page_length, bool):
@@ -199,10 +214,17 @@ class Calendar:
 			if str(int(start)) != str(start) or str(int(page_length)) != str(page_length):
 				raise ValueError
 			start, page_length = int(start), int(page_length)
-		except (TypeError, ValueError):
+		except (TypeError, ValueError, OverflowError):
 			raise ValueError("Invalid pagination") from None
 		if start < 0 or not 1 <= page_length <= 200:
 			raise ValueError("Invalid pagination")
+		return start, page_length
+
+	def details(self, key, period, metric, start=0, page_length=50):
+		start, page_length = self.validate_cell_input(key, period, metric, start, page_length)
+		self.validate_node("root" if key == "net" else key)
+		if period not in {"undated", "total", *(p.key for p in self.periods)}:
+			raise ValueError("Invalid calendar cell")
 		if metric in BALANCE_METRICS:
 			return self.balance_details(key, period, metric, start, page_length)
 

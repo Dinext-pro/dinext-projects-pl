@@ -82,3 +82,6 @@
 .liquidity-calendar .liquidity-record-link:hover .liquidity-record-label { text-decoration: underline; }
 .liquidity-calendar .liquidity-record-link:focus-visible { outline: 1px solid var(--text-color); }
 .liquidity-calendar .liquidity-icon-probe { position: absolute; visibility: hidden; pointer-events: none; }
+
+.liquidity-details .liquidity-payment-stage { min-width: 220px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color); }
+.liquidity-details .liquidity-payment-stage:last-child { margin-bottom: 0; border-bottom: 0; }

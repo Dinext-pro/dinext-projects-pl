@@ -86,7 +86,7 @@ def run(chains=2000, repetitions=5):
 		frappe.set_user("liquidity-financier@example.invalid")
 		records = []
 		for name, operation, limit in (
-			("summary", lambda: get_calendar(filters), 5),
+			("summary", lambda: get_calendar(filters, depth=2), 5),
 			("details", lambda: get_cell_details(filters, "root", "total", "forecast"), 2),
 		):
 			Path("/tmp/liquidity-benchmark-progress.json").write_text(

@@ -760,6 +760,7 @@ class Loader:
 				)
 				transfer = min(max(ZERO, incoming - party_in), max(ZERO, outgoing - party_out))
 			remaining_transfer = {"in": transfer, "out": transfer}
+			remaining_shares = {}
 			selected = set(f.accounts) if f.accounts else account_names
 			partial = bool(f.accounts) and any(r.account not in selected for r in entries)
 			for row in sorted(entries, key=lambda r: r.name):
@@ -767,25 +768,40 @@ class Loader:
 				direction = "in" if value >= 0 else "out"
 				internal = min(abs(value), remaining_transfer[direction])
 				remaining_transfer[direction] -= internal
-				if row.account not in selected:
-					continue
 				for metric, amount in (
 					("adjustment" if adjustment else "actual", abs(value) - internal),
 					("transfer", internal if partial else ZERO),
 				):
 					if not amount:
 						continue
+					gross = (
+						(incoming if direction == "in" else outgoing) - transfer
+						if metric != "transfer"
+						else transfer
+					)
+					references = (
+						pe_rows[voucher.name] if voucher.doctype == "Payment Entry" else je_rows[voucher.name]
+					)
 					parts = self.cash_shares(
 						voucher,
 						doc,
 						row,
-						pe_rows[voucher.name]
-						if voucher.doctype == "Payment Entry"
-						else je_rows[voucher.name],
+						references if metric != "transfer" else [],
+						gross=gross,
 					)
-					amounts = allocate(amount, [s.weight for s, _ in parts], self.snapshot.precision)
+					# Allocate the voucher once, then consume its budget across bank
+					# legs. Rounding and selected-account slices stay consistent.
+					key = (metric, direction)
+					if key not in remaining_shares:
+						remaining_shares[key] = allocate(
+							gross, [s.weight for s, _ in parts], self.snapshot.precision
+						)
+					amounts = allocate(amount, remaining_shares[key], self.snapshot.precision)
+					remaining_shares[key] = [
+						weight - part for weight, part in zip(remaining_shares[key], amounts, strict=True)
+					]
 					for (share, refs), part in zip(parts, amounts, strict=True):
-						if not part:
+						if not part or not refs or row.account not in selected:
 							continue
 						self.snapshot.actual.append(
 							Flow(
@@ -815,7 +831,7 @@ class Loader:
 							)
 						)
 
-	def cash_shares(self, voucher, doc, gl_row, reference_rows):
+	def cash_shares(self, voucher, doc, gl_row, reference_rows, gross):
 		if voucher in self.shares:
 			return [(s, (voucher,)) for s in self.shares[voucher]]
 		parts = []
@@ -829,12 +845,27 @@ class Loader:
 				row.get("reference_doctype") or row.get("reference_type") or "",
 				row.get("reference_name") or "",
 			)
+			rate = decimal(
+				doc.get("source_exchange_rate")
+				if doc.get("payment_type") == "Receive"
+				else doc.get("target_exchange_rate")
+			)
+			if voucher.doctype == "Payment Entry" and decimal(row.get("allocated_amount")) and rate <= 0:
+				self.warn("Missing exchange rate; forecast is incomplete")
+				# The reference cannot be valued safely. Reserve the whole movement
+				# privately instead of assigning it to an unrelated visible invoice.
+				return [(Share("withheld", gross, Analytic()), ())]
 			base = (
-				abs(decimal(row.get("allocated_amount")) * self.account_rate(ref))
+				abs(decimal(row.get("allocated_amount")) * rate)
 				if voucher.doctype == "Payment Entry"
 				else abs(decimal(row.get("debit")) - decimal(row.get("credit")))
 			)
-			if not base or ref not in self.shares:
+			if not base or not ref.doctype or not ref.name:
+				continue
+			if ref not in self.shares:
+				self.warn("Some cash source documents are not accessible")
+				# Keep the denominator but never emit this identifier or amount.
+				parts.append((Share("withheld", base, Analytic()), ()))
 				continue
 			refs = [voucher, ref]
 			refs.extend(sorted(self.payment_orders_by_voucher[voucher]))
@@ -851,16 +882,9 @@ class Loader:
 				self.shares[ref], allocate(base, weights, self.snapshot.precision), strict=True
 			):
 				parts.append((replace(share, key=row.name + ":" + share.key, weight=part), tuple(refs)))
-		if parts:
-			# Preserve unallocated cash as its own component, rather than inflating referenced invoices.
-			gross = decimal(
-				doc.get("base_received_amount")
-				if doc.get("payment_type") == "Receive"
-				else doc.get("base_paid_amount")
-			)
-			unallocated = max(ZERO, gross - sum((s.weight for s, _ in parts), ZERO))
-		else:
-			unallocated = Decimal(1)
+		# The basis is the whole voucher direction, not one bank leg or PE-only
+		# fields. Fees and unallocated cash retain their own analytic component.
+		unallocated = max(ZERO, gross - sum((s.weight for s, _ in parts), ZERO))
 		if unallocated:
 			analytic = Analytic(
 				gl_row.project or doc.get("project") or "",

@@ -3,42 +3,31 @@
 import json
 from dataclasses import asdict
 from io import BytesIO
-from typing import TypedDict
 
 import frappe
 from frappe import _
 from frappe.utils import now, today
 
 from .calculation import calculate
-from .model import Filters, as_date
+from .contracts import (
+	CalendarFormInput,
+	CalendarResponse,
+	CalendarRowResponse,
+	CellDetailsFormInput,
+	CellDetailsResponse,
+	ChildrenFormInput,
+	ExportFormInput,
+	OptionResponse,
+	OptionsFormInput,
+)
+from .details import decorate_details
+from .model import FilterInput, Filters, as_date
 from .navigation import decorate_tree
 from .presentation import Calendar, wire
 from .sources import Loader, load, require_access
 
 
-class CalendarFormInput(TypedDict, total=False):
-	filters: dict | str | None
-	depth: int | str
-
-
-class CalendarResponse(TypedDict):
-	filters: dict
-	as_of: str
-	calculated_at: str
-	currency: str
-	precision: int
-	periods: list[dict]
-	rows: list[dict]
-	directions: dict
-	net: dict
-	balances: dict | None
-	complete: bool
-	warnings: list[str]
-	kpis: dict
-	account_filter_note: str
-
-
-def calendar(filters) -> Calendar:
+def calendar(filters: FilterInput | str | None) -> Calendar:
 	try:
 		normalized = Filters.parse(filters, as_date(today()))
 	except (ValueError, TypeError, OverflowError):
@@ -59,13 +48,14 @@ def calendar(filters) -> Calendar:
 @frappe.whitelist()
 def get_calendar(filters=None, depth=1) -> CalendarResponse:
 	"""Calculate the authorized calendar and load all branches through the requested depth."""
+	form_input: CalendarFormInput = {"filters": filters, "depth": depth}
 	try:
 		if isinstance(depth, bool) or str(depth) not in {str(i) for i in range(1, 8)}:
 			raise ValueError
 		depth = int(depth)
 	except (ValueError, TypeError):
 		frappe.throw(_("Invalid calendar depth"))
-	calculated = calendar(filters)
+	calculated = calendar(form_input["filters"])
 	result = calculated.payload()
 	result["rows"] = decorate_tree(calculated.tree(depth), calculated.filters)
 	result["calculated_at"] = now()
@@ -73,18 +63,39 @@ def get_calendar(filters=None, depth=1) -> CalendarResponse:
 
 
 @frappe.whitelist()
-def get_children(filters, node_key="root") -> list[dict]:
+def get_children(filters, node_key="root") -> list[CalendarRowResponse]:
+	"""Return the authorized children of a current calendar node."""
+	form_input: ChildrenFormInput = {"filters": filters, "node_key": node_key}
 	try:
-		calculated = calendar(filters)
-		return decorate_tree(calculated.children(node_key), calculated.filters)
+		Calendar.validate_node_key(form_input["node_key"])
+		calculated = calendar(form_input["filters"])
+		return decorate_tree(calculated.children(form_input["node_key"]), calculated.filters)
 	except ValueError as exc:
 		frappe.throw(_(str(exc)))
 
 
 @frappe.whitelist()
-def get_cell_details(filters, node_key, period_key, metric, start=0, page_length=50) -> dict:
+def get_cell_details(filters, node_key, period_key, metric, start=0, page_length=50) -> CellDetailsResponse:
+	"""Return a bounded page of authorized components for one calendar cell."""
+	form_input: CellDetailsFormInput = {
+		"filters": filters,
+		"node_key": node_key,
+		"period_key": period_key,
+		"metric": metric,
+		"start": start,
+		"page_length": page_length,
+	}
 	try:
-		result = calendar(filters).details(node_key, period_key, metric, start, page_length)
+		Calendar.validate_cell_input(node_key, period_key, metric, start, page_length)
+		calculated = calendar(form_input["filters"])
+		result = calculated.details(
+			form_input["node_key"],
+			form_input["period_key"],
+			form_input["metric"],
+			form_input["start"],
+			form_input["page_length"],
+		)
+		decorate_details(result, calculated.filters, calculated.snapshot)
 		result["calculated_at"] = now()
 		return result
 	except ValueError as exc:
@@ -274,8 +285,10 @@ def make_workbook(result: Calendar) -> bytes:
 
 
 @frappe.whitelist()
-def export_liquidity_calendar(filters):
-	result = calendar(filters)
+def export_liquidity_calendar(filters) -> None:
+	"""Download all authorized calendar rows and components as an XLSX attachment."""
+	form_input: ExportFormInput = {"filters": filters}
+	result = calendar(form_input["filters"])
 	frappe.response.filename = "liquidity-payment-calendar.xlsx"
 	frappe.response.filecontent = make_workbook(result)
 	frappe.response.type = "binary"
@@ -283,13 +296,41 @@ def export_liquidity_calendar(filters):
 
 
 @frappe.whitelist()
-def get_options(kind, company=None, txt="", party_type=None):
+def get_options(kind, company=None, txt="", party_type=None) -> list[OptionResponse]:
+	"""Suggest permitted calendar filter values within the selected company."""
+	form_input: OptionsFormInput = {
+		"kind": kind,
+		"company": company,
+		"txt": txt,
+		"party_type": party_type,
+	}
 	if (
-		kind not in ("company", "project", "portfolio", "account", "party")
+		not isinstance(kind, str)
+		or kind not in ("company", "project", "portfolio", "account", "party")
+		or (
+			company is not None
+			and (
+				not isinstance(company, str)
+				or len(company) > 200
+				or (kind != "company" and not company.strip())
+			)
+		)
+		or (
+			party_type is not None
+			and (
+				not isinstance(party_type, str) or party_type not in ("", "Customer", "Supplier", "Employee")
+			)
+		)
 		or not isinstance(txt, str)
 		or len(txt) > 200
 	):
 		frappe.throw(_("Invalid calendar selection"))
+	kind, company, txt, party_type = (
+		form_input["kind"],
+		form_input["company"],
+		form_input["txt"],
+		form_input["party_type"],
+	)
 	if kind == "company":
 		roles = set(frappe.get_roles())
 		from .sources import FINANCE_ROLES, PROJECT_ROLES

@@ -183,7 +183,7 @@ def clear_transactions():
 			frappe.get_doc(dt, name).cancel()
 
 
-@whitelist_for_tests
+@whitelist_for_tests(methods=["POST"])
 @fixture_action
 def seed(scenario="base"):
 	guard()
@@ -192,6 +192,7 @@ def seed(scenario="base"):
 		"visual",
 		"standalone",
 		"request",
+		"stages",
 		"empty",
 		"many",
 		"overdue",
@@ -241,13 +242,13 @@ def seed(scenario="base"):
 		invoice = (
 			fixtures.purchase_invoice(context)
 			if scenario == "outward"
-			else fixtures.sales_invoice(order, 100 if scenario in ("request", "zero") else 60)
+			else fixtures.sales_invoice(order, 100 if scenario in ("request", "stages", "zero") else 60)
 		)
 		context["invoice"] = invoice.name
 		context["invoice_type"] = invoice.doctype
 		request = (
 			fixtures.payment_request(invoice, 100 if scenario == "outward" else 60, add_days(today(), 21))
-			if scenario in ("request", "outward", "overdue_request")
+			if scenario in ("request", "stages", "outward", "overdue_request")
 			else None
 		)
 		if scenario != "outward":
@@ -256,7 +257,7 @@ def seed(scenario="base"):
 			).name
 		if request:
 			context["request"] = request.name
-		if scenario == "outward":
+		if scenario in ("outward", "stages"):
 			context["payment_order"] = fixtures.payment_order(context, request).name
 		if scenario in ("overdue", "overdue_request", "undated"):
 			# Existing legacy data may lack dates even though current entry forms require them.
@@ -298,7 +299,7 @@ def seed(scenario="base"):
 	return context
 
 
-@whitelist_for_tests
+@whitelist_for_tests(methods=["POST"])
 @fixture_action
 def pay_standalone(request_name):
 	guard()
@@ -313,7 +314,7 @@ def pay_standalone(request_name):
 	return fixtures.pay(context, doc, 30, request).name
 
 
-@whitelist_for_tests
+@whitelist_for_tests(methods=["POST"])
 @fixture_action
 def move_request(request_name, days=35):
 	guard()
@@ -325,7 +326,7 @@ def move_request(request_name, days=35):
 	return request.transaction_date
 
 
-@whitelist_for_tests
+@whitelist_for_tests(methods=["POST"])
 @fixture_action
 def execute_order(order_name, via="entry"):
 	doc = frappe.get_doc("Payment Order", order_name)
@@ -357,7 +358,7 @@ def execute_order(order_name, via="entry"):
 	).name
 
 
-@whitelist_for_tests
+@whitelist_for_tests(methods=["POST"])
 @fixture_action
 def cover_request(request_name, amount=60):
 	request = frappe.get_doc("Payment Request", request_name)
@@ -377,7 +378,7 @@ def cover_request(request_name, amount=60):
 	return {"invoice": invoice.name, "payment_order": po.name}
 
 
-@whitelist_for_tests
+@whitelist_for_tests(methods=["POST"])
 @fixture_action
 def cleanup():
 	guard()

@@ -3,6 +3,7 @@
 import json
 
 import frappe
+from frappe import _
 
 from .sources import FINANCE_ROLES, PROJECT_ROLES
 
@@ -44,7 +45,7 @@ def install_workspace_links(workspaces=("Аналитика", "Фин. конт�
 	# Validate our only new document link. Existing standard workspaces can have
 	# links to optional apps/cards; preserve those already-imported references.
 	if not frappe.db.exists("Report", REPORT):
-		frappe.throw("Install Liquidity Payment Calendar before adding workspace links")
+		frappe.throw(_("Install Liquidity Payment Calendar before adding workspace links"))
 	for name in workspaces:
 		if not frappe.db.exists("Workspace", name):
 			continue

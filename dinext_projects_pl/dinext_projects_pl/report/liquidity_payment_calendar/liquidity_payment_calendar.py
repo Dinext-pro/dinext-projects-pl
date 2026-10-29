@@ -6,38 +6,79 @@ from dinext_projects_pl.liquidity.api import calendar
 def execute(filters=None):
 	result = calendar(filters)
 	payload = result.payload()
+	selected = result.filters.metrics
+	cash_metric = (
+		"combined"
+		if {"actual", "forecast"}.issubset(selected)
+		else next((metric for metric in ("actual", "forecast") if metric in selected), None)
+	)
+	metrics = (["plan"] if "plan" in selected else []) + ([cash_metric] if cash_metric else [])
+	keys = ["undated", *(period.key for period in result.periods), "total"]
+	metric_labels = {
+		"plan": _("Plan"),
+		"actual": _("Actual"),
+		"forecast": _("Forecast"),
+		"combined": _("Cash movement"),
+	}
+	period_labels = {"undated": _("Without date"), "total": _("Total")}
+	for period in result.periods:
+		if result.filters.grain == "week":
+			year, week, _weekday = period.start.isocalendar()
+			period_labels[period.key] = f"{week:02d} · {year}"
+		elif result.filters.grain == "month":
+			period_labels[period.key] = period.start.strftime("%m.%Y")
+		else:
+			period_labels[period.key] = period.start.strftime("%d.%m.%Y")
+
+	def column_label(key, metric):
+		if metric == "combined":
+			kinds = (
+				{result.period_metric(period.key) for period in result.periods}
+				if key == "total"
+				else {result.period_metric(key)}
+			)
+			if len(kinds) == 1:
+				metric = kinds.pop()
+		return metric_labels[metric]
+
 	columns = [{"fieldname": "label", "label": _("Name"), "fieldtype": "Data", "width": 300}]
-	period_labels = {p.key: f"{p.start} — {p.end}" for p in result.periods}
-	period_labels.update(total=_("Selected period total"), undated=_("Without date"))
-	for period in period_labels:
-		for metric in result.filters.metrics:
+	for key in keys:
+		for metric in metrics:
 			columns.append(
 				{
-					"fieldname": period + "__" + metric,
-					"label": f"{period_labels[period]} / {_(metric.title())}",
+					"fieldname": key + "__" + metric,
+					"label": f"{period_labels[key]} / {column_label(key, metric)}",
 					"fieldtype": "Currency",
 					"options": result.snapshot.currency,
 					"width": 140,
 				}
 			)
-	# The scoped client renders ECharts from get_calendar. Standard Script Report
-	# consumers still receive the same combined cash series and KPI totals.
+	rows = [
+		{
+			**row,
+			**{
+				key + "__" + metric: result.display_value(row, key, metric)
+				for key in keys
+				for metric in metrics
+			},
+		}
+		for row in result.children()
+	]
+	# Standard Script Report consumers follow the same period-dependent choice
+	# as the scoped ECharts client and XLSX; plan remains a separate series.
 	chart = {
 		"type": "bar",
 		"data": {
-			"labels": [period_labels[p.key] for p in result.periods],
+			"labels": [period_labels[period.key] for period in result.periods],
 			"datasets": [
 				{
-					"name": _(label),
+					"name": f"{_(label)} / {column_label('total', metric)}",
 					"values": [
-						sign
-						* sum(
-							payload["directions"][direction].get(p.key + "__" + metric, 0)
-							for metric in ("actual", "forecast")
-						)
-						for p in result.periods
+						sign * result.display_value(payload["directions"][direction], period.key, metric)
+						for period in result.periods
 					],
 				}
+				for metric in metrics
 				for direction, label, sign in (("in", "Receipts", 1), ("out", "Payments", -1))
 			],
 		},
@@ -54,4 +95,4 @@ def execute(filters=None):
 			("Expected payments", "expected_payments"),
 		)
 	]
-	return columns, result.children(), None, chart, summary, True
+	return columns, rows, None, chart, summary, True

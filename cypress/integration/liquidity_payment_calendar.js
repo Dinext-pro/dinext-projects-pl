@@ -9,7 +9,9 @@ describe("Liquidity Payment Calendar", () => {
 	let context;
 	beforeEach(function () {
 		const title = this.currentTest.title;
-		const scenario = title.includes("VF-")
+		const scenario = title.includes("ST-01")
+			? "stages"
+			: title.includes("VF-")
 			? "visual"
 			: title.includes("UI-20")
 			? "pnl"
@@ -137,6 +139,84 @@ describe("Liquidity Payment Calendar", () => {
 			cy.get("[data-testid=liquidity-details]")
 				.should("be.visible")
 				.and("contain", context.invoice);
+		}
+	);
+
+	testCase("TN-03 restores the calendar after visiting a document without route filters", () => {
+		cy.openLiquidity(context, {}, "operator");
+		for (const theme of ["light", "dark"]) {
+			cy.window().then((win) => {
+				win.document.documentElement.setAttribute("data-theme", theme);
+				win.__calendarBeforeForm = win.frappe.query_report.__liquidityView;
+			});
+			cy.get(grid + " .liquidity-record-link")
+				.filter((_i, el) => el.textContent === context.project)
+				.first()
+				.dblclick();
+			cy.window().should((win) => {
+				expect(win.frappe.get_route()).to.deep.eq(["Form", "Project", context.project]);
+				expect(win.cur_frm?.doc?.name).to.eq(context.project);
+				expect(win.__calendarBeforeForm.disposed).to.eq(true);
+				expect(win.__calendarBeforeForm.chart).to.eq(null);
+			});
+			cy.window().then((win) =>
+				win.frappe.set_route("query-report", "Liquidity Payment Calendar")
+			);
+			cy.get(grid + " .ag-root").should("be.visible");
+			cy.get("[data-testid=liquidity-calendar]")
+				.should("have.length", 1)
+				.and("have.attr", "aria-busy", "false");
+			cy.window().should((win) => {
+				expect(win.frappe.query_report.__liquidityView.disposed).to.eq(false);
+				expect(win.frappe.query_report.__liquidityView.filters.company).to.eq(
+					context.company
+				);
+			});
+		}
+	});
+
+	testCase(
+		"ST-01 shows authorized payment stages without adding their reference amounts",
+		() => {
+			cy.openLiquidity(context, {}, "operator");
+			cy.viewport(1280, 720);
+			cy.liquidityMode("forecast");
+			cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__forecast']")
+				.first()
+				.should("contain", "80")
+				.dblclick();
+			const request = '[data-stage-doctype="Payment Request"]';
+			const order = '[data-stage-doctype="Payment Order"]';
+			cy.window().then((win) =>
+				cy.get(".modal:visible .modal-dialog").should(($dialog) => {
+					expect($dialog[0].getBoundingClientRect().right).to.be.at.most(win.innerWidth);
+				})
+			);
+			cy.get(request).should("contain", context.request);
+			cy.get(request + " [data-stage-status]").should("have.attr", "data-stage-status", "1");
+			cy.get(request + " [data-stage-field=requested]").should("contain", "60 USD");
+			cy.get(request + " [data-stage-field=settled]").should("contain", "20 USD");
+			cy.get(request + " [data-stage-field=remaining]").should("contain", "40 USD");
+			cy.get(order).should("contain", context.payment_order);
+			cy.get(order + " [data-stage-field=ordered]").should("contain", "60 USD");
+			for (const theme of ["dark", "light"]) {
+				cy.window().then((win) =>
+					win.document.documentElement.setAttribute("data-theme", theme)
+				);
+				cy.get(".liquidity-detail-scroll").scrollTo("right", { ensureScrollable: false });
+				cy.get(request).should("be.visible");
+				cy.screenshot("liquidity-payment-stages-" + theme, { capture: "viewport" });
+			}
+			cy.get(".modal:visible .btn-modal-close").click();
+			cy.liquidityMode("actual");
+			cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__actual']")
+				.first()
+				.should("contain", "20")
+				.dblclick();
+			cy.get('[data-stage-doctype="Payment Entry"] [data-stage-field=executed]').should(
+				"contain",
+				"20 USD"
+			);
 		}
 	);
 
@@ -1185,9 +1265,12 @@ describe("Liquidity Payment Calendar", () => {
 		cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__forecast']")
 			.first()
 			.dblclick();
-		cy.get("[data-testid=liquidity-details] tbody tr td:first-child")
-			.should("have.length", 2)
-			.each(($cell) => cy.wrap($cell).should("contain", "Sales Invoice"));
+		cy.window().then((win) =>
+			cy
+				.get("[data-testid=liquidity-details] tbody tr td:first-child")
+				.should("have.length", 2)
+				.each(($cell) => cy.wrap($cell).should("contain", win.__("Sales Invoice")))
+		);
 	});
 
 	testCase("UI-13 overdue dates remain visible while cash is expected today", () => {
