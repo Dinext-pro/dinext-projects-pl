@@ -143,7 +143,15 @@ describe("Liquidity Payment Calendar", () => {
 	);
 
 	testCase("TN-03 restores the calendar after visiting a document without route filters", () => {
+		cy.intercept({ url: "**/project-budget.bundle.*.js*", times: 1 }, (request) => {
+			request.continue((response) => response.setDelay(500));
+		}).as("projectBudgetBundle");
 		cy.openLiquidity(context, {}, "operator");
+		cy.window().then((win) => {
+			expect(win.ProjectBudget?.isReady?.()).not.to.eq(true);
+			// Optional local apps may supply the binder eagerly; CI has no such app.
+			delete win.project_workload_assignment?.bindLazyTabMount;
+		});
 		for (const theme of ["light", "dark"]) {
 			cy.window().then((win) => {
 				win.document.documentElement.setAttribute("data-theme", theme);
@@ -153,6 +161,7 @@ describe("Liquidity Payment Calendar", () => {
 				.filter((_i, el) => el.textContent === context.project)
 				.first()
 				.dblclick();
+			if (theme === "light") cy.wait("@projectBudgetBundle");
 			cy.window().should((win) => {
 				expect(win.frappe.get_route()).to.deep.eq(["Form", "Project", context.project]);
 				expect(win.cur_frm?.doc?.name).to.eq(context.project);

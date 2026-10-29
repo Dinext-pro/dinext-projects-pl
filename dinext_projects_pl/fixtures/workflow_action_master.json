@@ -11,7 +11,8 @@
   "doctype": "Workflow Action Master",
   "modified": "2023-09-13 13:39:44.489479",
   "name": "Не согласовано",
-  "workflow_action_name": "Не согласовано"
+  "workflow_action_name": "Не согласовано",
+  "custom_icon": "close"
  },
  {
   "docstatus": 0,
@@ -25,7 +26,8 @@
   "doctype": "Workflow Action Master",
   "modified": "2023-09-13 13:40:04.884016",
   "name": "Согласовано",
-  "workflow_action_name": "Согласовано"
+  "workflow_action_name": "Согласовано",
+  "custom_icon": "check"
  },
  {
   "docstatus": 0,

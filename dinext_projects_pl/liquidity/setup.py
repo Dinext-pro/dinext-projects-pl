@@ -76,6 +76,21 @@ def install_workspace_links(workspaces=("Аналитика", "Фин. конт�
 			frappe.conf.developer_mode = old
 
 
+def install_indexes():
+	"""Keep company-scoped cash and settlement reads selective on growing ledgers."""
+	frappe.db.add_index(
+		"GL Entry",
+		["company", "is_cancelled", "account", "posting_date"],
+		"liquidity_company_cash_date",
+	)
+	frappe.db.add_index(
+		"Payment Ledger Entry",
+		["company", "against_voucher_type", "against_voucher_no", "delinked"],
+		"liquidity_company_settlement",
+	)
+
+
 def after_migrate():
 	install_report()
 	install_workspace_links()
+	install_indexes()

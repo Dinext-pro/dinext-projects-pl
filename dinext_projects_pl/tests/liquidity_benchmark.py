@@ -3,6 +3,9 @@
 Clone a controller-validated chain through bulk_insert to isolate report read cost
 from thousands of unrelated document-submit hooks. Each measured chain has real
 database children, payment ledger rows and cash GL rows.
+
+Bootstrap liquidity_ui_helpers first to create the real test financier; run its
+cleanup afterwards. The measured financial documents themselves always roll back.
 """
 
 import json
@@ -14,6 +17,7 @@ import frappe
 from frappe.utils import add_days, today
 
 from dinext_projects_pl.liquidity.api import get_calendar, get_cell_details
+from dinext_projects_pl.liquidity.sources import FINANCE_ROLES
 from dinext_projects_pl.tests import liquidity_fixtures as fixtures
 
 
@@ -32,6 +36,9 @@ def profile():
 def run(chains=2000, repetitions=5):
 	if frappe.request or frappe.session.user != "Administrator" or not frappe.conf.allow_tests:
 		frappe.throw("Run the benchmark from the test-site CLI as Administrator", frappe.PermissionError)
+	user = "liquidity-financier@example.invalid"
+	if not frappe.db.exists("User", user) or not FINANCE_ROLES.intersection(frappe.get_roles(user)):
+		raise ValueError("Bootstrap liquidity_ui_helpers before running the benchmark")
 	chains, repetitions = int(chains), int(repetitions)
 	if not 1 <= chains <= 2500 or not 5 <= repetitions <= 10:
 		raise ValueError("Invalid benchmark size")
@@ -83,7 +90,7 @@ def run(chains=2000, repetitions=5):
 
 			frappe.db.bulk_insert(dt, fields, values(), chunk_size=500)
 		filters = {"company": fixtures.COMPANY, "from_date": today(), "to_date": add_days(today(), 90)}
-		frappe.set_user("liquidity-financier@example.invalid")
+		frappe.set_user(user)
 		records = []
 		for name, operation, limit in (
 			("summary", lambda: get_calendar(filters, depth=2), 5),
