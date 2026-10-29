@@ -2,6 +2,7 @@
 
 import unittest
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
@@ -100,4 +101,78 @@ class TestLiquidityContracts(unittest.TestCase):
 		for name in ("seed", "pay_standalone", "move_request", "execute_order", "cover_request", "cleanup"):
 			with self.subTest(name=name):
 				method = getattr(liquidity_ui_helpers, name)
+				self.assertIn(method, frappe.whitelisted)
 				self.assertEqual(frappe.allowed_http_methods_for_whitelisted_func[method], ["POST"])
+				self.assert_http_post_only(method)
+
+	def assert_http_post_only(self, method):
+		from frappe import handler
+
+		request = SimpleNamespace(method="GET")
+		with (
+			patch.object(frappe, "local", SimpleNamespace(request=request)),
+			patch.object(handler, "throw_permission_error", side_effect=frappe.PermissionError) as denied,
+		):
+			with self.assertRaises(frappe.PermissionError):
+				handler.is_valid_http_method(method)
+			denied.assert_called_once()
+			request.method = "POST"
+			denied.reset_mock()
+			handler.is_valid_http_method(method)
+			denied.assert_not_called()
+
+	def test_post_decorator_supports_legacy_no_keyword_wrapper(self):
+		from dinext_projects_pl.tests import liquidity_ui_helpers as helpers
+
+		# This signature/return behavior matches the pinned CI Frappe revision.
+		def legacy_whitelist_for_tests(function):
+			return frappe.whitelist()(function)
+
+		def fixture():
+			return "fixture"
+
+		with patch.object(helpers, "whitelist_for_tests", legacy_whitelist_for_tests):
+			method = helpers.whitelist_fixture_post(fixture)
+		try:
+			self.assertIsNot(method, fixture)
+			self.assertIn(method, frappe.whitelisted)
+			self.assertNotIn(fixture, frappe.allowed_http_methods_for_whitelisted_func)
+			self.assertEqual(frappe.allowed_http_methods_for_whitelisted_func[method], ["POST"])
+			self.assert_http_post_only(method)
+		finally:
+			frappe.whitelisted.remove(method)
+			frappe.allowed_http_methods_for_whitelisted_func.pop(method)
+
+	def test_post_decorator_does_not_bypass_test_server_registration_gate(self):
+		from dinext_projects_pl.tests import liquidity_ui_helpers as helpers
+
+		def fixture():
+			return "fixture"
+
+		with patch.object(helpers, "whitelist_for_tests", lambda function: function):
+			self.assertIs(helpers.whitelist_fixture_post(fixture), fixture)
+		self.assertNotIn(fixture, frappe.whitelisted)
+		self.assertNotIn(fixture, frappe.allowed_http_methods_for_whitelisted_func)
+
+		frappe.flags.in_test = False
+		with (
+			patch.object(frappe, "request", SimpleNamespace(method="POST")),
+			patch.object(frappe, "local", SimpleNamespace(dev_server=False)),
+			patch.object(frappe, "throw", side_effect=frappe.PermissionError),
+		):
+			with self.assertRaises(frappe.PermissionError):
+				helpers.whitelist_fixture_post(fixture)
+		self.assertNotIn(fixture, frappe.whitelisted)
+		self.assertNotIn(fixture, frappe.allowed_http_methods_for_whitelisted_func)
+
+	def test_fixture_execution_guard_rejects_production_even_if_imported_in_tests(self):
+		from dinext_projects_pl.tests import liquidity_ui_helpers as helpers
+
+		with (
+			patch.object(frappe, "request", SimpleNamespace(method="POST")),
+			patch.object(frappe, "local", SimpleNamespace(dev_server=False)),
+			patch.object(frappe, "conf", frappe._dict(allow_tests=True)),
+			patch.object(frappe, "throw", side_effect=frappe.PermissionError),
+		):
+			with self.assertRaises(frappe.PermissionError):
+				helpers.guard()

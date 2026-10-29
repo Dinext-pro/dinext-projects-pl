@@ -171,9 +171,9 @@ class TestLiquidityIntegration(FrappeTestCase):
 		)
 
 		columns, rows, _, chart, summary, _ = execute(self.filters)
-		self.assertTrue(any(c["fieldname"] == "total__forecast" for c in columns))
-		self.assertEqual(rows[0]["total__forecast"], 40)
-		self.assertEqual(sum(chart["data"]["datasets"][0]["values"]), 60)
+		self.assertTrue(any(c["fieldname"] == "total__combined" for c in columns))
+		self.assertEqual(rows[0]["total__combined"], 40)
+		self.assertEqual([sum(series["values"]) for series in chart["data"]["datasets"]], [80, 0, 40, 0])
 		self.assertEqual(summary[0]["value"], 40)
 
 	def test_real_request_without_invoice_and_partial_payment(self):

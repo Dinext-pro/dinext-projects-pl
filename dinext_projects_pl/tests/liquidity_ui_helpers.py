@@ -19,6 +19,16 @@ DENIED = "liquidity-denied@example.invalid"
 PNL_TEST_ROLE = "_Test Liquidity P&L Reader"
 
 
+def whitelist_fixture_post(function):
+	"""Keep Frappe's test-server gate, including releases without a methods keyword."""
+	method = whitelist_for_tests(function)
+	# The returned wrapper is the function resolved by the HTTP handler. Do not
+	# register anything ourselves if a framework version leaves it unwhitelisted.
+	if method in frappe.whitelisted:
+		frappe.allowed_http_methods_for_whitelisted_func[method] = ["POST"]
+	return method
+
+
 def guard():
 	if not frappe.conf.allow_tests or (frappe.request and not getattr(frappe.local, "dev_server", False)):
 		frappe.throw("Liquidity UI fixtures require a development test site", frappe.PermissionError)
@@ -183,7 +193,7 @@ def clear_transactions():
 			frappe.get_doc(dt, name).cancel()
 
 
-@whitelist_for_tests(methods=["POST"])
+@whitelist_fixture_post
 @fixture_action
 def seed(scenario="base"):
 	guard()
@@ -299,7 +309,7 @@ def seed(scenario="base"):
 	return context
 
 
-@whitelist_for_tests(methods=["POST"])
+@whitelist_fixture_post
 @fixture_action
 def pay_standalone(request_name):
 	guard()
@@ -314,7 +324,7 @@ def pay_standalone(request_name):
 	return fixtures.pay(context, doc, 30, request).name
 
 
-@whitelist_for_tests(methods=["POST"])
+@whitelist_fixture_post
 @fixture_action
 def move_request(request_name, days=35):
 	guard()
@@ -326,7 +336,7 @@ def move_request(request_name, days=35):
 	return request.transaction_date
 
 
-@whitelist_for_tests(methods=["POST"])
+@whitelist_fixture_post
 @fixture_action
 def execute_order(order_name, via="entry"):
 	doc = frappe.get_doc("Payment Order", order_name)
@@ -358,7 +368,7 @@ def execute_order(order_name, via="entry"):
 	).name
 
 
-@whitelist_for_tests(methods=["POST"])
+@whitelist_fixture_post
 @fixture_action
 def cover_request(request_name, amount=60):
 	request = frappe.get_doc("Payment Request", request_name)
@@ -378,7 +388,7 @@ def cover_request(request_name, amount=60):
 	return {"invoice": invoice.name, "payment_order": po.name}
 
 
-@whitelist_for_tests(methods=["POST"])
+@whitelist_fixture_post
 @fixture_action
 def cleanup():
 	guard()
