@@ -12,13 +12,15 @@ from .calculation import calculate
 from .contracts import (
 	CalendarFormInput,
 	CalendarResponse,
-	CalendarRowResponse,
 	CellDetailsFormInput,
 	CellDetailsResponse,
 	ChildrenFormInput,
+	ChildrenResponse,
 	ExportFormInput,
 	OptionResponse,
 	OptionsFormInput,
+	SettingsCatalogResponse,
+	SettingsConflictResponse,
 )
 from .details import decorate_details
 from .model import FilterInput, Filters, as_date
@@ -27,55 +29,119 @@ from .presentation import Calendar, wire
 from .sources import Loader, load, require_access
 
 
-def calendar(filters: FilterInput | str | None) -> Calendar:
+class CalendarSettingsChanged(frappe.ValidationError):
+	http_status_code = 409
+
+
+def require_version(snapshot, expected):
+	if not snapshot.policy:
+		return
+	if expected is not None and (not isinstance(expected, str) or expected != snapshot.policy.version):
+		raise CalendarSettingsChanged(_("Payment Calendar Settings changed. Refresh the calendar."))
+	if expected is None and getattr(frappe.local, "request", None):
+		raise CalendarSettingsChanged(_("Refresh the calendar before requesting this operation."))
+
+
+def settings_conflict(error: CalendarSettingsChanged) -> SettingsConflictResponse:
+	# A normal concurrency outcome has no traceback or Error Log. Other failures
+	# still use Frappe's regular exception reporting and browser Console checks.
+	if not getattr(frappe.local, "request", None):
+		raise error
+	frappe.response["http_status_code"] = 409
+	return {"error": "calendar_settings_changed", "message": str(error)}
+
+
+def calendar(
+	filters: FilterInput | str | None,
+	expected_settings_version=None,
+	followup=False,
+	expected_metrics=None,
+	include_cash=True,
+) -> Calendar:
 	try:
 		normalized = Filters.parse(filters, as_date(today()))
 	except (ValueError, TypeError, OverflowError):
 		frappe.throw(_("Invalid calendar filters"))
-	loader, snapshot = load(normalized)
-	flows = calculate(snapshot, include_zero=normalized.show_zero)
+	loader, snapshot = load(normalized, include_cash=include_cash)
+	if followup or expected_settings_version is not None:
+		require_version(snapshot, expected_settings_version)
+	flows = calculate(snapshot, include_zero=normalized.show_zero, expected_metrics=expected_metrics)
 	# Restrict after allocation so hidden siblings cannot inflate the permitted share.
 	visible = [f for f in flows if loader.allowed_analytic(f.analytic)]
 	if len(visible) != len(flows):
 		snapshot.can_balance = False
 		snapshot.complete = False
 		snapshot.warnings.append("Only permitted analytical shares are shown; balances are hidden")
+	if snapshot.allocations:
+		invoice_shares = {(i.source, s.key): s.analytic for i in snapshot.invoices for s in i.shares}
+		request_shares = {(r.source, s.key): s.analytic for r in snapshot.requests for s in r.shares}
+		snapshot.allocations = [
+			a
+			for a in snapshot.allocations
+			if (a["invoice"], a["invoice_share"]) in invoice_shares
+			and (a["request"], a["request_share"]) in request_shares
+			and loader.allowed_analytic(invoice_shares[(a["invoice"], a["invoice_share"])])
+			and loader.allowed_analytic(request_shares[(a["request"], a["request_share"])])
+		]
 	if not snapshot.complete:
 		snapshot.can_balance = False
 	return Calendar(normalized, snapshot, visible, _)
 
 
 @frappe.whitelist()
-def get_calendar(filters=None, depth=1) -> CalendarResponse:
+def get_calendar(
+	filters=None, depth=1, expected_settings_version=None
+) -> CalendarResponse | SettingsConflictResponse:
 	"""Calculate the authorized calendar and load all branches through the requested depth."""
-	form_input: CalendarFormInput = {"filters": filters, "depth": depth}
+	form_input: CalendarFormInput = {
+		"filters": filters,
+		"depth": depth,
+		"expected_settings_version": expected_settings_version,
+	}
 	try:
 		if isinstance(depth, bool) or str(depth) not in {str(i) for i in range(1, 8)}:
 			raise ValueError
 		depth = int(depth)
 	except (ValueError, TypeError):
 		frappe.throw(_("Invalid calendar depth"))
-	calculated = calendar(form_input["filters"])
+	try:
+		calculated = calendar(form_input["filters"], expected_settings_version)
+	except CalendarSettingsChanged as exc:
+		return settings_conflict(exc)
 	result = calculated.payload()
 	result["rows"] = decorate_tree(calculated.tree(depth), calculated.filters)
 	result["calculated_at"] = now()
+	result["settings_version"] = calculated.snapshot.policy.version
 	return result
 
 
 @frappe.whitelist()
-def get_children(filters, node_key="root") -> list[CalendarRowResponse]:
+def get_children(
+	filters, node_key="root", expected_settings_version=None
+) -> ChildrenResponse | SettingsConflictResponse:
 	"""Return the authorized children of a current calendar node."""
-	form_input: ChildrenFormInput = {"filters": filters, "node_key": node_key}
+	form_input: ChildrenFormInput = {
+		"filters": filters,
+		"node_key": node_key,
+		"expected_settings_version": expected_settings_version,
+	}
 	try:
 		Calendar.validate_node_key(form_input["node_key"])
-		calculated = calendar(form_input["filters"])
-		return decorate_tree(calculated.children(form_input["node_key"]), calculated.filters)
+		calculated = calendar(form_input["filters"], expected_settings_version, followup=True)
+		return {
+			"rows": decorate_tree(calculated.children(form_input["node_key"]), calculated.filters),
+			"settings_version": calculated.snapshot.policy.version,
+		}
+	except CalendarSettingsChanged as exc:
+		return settings_conflict(exc)
 	except ValueError as exc:
 		frappe.throw(_(str(exc)))
 
 
 @frappe.whitelist()
-def get_cell_details(filters, node_key, period_key, metric, start=0, page_length=50) -> CellDetailsResponse:
+def get_cell_details(
+	filters, node_key, period_key, metric, start=0, page_length=50, expected_settings_version=None
+) -> CellDetailsResponse | SettingsConflictResponse:
 	"""Return a bounded page of authorized components for one calendar cell."""
 	form_input: CellDetailsFormInput = {
 		"filters": filters,
@@ -84,10 +150,28 @@ def get_cell_details(filters, node_key, period_key, metric, start=0, page_length
 		"metric": metric,
 		"start": start,
 		"page_length": page_length,
+		"expected_settings_version": expected_settings_version,
 	}
 	try:
 		Calendar.validate_cell_input(node_key, period_key, metric, start, page_length)
-		calculated = calendar(form_input["filters"])
+		expected_metrics = (
+			("plan",)
+			if metric == "plan"
+			else ("forecast",)
+			if metric in ("forecast", "combined", "projected_opening", "projected_closing")
+			else ()
+		)
+		# A child row may exist only in another metric; retain its complete authorized
+		# tree for strict node validation, even when the requested cell is zero.
+		if node_key not in ("root", "net"):
+			expected_metrics = None
+		calculated = calendar(
+			form_input["filters"],
+			expected_settings_version,
+			followup=True,
+			expected_metrics=expected_metrics,
+			include_cash=not (node_key in ("root", "net") and metric in ("plan", "forecast")),
+		)
 		result = calculated.details(
 			form_input["node_key"],
 			form_input["period_key"],
@@ -97,7 +181,10 @@ def get_cell_details(filters, node_key, period_key, metric, start=0, page_length
 		)
 		decorate_details(result, calculated.filters, calculated.snapshot)
 		result["calculated_at"] = now()
+		result["settings_version"] = calculated.snapshot.policy.version
 		return result
+	except CalendarSettingsChanged as exc:
+		return settings_conflict(exc)
 	except ValueError as exc:
 		frappe.throw(_(str(exc)))
 
@@ -215,6 +302,10 @@ def make_workbook(result: Calendar) -> bytes:
 				"Links",
 				"Date source",
 				"Original due date overdue",
+				"Match basis",
+				"Covered amount",
+				"Uncovered amount",
+				"Amount source",
 			)
 		]
 	)
@@ -250,12 +341,51 @@ def make_workbook(result: Calendar) -> bytes:
 			json.dumps([asdict(link) for link in f.links], ensure_ascii=False),
 			f"{f.date_source.doctype}: {f.date_source.name}" if f.date_source else f.source.name,
 			int(f.contract_overdue),
+			f.match_basis,
+			float(f.covered),
+			float(f.uncovered),
+			f"{f.amount_source.doctype}: {f.amount_source.name}" if f.amount_source else f.source.name,
 		]
 		detail.append([safe_text(v) if isinstance(v, str) else v for v in values])
 	detail.freeze_panes = "D2"
 	parameters = wb.create_sheet(_("Parameters")[:31])
 	parameters.append([_("Calculation date"), result.snapshot.today.isoformat()])
 	parameters.append([_("Company currency"), result.snapshot.currency])
+	if result.snapshot.policy:
+		parameters.append([_("Settings version"), result.snapshot.policy.version])
+		parameters.append(
+			[
+				_("Calculation method"),
+				safe_text(json.dumps(result.snapshot.policy.as_dict(), ensure_ascii=False)),
+			]
+		)
+		allocations = wb.create_sheet(_("Allocations")[:31])
+		allocations.append(
+			[
+				_(v)
+				for v in (
+					"Metric",
+					"Payment Request",
+					"Invoice",
+					"Match basis",
+					"Currency",
+					"Covered amount",
+					"Remaining amount",
+				)
+			]
+		)
+		for row in result.snapshot.allocations:
+			allocations.append(
+				[
+					safe_text(row["metric"]),
+					safe_text(row["request"].name),
+					safe_text(row["invoice"].name),
+					safe_text(row["basis"]),
+					safe_text(row["currency"]),
+					float(row["covered_original"]),
+					float(row["remaining_original"]),
+				]
+			)
 	for key, value in wire(asdict(result.filters)).items():
 		parameters.append([key, safe_text(json.dumps(value, ensure_ascii=False))])
 	for warning in payload["warnings"]:
@@ -285,10 +415,13 @@ def make_workbook(result: Calendar) -> bytes:
 
 
 @frappe.whitelist()
-def export_liquidity_calendar(filters) -> None:
+def export_liquidity_calendar(filters, expected_settings_version=None) -> None | SettingsConflictResponse:
 	"""Download all authorized calendar rows and components as an XLSX attachment."""
-	form_input: ExportFormInput = {"filters": filters}
-	result = calendar(form_input["filters"])
+	form_input: ExportFormInput = {"filters": filters, "expected_settings_version": expected_settings_version}
+	try:
+		result = calendar(form_input["filters"], expected_settings_version, followup=True)
+	except CalendarSettingsChanged as exc:
+		return settings_conflict(exc)
 	frappe.response.filename = "liquidity-payment-calendar.xlsx"
 	frappe.response.filecontent = make_workbook(result)
 	frappe.response.type = "binary"
@@ -393,3 +526,29 @@ def get_options(kind, company=None, txt="", party_type=None) -> list[OptionRespo
 	return [
 		{"value": r.name, "description": ""} for r in rows if frappe.has_permission(doctype, "read", r.name)
 	]
+
+
+@frappe.whitelist()
+def get_settings_catalog() -> SettingsCatalogResponse:
+	"""Return supported source choices to authorized calendar configuration managers."""
+	from .settings import MANAGERS, SETTINGS, SUPPORTED, date_fields, status_options
+
+	if not MANAGERS.intersection(frappe.get_roles()) or not frappe.has_permission(SETTINGS, "write"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	return {
+		"sources": {
+			dt: {
+				"dates": [
+					{
+						"value": name,
+						"label": _("Payment Schedule")
+						if name == "payment_schedule"
+						else _(frappe.get_meta(dt).get_label(name) or name),
+					}
+					for name in date_fields(dt)
+				],
+				"statuses": list(status_options(dt)),
+			}
+			for dt in SUPPORTED
+		}
+	}

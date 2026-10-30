@@ -44,6 +44,17 @@ class TestLiquidityReport(unittest.TestCase):
 		]
 		return Calendar(filters, Snapshot(today, "USD"), flows)
 
+	def test_root_detail_does_not_construct_unrequested_tree_and_keeps_same_totals(self):
+		from dinext_projects_pl.liquidity.presentation import node_key
+
+		with patch("dinext_projects_pl.liquidity.presentation.node_key", wraps=node_key) as keys:
+			calendar = self.result()
+			before = calendar.details("root", "total", "forecast")
+			self.assertEqual(keys.call_count, 0, "Root detail has no need to encode every tree path")
+			calendar.tree(depth=7)
+			self.assertEqual(keys.call_count, len(calendar.nodes))
+			self.assertEqual(calendar.details("root", "total", "forecast"), before)
+
 	def execute(self, metrics=("actual", "forecast"), grain="day"):
 		with (
 			patch.object(report, "calendar", return_value=self.result(metrics, grain)),

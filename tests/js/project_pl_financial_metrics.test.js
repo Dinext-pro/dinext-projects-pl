@@ -602,8 +602,10 @@ test("metrics refresh skips mount when the Metrics tab is hidden", () => {
     assert.equal(bindCalls.length, 0);
 });
 
-test("dashboard refresh schedules lazy mount on P&L summary, not metrics", () => {
+test("dashboard refresh schedules lazy mount on P&L summary, not metrics", async () => {
     const context = loadDashboardModule();
+    // This test covers lazy scheduling/buttons; the chart has its own tests.
+    context.add_project_profit_loss_chart = () => Promise.resolve();
     let renderCount = 0;
     let bindCalls = [];
     context.globalThis.render_financial_metrics = () => {
@@ -633,7 +635,7 @@ test("dashboard refresh schedules lazy mount on P&L summary, not metrics", () =>
     assert.equal(bindCalls.length, 1);
     assert.equal(bindCalls[0].fieldname, "custom_pl_summary");
 
-    bindCalls[0].mountFn();
+    await bindCalls[0].mountFn();
     assert.equal(renderCount, 0);
     assert.ok(context.__controlCalls.length >= 4);
 });

@@ -15,7 +15,18 @@
 		projected_opening: __("Projected opening"),
 		projected_closing: __("Projected closing"),
 	};
-	const call = (method, args) => frappe.xcall(API + method, args);
+	const call = (method, args) =>
+		new Promise((resolve, reject) => {
+			frappe.call({
+				method: API + method,
+				args,
+				callback: (response) => resolve(response.message),
+				error: reject,
+				error_handlers: {
+					CalendarSettingsChanged: (response) => reject({ ...response, status: 409 }),
+				},
+			});
+		});
 	const active = (report) =>
 		report.report_name === NAME &&
 		frappe.get_route()[0] === "query-report" &&
@@ -366,9 +377,10 @@
 						const children = await call("get_children", {
 							filters: this.filters,
 							node_key: row.id,
+							expected_settings_version: this.payload.settings_version,
 						});
 						if (this.valid(sequence) && expansion === this.expansionSequence)
-							table.setRowChildren(rowId, children);
+							table.setRowChildren(rowId, children.rows);
 					} catch (error) {
 						if (this.valid(sequence))
 							frappe.msgprint(__("Unable to load this branch. Collapse and retry."));
@@ -561,11 +573,17 @@
 									"/api/method/" +
 									API +
 									"export_liquidity_calendar?filters=" +
-									encodeURIComponent(JSON.stringify(this.filters)),
+									encodeURIComponent(JSON.stringify(this.filters)) +
+									"&expected_settings_version=" +
+									encodeURIComponent(this.payload.settings_version),
 							})
 							.html(
 								'<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M8 2v8m-3-3 3 3 3-3M3 11v3h10v-3"/></svg>'
 							);
+						link.on("click", (event) => {
+							event.preventDefault();
+							this.download(link[0].href, sequence);
+						});
 						$(host).empty().append(link);
 					},
 				},
@@ -821,7 +839,11 @@
 			this.root.find(".liquidity-grid").attr("aria-busy", "true");
 			try {
 				if (depth > this.loadedDepth) {
-					const payload = await call("get_calendar", { filters: this.filters, depth });
+					const payload = await call("get_calendar", {
+						filters: this.filters,
+						depth,
+						expected_settings_version: this.payload.settings_version,
+					});
 					if (!valid()) return;
 					this.payload = payload;
 					this.treeRows = payload.rows;
@@ -848,8 +870,10 @@
 				this.grid.clearCellSelection();
 				this.root.find('[data-testid="liquidity-depth"]').val(String(depth));
 			} catch (error) {
-				if (valid())
+				if (valid()) {
+					if (await this.settingsChanged(error)) return;
 					frappe.msgprint(__("Unable to load this branch. Collapse and retry."));
+				}
 			} finally {
 				if (valid()) this.root.find(".liquidity-grid").attr("aria-busy", "false");
 			}
@@ -1079,6 +1103,37 @@
 			];
 		}
 
+		async settingsChanged(error) {
+			if (error?.status !== 409 && error?.exc_type !== "CalendarSettingsChanged")
+				return false;
+			frappe.show_alert({
+				message: __("Payment Calendar Settings changed. Refreshing the calendar."),
+				indicator: "orange",
+			});
+			await this.refreshData(this.filters);
+			return true;
+		}
+
+		async download(url, sequence) {
+			try {
+				const response = await fetch(url, { credentials: "same-origin" });
+				if (!response.ok) throw { status: response.status };
+				const blob = await response.blob();
+				if (!this.valid(sequence)) return;
+				const blobUrl = URL.createObjectURL(blob);
+				const link = document.createElement("a");
+				link.href = blobUrl;
+				link.download = "liquidity-payment-calendar.xlsx";
+				document.body.appendChild(link);
+				link.click();
+				link.remove();
+				setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+			} catch (error) {
+				if (!this.valid(sequence) || (await this.settingsChanged(error))) return;
+				frappe.msgprint(__("Unable to export calendar. Refresh and retry."));
+			}
+		}
+
 		async details(node, period, metric, start, sequence) {
 			const detailSequence = (this.detailSequence || 0) + 1;
 			this.detailSequence = detailSequence;
@@ -1090,6 +1145,7 @@
 					metric,
 					start,
 					page_length: 50,
+					expected_settings_version: this.payload.settings_version,
 				});
 				if (!this.valid(sequence) || detailSequence !== this.detailSequence) return;
 				await this.closeDialog();
@@ -1110,6 +1166,7 @@
 					dialog.$wrapper.remove();
 					if (this.dialog === dialog) this.dialog = null;
 				});
+				dialog.$wrapper.addClass("liquidity-detail-dialog");
 				const host = dialog.fields_dict.details.$wrapper;
 				$("<p></p>")
 					.text(
@@ -1148,6 +1205,7 @@
 					__("Remaining amount"),
 					__("Linked documents"),
 					__("Payment stages"),
+					__("Allocation basis"),
 				].forEach((title) => $("<th></th>").text(title).appendTo(header));
 				const body = $("<tbody></tbody>").appendTo(table);
 				const link = (target, doc) =>
@@ -1167,13 +1225,19 @@
 					[
 						item.original_date || __("Without date"),
 						item.date || __("Without date"),
-						this.format(item.original_amount) + " " + item.currency,
+						this.format(item.original_amount, true) + " " + item.currency,
 						this.format(
-							item.amount * (response.signed && item.direction === "out" ? -1 : 1)
+							item.amount * (response.signed && item.direction === "out" ? -1 : 1),
+							true
 						),
-						this.format(item.paid),
-						this.format(item.outstanding),
-					].forEach((value) => $("<td></td>").text(value).appendTo(row));
+						this.format(item.paid, true),
+						this.format(item.outstanding, true),
+					].forEach((value, index) =>
+						$("<td></td>")
+							.toggleClass("liquidity-detail-amount", index >= 2)
+							.text(value)
+							.appendTo(row)
+					);
 					const refs = $("<td></td>").appendTo(row);
 					const docs = [
 						...item.links,
@@ -1263,6 +1327,21 @@
 								)
 								.appendTo(block);
 					});
+					$("<td></td>")
+						.text(
+							[
+								item.match_basis === "FIFO"
+									? __("FIFO")
+									: item.match_basis
+									? __("Explicit link")
+									: "",
+								__("Covered amount") + ": " + this.format(item.covered || 0),
+								__("Uncovered amount") + ": " + this.format(item.uncovered || 0),
+							]
+								.filter(Boolean)
+								.join(" · ")
+						)
+						.appendTo(row);
 				});
 				const pager = $("<div class='liquidity-toolbar'></div>").appendTo(host);
 				[
@@ -1277,8 +1356,10 @@
 				);
 				dialog.show();
 			} catch (error) {
-				if (this.valid(sequence))
+				if (this.valid(sequence)) {
+					if (await this.settingsChanged(error)) return;
 					frappe.msgprint(__("Unable to load details. Refresh and retry."));
+				}
 			}
 		}
 	}

@@ -58,11 +58,11 @@ def decorate_details(
 		for batch in chunks(sorted(names)):
 			for doc in loader.parents(
 				doctype,
-				["status"],
+				["status", "docstatus"],
 				{
 					"name": ["in", batch],
 					"company": filters.company,
-					"docstatus": 1,
+					"docstatus": ["in", [0, 1]],
 				},
 			):
 				documents[Link(doctype, doc.name)] = doc
@@ -95,7 +95,7 @@ def decorate_details(
 			stage: PaymentStageResponse = {
 				"doctype": link.doctype,
 				"name": link.name,
-				"docstatus": 1,
+				"docstatus": documents[link].get("docstatus", 1),
 				"status": documents[link].get("status") or "",
 				"currency": snapshot.currency,
 				"scope": "analytical_share",

@@ -94,3 +94,6 @@ def after_migrate():
 	install_report()
 	install_workspace_links()
 	install_indexes()
+	from .settings import install_settings
+
+	install_settings()

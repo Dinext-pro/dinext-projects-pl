@@ -53,8 +53,45 @@ def fixture_action(function):
 	return wrapped
 
 
+def settings_values(settings):
+	"""Back up rules, without IDs of child rows replaced during scenario seeding."""
+	metadata = {
+		"name",
+		"doctype",
+		"parent",
+		"parenttype",
+		"parentfield",
+		"owner",
+		"creation",
+		"modified",
+		"modified_by",
+		"docstatus",
+		"idx",
+	}
+	return {
+		key: [
+			{k: v for k, v in row.as_dict().items() if k not in metadata and not k.startswith("__")}
+			for row in settings.get(key)
+		]
+		for key in ("sources", "links")
+	}
+
+
 def bootstrap():
 	guard()
+	from dinext_projects_pl.liquidity.settings import SETTINGS, install_settings
+
+	install_settings()
+	backup = Path("/tmp/liquidity-settings-before-ui.json")
+	if not backup.exists():
+		settings = frappe.get_doc(SETTINGS)
+		backup.write_text(
+			json.dumps(
+				settings_values(settings),
+				default=str,
+			)
+		)
+		backup.chmod(0o600)
 	fixtures.setup_company()
 	# The local P&L source has no existing non-Administrator report permission.
 	# This temporary role belongs only to our UI operator and is deleted by cleanup.
@@ -189,6 +226,8 @@ def clear_transactions():
 		"Sales Order",
 		"Purchase Order",
 	):
+		for name in frappe.get_all(dt, filters={"company": fixtures.COMPANY, "docstatus": 0}, pluck="name"):
+			frappe.delete_doc(dt, name, force=True)
 		for name in frappe.get_all(dt, filters={"company": fixtures.COMPANY, "docstatus": 1}, pluck="name"):
 			frappe.get_doc(dt, name).cancel()
 
@@ -211,8 +250,14 @@ def seed(scenario="base"):
 		"zero",
 		"outward",
 		"pnl",
+		"fifo",
 	):
 		frappe.throw("Unknown fixture scenario")
+	from dinext_projects_pl.liquidity.settings import SETTINGS, initial_profile
+
+	settings = frappe.get_doc(SETTINGS)
+	settings.update(initial_profile())
+	settings.save()
 	context = fixtures.setup_company()
 	clear_transactions()
 	context["from_date"] = today()
@@ -275,6 +320,8 @@ def seed(scenario="base"):
 			invoice.db_set("due_date", due)
 			for row in invoice.payment_schedule:
 				frappe.db.set_value("Payment Schedule", row.name, "due_date", due)
+	if scenario == "fifo":
+		context["request"] = fixtures.payment_request(order, 100, add_days(today(), 14)).name
 	if scenario == "visual":
 		context["purchase_invoice"] = fixtures.purchase_invoice(context).name
 	if scenario == "many":
@@ -390,8 +437,55 @@ def cover_request(request_name, amount=60):
 
 @whitelist_fixture_post
 @fixture_action
+def draft_entry(invoice_name, action="create", entry_name=None):
+	if action not in ("create", "submit", "cancel"):
+		frappe.throw("Not permitted", frappe.PermissionError)
+	invoice = frappe.get_doc("Sales Invoice", invoice_name)
+	if invoice.company != fixtures.COMPANY:
+		frappe.throw("Not permitted", frappe.PermissionError)
+	if action == "create":
+		from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+
+		entry = get_payment_entry(
+			invoice.doctype, invoice.name, bank_account="Liquidity Bank A - LQC", party_amount=20
+		)
+		entry.posting_date = add_days(today(), 14)
+		entry.reference_no = "Liquidity draft UI test"
+		entry.reference_date = today()
+		entry.insert()
+	else:
+		entry = frappe.get_doc("Payment Entry", entry_name)
+		if entry.company != fixtures.COMPANY or not any(
+			row.reference_doctype == invoice.doctype and row.reference_name == invoice.name
+			for row in entry.references
+		):
+			frappe.throw("Not permitted", frappe.PermissionError)
+		if action == "submit":
+			entry.posting_date = today()
+			entry.save()
+			entry.submit()
+		else:
+			entry.cancel()
+	return {"name": entry.name, "docstatus": entry.docstatus}
+
+
+@whitelist_fixture_post
+@fixture_action
 def cleanup():
 	guard()
+	backup = Path("/tmp/liquidity-settings-before-ui.json")
+	if backup.exists():
+		from dinext_projects_pl.liquidity.settings import SETTINGS
+
+		settings = frappe.get_doc(SETTINGS)
+		saved = frappe.get_doc({"doctype": SETTINGS, **json.loads(backup.read_text())})
+		settings.update(settings_values(saved))
+		settings.save()
+		settings.reload()
+		from dinext_projects_pl.liquidity.settings import compile_policy
+
+		compile_policy(settings)
+		backup.unlink()
 	clear_transactions()
 	projects = frappe.get_all("Project", filters={"company": fixtures.COMPANY}, pluck="name")
 	if projects:

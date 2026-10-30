@@ -190,8 +190,8 @@ class TestLiquidityDetails(unittest.TestCase):
 		self.decorate(*[replace(self.flow, id=f"flow-{i}") for i in range(50)])
 		self.assertEqual(self.loader.parents.call_count, 2)
 		for call in self.loader.parents.call_args_list:
-			self.assertEqual(call.args[1], ["status"])
-			self.assertEqual(call.args[2]["docstatus"], 1)
+			self.assertEqual(call.args[1], ["status", "docstatus"])
+			self.assertEqual(call.args[2]["docstatus"], ["in", [0, 1]])
 			self.assertEqual(call.args[2]["company"], "Company")
 		self.assertEqual(self.loader.children.call_count, 1)
 

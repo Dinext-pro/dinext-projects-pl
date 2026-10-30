@@ -361,3 +361,44 @@ Remaining amount,Непогашенная сумма
 Ordered amount,Сумма поручения
 Executed cash amount,Исполнено деньгами
 The amount cannot be attributed unambiguously to this analytical share.,Сумму невозможно однозначно отнести к этой аналитической ветке.
+Payment Calendar Settings,Настройки платежного календаря
+Payment Calendar Source,Источник платежного календаря
+Payment Calendar Link,Связь платежного календаря
+Sources,Источники
+Links,Связи
+Source DocType,Тип документа источника
+Refining DocType,Тип уточняющего документа
+Document state,Состояние документа
+Allowed business states,Допустимые состояния
+Choose business states,Выбрать состояния
+Fallback date,Резервная дата
+Previous source date,Дата предыдущего источника
+Both,Оба
+Empty selection accepts all business states. Cancelled documents are always excluded.,Пустой выбор допускает все бизнес-состояния. Отменённые документы всегда исключены.
+Invalid or duplicate calendar source,Недопустимый или повторяющийся источник календаря
+Invalid calendar document state,Недопустимое состояние документа календаря
+Invalid calendar business state,Недопустимое бизнес-состояние календаря
+Invalid calendar date field,Недопустимое поле даты календаря
+Invalid calendar priority,Недопустимый приоритет календаря
+Invalid calendar source flag,Недопустимое значение включения источника календаря
+Payment Calendar Settings is empty; configure Sources and Links,Настройки платежного календаря пусты; заполните «Источники» и «Связи»
+Invalid calendar link flag,Недопустимое значение включения связи календаря
+Invalid or duplicate calendar link,Недопустимая или повторяющаяся связь календаря
+Calendar links must follow increasing priorities without cycles,Связи календаря должны следовать возрастанию приоритетов без циклов
+Payment Calendar Settings changed. Refresh the calendar.,Настройки платежного календаря изменились. Обновите календарь.
+Refresh the calendar before requesting this operation.,Обновите календарь перед выполнением этой операции.
+Payment Calendar Settings changed. Refreshing the calendar.,Настройки платежного календаря изменились. Календарь обновляется.
+Unable to export calendar. Refresh and retry.,Не удалось выгрузить календарь. Обновите его и повторите попытку.
+Settings version,Версия настроек
+Calculation method,Методика расчёта
+Allocations,Распределения
+Match basis,Основание сопоставления
+Allocation basis,Основание распределения
+Covered amount,Покрытая сумма
+Uncovered amount,Непокрытый остаток
+Amount source,Источник суммы
+Explicit link,Явная связь
+FIFO,FIFO
+Unreconciled payment instruction allocation,Не удалось сверить распределение платежного документа
+Payment instruction exceeds its obligation,Сумма платёжного распоряжения превышает обязательство
+Unsupported request settlement currency; forecast is incomplete,Валюта погашения заявки не поддерживается; прогноз неполон

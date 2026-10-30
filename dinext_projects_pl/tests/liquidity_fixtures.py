@@ -327,7 +327,7 @@ def purchase_invoice(context, amount=100, currency="USD", rate=1):
 	return doc
 
 
-def payment_order(context, request, invoice=None, covered=None, parts=1):
+def payment_order(context, request=None, invoice=None, covered=None, parts=1, entry=None):
 	bank = ensure({"doctype": "Bank", "name": "_Test Liquidity Bank", "bank_name": "_Test Liquidity Bank"})
 	bank_account = frappe.db.get_value("Bank Account", {"account": context["bank"]}, "name")
 	if not bank_account:
@@ -351,17 +351,36 @@ def payment_order(context, request, invoice=None, covered=None, parts=1):
 			"doctype": "Payment Order",
 			"company": COMPANY,
 			"posting_date": today(),
-			"payment_order_type": "Payment Request",
+			"payment_order_type": "Payment Entry" if entry else "Payment Request",
 			"company_bank_account": bank_account,
 			"account": context["bank"],
 			"references": [
 				{
-					"reference_doctype": invoice.doctype if invoice else request.reference_doctype,
-					"reference_name": invoice.name if invoice else request.reference_name,
-					"payment_request": request.name,
-					"amount": (covered if covered is not None else request.grand_total) / parts,
+					"reference_doctype": entry.doctype
+					if entry
+					else invoice.doctype
+					if invoice
+					else request.reference_doctype,
+					"reference_name": entry.name
+					if entry
+					else invoice.name
+					if invoice
+					else request.reference_name,
+					"payment_request": request.name if request else None,
+					"amount": (
+						covered
+						if covered is not None
+						else entry.paid_amount
+						if entry
+						else request.grand_total
+					)
+					/ parts,
 					"bank_account": bank_account,
-					"supplier": request.party if request.party_type == "Supplier" else None,
+					"supplier": entry.party
+					if entry and entry.party_type == "Supplier"
+					else request.party
+					if request and request.party_type == "Supplier"
+					else None,
 				}
 				for _ in range(parts)
 			],

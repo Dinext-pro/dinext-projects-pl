@@ -46,7 +46,7 @@ def _flows(snapshot, obligation, amount, due, original_due, key, metric, request
 		)
 
 
-def calculate(snapshot: Snapshot, include_zero=False) -> list[Flow]:
+def calculate_legacy(snapshot: Snapshot, include_zero=False) -> list[Flow]:
 	flows = [f for f in snapshot.actual if f.date and f.date <= snapshot.today]
 	for order in snapshot.orders:
 		if include_zero and order.outstanding <= 0:
@@ -148,3 +148,20 @@ def calculate(snapshot: Snapshot, include_zero=False) -> list[Flow]:
 	if len(ids) != len(set(ids)):
 		raise ValueError("Duplicate liquidity component")
 	return flows
+
+
+def calculate(snapshot: Snapshot, include_zero=False, expected_metrics=None) -> list[Flow]:
+	if snapshot.policy is not None:
+		from .projection import calculate_expected
+
+		return calculate_expected(snapshot, include_zero, expected_metrics)
+	flows = calculate_legacy(snapshot, include_zero)
+	return (
+		flows
+		if expected_metrics is None
+		else [
+			flow
+			for flow in flows
+			if flow.metric not in ("plan", "forecast") or flow.metric in expected_metrics
+		]
+	)

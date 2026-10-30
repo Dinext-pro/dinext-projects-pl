@@ -8,7 +8,10 @@ Bootstrap liquidity_ui_helpers first to create the real test financier; run its
 cleanup afterwards. The measured financial documents themselves always roll back.
 """
 
+import hashlib
 import json
+import platform
+import subprocess
 from collections import defaultdict
 from pathlib import Path
 from time import perf_counter
@@ -21,16 +24,45 @@ from dinext_projects_pl.liquidity.sources import FINANCE_ROLES
 from dinext_projects_pl.tests import liquidity_fixtures as fixtures
 
 
-def profile():
+def profile(chains=2000):
+	"""Diagnostic endpoint profiles; never use profiled timings as acceptance evidence."""
 	import cProfile
 
-	profiler = cProfile.Profile()
+	global get_calendar, get_cell_details
+	originals = {"summary": get_calendar, "details": get_cell_details}
+	seen = set()
+
+	def measured(name):
+		def operation(*args, **kwargs):
+			if name in seen:
+				return originals[name](*args, **kwargs)
+			seen.add(name)
+			profiler = cProfile.Profile()
+			try:
+				return profiler.runcall(originals[name], *args, **kwargs)
+			finally:
+				profiler.dump_stats(f"/tmp/liquidity-{name}-profile.pstats")
+
+		return operation
+
+	get_calendar, get_cell_details = measured("summary"), measured("details")
 	try:
-		profiler.enable()
-		return run(chains=25)
+		return run(chains=chains)
 	finally:
-		profiler.disable()
-		profiler.dump_stats("/tmp/liquidity-profile.pstats")
+		get_calendar, get_cell_details = originals["summary"], originals["details"]
+
+
+def code_fingerprint():
+	root = Path(frappe.get_app_path("dinext_projects_pl", ".."))
+	paths = set()
+	for args in (("ls-files", "-z"), ("ls-files", "--others", "--exclude-standard", "-z")):
+		paths.update(subprocess.check_output(["git", "-C", str(root), *args]).decode().split("\0"))
+	digest = hashlib.sha256()
+	for name in sorted(paths - {""}):
+		path = root / name
+		if path.is_file() and path.suffix in (".py", ".js", ".css", ".json", ".csv", ".yml"):
+			digest.update(name.encode() + b"\0" + path.read_bytes() + b"\0")
+	return digest.hexdigest()
 
 
 def run(chains=2000, repetitions=5):
@@ -54,10 +86,17 @@ def run(chains=2000, repetitions=5):
 		order = fixtures.sales_order(context)
 		invoice = fixtures.sales_invoice(order, 60)
 		payment = fixtures.pay(context, invoice, 20)
-		request = fixtures.payment_request(invoice, 40, add_days(today(), 14))
+		request = fixtures.payment_request(order, 100, add_days(today(), 14))
 		payment_order = fixtures.payment_order(context, request, parts=2)
 		contract = fixtures.contract(order)
 		documents = [order, invoice, payment, request, payment_order, contract]
+		other_project = frappe.copy_doc(frappe.get_doc("Project", context["project"]))
+		other_project.project_name = fixtures.PROJECT + " Benchmark B"
+		other_project.insert(set_name=other_project.project_name)
+		other_customer = frappe.copy_doc(frappe.get_doc("Customer", fixtures.CUSTOMER))
+		other_customer.customer_name = fixtures.CUSTOMER + " Benchmark B"
+		other_customer.insert()
+		company_currency = frappe.db.get_value("Company", fixtures.COMPANY, "default_currency")
 		templates = defaultdict(list)
 		for doc in documents:
 			for part in [doc, *doc.get_all_children()]:
@@ -80,6 +119,10 @@ def run(chains=2000, repetitions=5):
 			def values():
 				for i in range(1, chains):
 					mapping = {name: f"LQBENCH-{i:04d}-{j:03d}" for j, name in enumerate(original_names)}
+					if i % 2:
+						mapping.update(
+							{context["project"]: other_project.name, fixtures.CUSTOMER: other_customer.name}
+						)
 					for row in rows:
 						yield [
 							mapping.get(row.get(field), row.get(field))
@@ -88,7 +131,7 @@ def run(chains=2000, repetitions=5):
 							for field in fields
 						]
 
-			frappe.db.bulk_insert(dt, fields, values(), chunk_size=500)
+			frappe.db.bulk_insert(dt, fields, values(), chunk_size=50)
 		filters = {"company": fixtures.COMPANY, "from_date": today(), "to_date": add_days(today(), 90)}
 		frappe.set_user(user)
 		records = []
@@ -117,11 +160,11 @@ def run(chains=2000, repetitions=5):
 				finally:
 					frappe.db.sql = original_sql
 				if name == "summary":
-					assert result["directions"]["in"]["total__forecast"] == chains * 40
+					assert result["directions"]["in"]["total__forecast"] == chains * 80
 					assert result["directions"]["in"]["total__actual"] == chains * 20
 					assert result["directions"]["in"]["total__plan"] == chains * 80
 				else:
-					assert result["count"] == chains and result["total"] == chains * 40
+					assert result["count"] == chains * 3 and result["total"] == chains * 80
 				records.append(
 					{
 						"operation": name,
@@ -140,6 +183,18 @@ def run(chains=2000, repetitions=5):
 			"payment_order_rows": chains * 2,
 			"chains": chains,
 			"user_mode": "financier",
+			"dataset": "standalone-request100-invoice60-payment20-order100-fifo",
+			"projects": 2,
+			"counterparties": 2,
+			"company_currency": company_currency,
+			"settings_version": get_calendar(filters)["settings_version"],
+			"app_head": subprocess.check_output(
+				["git", "-C", frappe.get_app_path("dinext_projects_pl", ".."), "rev-parse", "HEAD"], text=True
+			).strip(),
+			"code_sha256": code_fingerprint(),
+			"python": platform.python_version(),
+			"site": frappe.local.site,
+			"calculation_date": today(),
 			"measurements": records,
 			"passed": all(r["passed"] for r in records),
 		}

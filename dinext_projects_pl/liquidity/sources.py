@@ -10,7 +10,7 @@ from decimal import Decimal
 
 import frappe
 from frappe import _
-from frappe.utils import getdate, today
+from frappe.utils import get_system_timezone, getdate, today
 
 from .model import (
 	ZERO,
@@ -54,7 +54,8 @@ def fields_for(doctype, fields):
 	return [
 		f
 		for f in dict.fromkeys(["name", "owner", *fields])
-		if f in ("name", "owner", "parent", "parenttype", "idx") or meta.has_field(f)
+		if f in ("name", "owner", "parent", "parenttype", "idx", "docstatus", "creation", "modified")
+		or meta.has_field(f)
 	]
 
 
@@ -70,12 +71,15 @@ def require_access(company):
 
 
 class Loader:
-	def __init__(self, filters: Filters):
+	def __init__(self, filters: Filters, policy=None):
 		self.filters = filters
 		self.full_role = require_access(filters.company)
 		self.snapshot = Snapshot(
 			as_date(today()), frappe.get_cached_value("Company", filters.company, "default_currency")
 		)
+		self.snapshot.timezone = get_system_timezone()
+		self.snapshot.policy = policy
+		self.policy = policy
 		self.snapshot.precision = int(frappe.db.get_default("currency_precision") or 2)
 		self.docs = {}
 		self.items = {}
@@ -160,7 +164,36 @@ class Loader:
 			)
 		return rows
 
-	def load(self):
+	def expected_fields(self, doctype, fields):
+		if not self.policy:
+			return fields
+		configured_dates = {
+			name
+			for source in self.policy.sources
+			if source.enabled and source.doctype == doctype
+			for name in (source.date_field, source.fallback)
+			if name not in ("payment_schedule", "previous", "undated")
+		}
+		return list(dict.fromkeys([*fields, "status", "docstatus", "creation", *sorted(configured_dates)]))
+
+	def expected_states(self, doctype):
+		return (
+			sorted(
+				{
+					1,
+					*(
+						state
+						for p in self.policy.sources
+						if p.doctype == doctype and p.enabled
+						for state in p.docstatuses
+					),
+				}
+			)
+			if self.policy
+			else [1]
+		)
+
+	def load(self, *, include_cash=True):
 		f = self.filters
 		projects = self.parents("Project", ["custom_project_portfolio"], {"company": f.company})
 		self.allowed_projects = {p.name for p in projects}
@@ -170,8 +203,8 @@ class Loader:
 		for dt in ORDERS + INVOICES:
 			rows = self.parents(
 				dt,
-				FINANCIAL_FIELDS,
-				{"company": f.company, "docstatus": 1},
+				self.expected_fields(dt, FINANCIAL_FIELDS),
+				{"company": f.company, "docstatus": ["in", self.expected_states(dt)]},
 				True,
 			)
 			self.docs[dt] = {r.name: r for r in rows}
@@ -210,16 +243,24 @@ class Loader:
 			),
 			(
 				"Payment Entry",
-				"company project party_type party payment_type posting_date paid_from paid_to paid_from_account_currency paid_to_account_currency source_exchange_rate target_exchange_rate base_paid_amount base_received_amount payment_order",
+				"company project party_type party payment_type posting_date paid_from paid_to paid_from_account_currency paid_to_account_currency source_exchange_rate target_exchange_rate paid_amount received_amount base_paid_amount base_received_amount payment_order",
 				"posting_date",
 			),
 			("Payment Order", "company posting_date payment_order_type account", None),
 			("Journal Entry", "company posting_date voucher_type payment_order is_opening", "posting_date"),
 		):
-			conditions = {"company": f.company, "docstatus": 1}
+			conditions = {
+				"company": f.company,
+				"docstatus": ["in", self.expected_states(dt)] if dt == "Payment Request" else 1,
+			}
 			if date_field:
 				conditions[date_field] = ["<=", self.snapshot.today]
-			rows = self.parents(dt, fields.split(), conditions, financial=True)
+			rows = self.parents(
+				dt,
+				self.expected_fields(dt, fields.split()) if dt != "Journal Entry" else fields.split(),
+				conditions,
+				financial=True,
+			)
 			self.docs[dt] = {r.name: r for r in rows}
 		self.pe_refs = self.children(
 			"Payment Entry Reference",
@@ -252,15 +293,24 @@ class Loader:
 		self.load_settlements()
 		self.build_obligations()
 		self.build_requests()
-		self.load_cash()
-		self.snapshot.can_balance = self.full_role and self.snapshot.complete and not f.analytical
+		self.load_cash(include_movements=include_cash)
+		if self.policy:
+			from .expected_sources import load_instructions
+
+			self.snapshot.documents = {
+				Link(dt, name): dict(doc) for dt, docs in self.docs.items() for name, doc in docs.items()
+			}
+			load_instructions(self)
+		self.snapshot.can_balance = (
+			include_cash and self.full_role and self.snapshot.complete and not f.analytical
+		)
 		return self.snapshot
 
 	def load_contracts(self):
 		# Contract uses an explicit reverse document link, not a party/project guess.
 		if not frappe.has_permission("Contract", "read"):
 			return
-		for dt in ORDERS + INVOICES:
+		for dt in (*ORDERS, *INVOICES, "Payment Request", "Payment Entry"):
 			for batch in chunks(self.docs[dt]):
 				for row in self.parents(
 					"Contract",
@@ -286,26 +336,50 @@ class Loader:
 						"against_voucher_type": dt,
 						"against_voucher_no": ["in", batch],
 						"delinked": 0,
+						"posting_date": ["<=", self.snapshot.today],
 					},
-					fields=[
-						"against_voucher_no",
-						"amount_in_account_currency",
-						"posting_date",
-						"voucher_type",
-						"voucher_no",
-					],
+					fields=["against_voucher_no", "sum(amount_in_account_currency) as outstanding"],
+					group_by="against_voucher_no",
+					order_by="against_voucher_no",
 					limit_page_length=0,
 				)
 				for row in rows:
-					# A submitted future-dated invoice is a forecast obligation. Its own
-					# debt is included, while future payments/credits are not settled yet.
-					if as_date(row.posting_date) > self.snapshot.today and not (
-						row.voucher_type == dt and row.voucher_no == row.against_voucher_no
-					):
-						continue
 					link = Link(dt, row.against_voucher_no)
 					self.ledger_seen.add(link)
-					self.outstanding[link] += decimal(row.amount_in_account_currency)
+					self.outstanding[link] += decimal(row.outstanding)
+			# Retain a future submitted invoice's own debt, never a future payment
+			# or another invoice's credit. Grouping preserves zero settled balances.
+			future = [
+				name
+				for name, doc in self.docs[dt].items()
+				if doc.get("docstatus", 1) == 1
+				and as_date(doc.get("posting_date"))
+				and as_date(doc.posting_date) > self.snapshot.today
+			]
+			for batch in chunks(future):
+				for row in frappe.get_all(
+					"Payment Ledger Entry",
+					filters={
+						"company": self.filters.company,
+						"against_voucher_type": dt,
+						"against_voucher_no": ["in", batch],
+						"voucher_type": dt,
+						"posting_date": [">", self.snapshot.today],
+						"delinked": 0,
+					},
+					fields=[
+						"against_voucher_no",
+						"voucher_no",
+						"sum(amount_in_account_currency) as outstanding",
+					],
+					group_by="against_voucher_no, voucher_no",
+					order_by="against_voucher_no, voucher_no",
+					limit_page_length=0,
+				):
+					if row.voucher_no == row.against_voucher_no:
+						link = Link(dt, row.against_voucher_no)
+						self.ledger_seen.add(link)
+						self.outstanding[link] += decimal(row.outstanding)
 		for row in self.pe_refs:
 			link = Link(row.reference_doctype or "", row.reference_name or "")
 			if link.name in self.docs.get(link.doctype, {}) and row.payment_term:
@@ -377,7 +451,9 @@ class Loader:
 				)
 				shares = self.document_shares(dt, doc, items[doc.name])
 				if dt in INVOICES:
-					if link not in self.ledger_seen:
+					if doc.get("docstatus", 1) == 0:
+						outstanding = total
+					elif link not in self.ledger_seen:
 						# Legacy invoices without ledger rows need explicit diagnostics, never fake reconciliation.
 						self.warn("Invoice payment ledger is incomplete")
 						outstanding = decimal(doc.outstanding_amount) * self.account_rate(link)
@@ -473,7 +549,7 @@ class Loader:
 		if doc.currency == self.snapshot.currency:
 			return Decimal(1)
 		ref = self.docs.get(reference.doctype, {}).get(reference.name)
-		if ref and ref.get("currency") == doc.currency:
+		if ref and ref.get("currency") == doc.currency and (not self.policy or reference.doctype in INVOICES):
 			return decimal(ref.conversion_rate)
 		if not doc.transaction_date:
 			return ZERO
@@ -493,12 +569,40 @@ class Loader:
 					return rate if source == doc.currency else Decimal(1) / rate
 		return ZERO
 
+	def request_settlement(self, request_name, amount, party_currency, reference):
+		"""Value a shared settlement once in the request's own monetary basis."""
+		doc = self.docs["Payment Request"][request_name]
+		rate = self.request_rates[request_name]
+		if rate <= 0:
+			return ZERO
+		amount = abs(decimal(amount))
+		if party_currency == doc.currency:
+			return amount * rate
+		ref = self.docs.get(reference.doctype, {}).get(reference.name)
+		if ref and ref.get("currency") == doc.currency and decimal(ref.get("conversion_rate")) > 0:
+			if party_currency == self.snapshot.currency:
+				return amount / decimal(ref.conversion_rate) * rate
+		if party_currency == self.snapshot.currency:
+			return amount
+		if (
+			ref
+			and ref.get("party_account_currency") == party_currency
+			and ref.get("currency") == party_currency
+		):
+			return amount * decimal(ref.conversion_rate)
+		self.warn("Unsupported request settlement currency; forecast is incomplete")
+		return ZERO
+
 	def build_requests(self):
 		self.exchange_rates = self.parents(
 			"Currency Exchange", ["from_currency", "to_currency", "date", "exchange_rate"], {}
 		)
+		self.request_rates = {
+			doc.name: self.request_rate(doc, Link(doc.reference_doctype or "", doc.reference_name or ""))
+			for doc in self.docs["Payment Request"].values()
+		}
 		paid = defaultdict(lambda: ZERO)
-		paid_by_reference = defaultdict(lambda: ZERO)
+		paid_by_reference = defaultdict(lambda: defaultdict(lambda: ZERO))
 		ordered_coverage = defaultdict(lambda: defaultdict(lambda: ZERO))
 		links = defaultdict(set)
 		for row in self.pe_refs:
@@ -507,10 +611,22 @@ class Loader:
 				rate = decimal(
 					pe.source_exchange_rate if pe.payment_type == "Receive" else pe.target_exchange_rate
 				)
-				paid[row.payment_request] += decimal(row.allocated_amount) * rate
-				paid_by_reference[
-					(row.payment_request, Link(row.reference_doctype or "", row.reference_name or ""))
-				] += decimal(row.allocated_amount) * rate
+				value = (
+					self.request_settlement(
+						row.payment_request,
+						row.allocated_amount,
+						pe.paid_from_account_currency
+						if pe.payment_type == "Receive"
+						else pe.paid_to_account_currency,
+						Link(row.reference_doctype or "", row.reference_name or ""),
+					)
+					if self.policy
+					else decimal(row.allocated_amount) * rate
+				)
+				paid[row.payment_request] += value
+				paid_by_reference[row.payment_request][
+					Link(row.reference_doctype or "", row.reference_name or "")
+				] += value
 				links[row.payment_request].add(Link("Payment Entry", row.parent))
 				links[row.payment_request].update(
 					self.payment_orders_by_voucher[Link("Payment Entry", row.parent)]
@@ -545,9 +661,20 @@ class Loader:
 				rate = decimal(
 					pe.source_exchange_rate if pe.payment_type == "Receive" else pe.target_exchange_rate
 				)
-				amount = decimal(row.allocated_amount) * rate
+				amount = (
+					self.request_settlement(
+						request_name,
+						row.allocated_amount,
+						pe.paid_from_account_currency
+						if pe.payment_type == "Receive"
+						else pe.paid_to_account_currency,
+						invoice,
+					)
+					if self.policy
+					else decimal(row.allocated_amount) * rate
+				)
 				paid[request_name] += amount
-				paid_by_reference[(request_name, invoice)] += amount
+				paid_by_reference[request_name][invoice] += amount
 				links[request_name].add(Link("Payment Entry", row.parent))
 			elif matches:
 				self.warn("Unreconciled request coverage")
@@ -560,19 +687,35 @@ class Loader:
 				if r.reference_doctype == row.reference_type and r.reference_name == row.reference_name
 			]
 			if len(matches) == 1:
-				paid[matches[0].payment_request] += abs(decimal(row.debit) - decimal(row.credit))
-				paid_by_reference[
-					(matches[0].payment_request, Link(row.reference_type, row.reference_name))
-				] += abs(decimal(row.debit) - decimal(row.credit))
+				request_name = matches[0].payment_request
+				currency = (
+					self.docs["Payment Request"][request_name].party_account_currency
+					or self.snapshot.currency
+				)
+				amount = (
+					self.request_settlement(
+						request_name,
+						abs(decimal(row.debit_in_account_currency) - decimal(row.credit_in_account_currency)),
+						currency,
+						Link(row.reference_type, row.reference_name),
+					)
+					if self.policy
+					else abs(decimal(row.debit) - decimal(row.credit))
+				)
+				paid[request_name] += amount
+				paid_by_reference[request_name][Link(row.reference_type, row.reference_name)] += amount
 				links[matches[0].payment_request].add(Link("Journal Entry", row.parent))
 			elif len(matches) > 1:
 				self.warn("Payment order execution requires an explicit allocation")
 		invoice_map = {i.source: i for i in self.snapshot.invoices}
 		for doc in self.docs["Payment Request"].values():
-			if doc.status in ("Draft", "Cancelled", "Failed"):
+			if doc.status in ("Draft", "Cancelled", "Failed") and not (
+				self.policy
+				and any(p.doctype == "Payment Request" and p.accepts(doc) for p in self.policy.sources)
+			):
 				continue
 			ref = Link(doc.reference_doctype or "", doc.reference_name or "")
-			rate = self.request_rate(doc, ref)
+			rate = self.request_rates[doc.name]
 			if rate <= 0:
 				self.warn("Missing exchange rate; forecast is incomplete")
 				continue
@@ -580,8 +723,16 @@ class Loader:
 			outstanding = max(ZERO, total - paid[doc.name])
 			# Status Paid is not evidence of a cash movement. A ledger-backed settlement wins.
 			stored_rate = Decimal(1) if doc.party_account_currency == self.snapshot.currency else rate
-			stored = decimal(doc.outstanding_amount) * stored_rate
-			if outstanding - stored > Decimal(1).scaleb(-self.snapshot.precision):
+			stored = (
+				self.request_settlement(
+					doc.name, doc.outstanding_amount, doc.party_account_currency or doc.currency, ref
+				)
+				if self.policy
+				else decimal(doc.outstanding_amount) * stored_rate
+			)
+			if doc.get("docstatus", 1) == 1 and outstanding - stored > Decimal(1).scaleb(
+				-self.snapshot.precision
+			):
 				self.warn("Payment request outstanding differs from linked settlements")
 			cov = {}
 			invoice_only = ref.doctype in INVOICES
@@ -597,7 +748,7 @@ class Loader:
 					if invoice not in invoice_map:
 						self.warn("Some financial sources are not accessible; balances are hidden")
 						continue
-					remaining = max(ZERO, covered * rate - paid_by_reference[(doc.name, invoice)])
+					remaining = max(ZERO, covered * rate - paid_by_reference[doc.name][invoice])
 					cov[invoice] = min(remaining, invoice_map[invoice].outstanding)
 				if sum(cov.values(), ZERO) > outstanding:
 					self.warn("Unreconciled request coverage")
@@ -608,11 +759,17 @@ class Loader:
 					Share(
 						"request",
 						Decimal(1),
-						Analytic(doc.project or "", doc.party_type or "", doc.party or ""),
+						Analytic(
+							doc.project or "",
+							doc.party_type or "",
+							doc.party or "",
+							self.contract(Link("Payment Request", doc.name)),
+						),
 					)
 				]
 			if (
-				ref.doctype in ORDERS
+				not self.policy
+				and ref.doctype in ORDERS
 				and any(s.analytic.order == ref for i in self.snapshot.invoices for s in i.shares)
 				and not invoice_only
 				and not cov
@@ -633,6 +790,10 @@ class Loader:
 					tuple(sorted(links[doc.name])),
 					doc.status,
 					doc.get("payment_term") or "",
+					{ref: min(total, invoice_map[ref].total)}
+					if invoice_only
+					else {i: a * rate for i, a in ordered_coverage[doc.name].items() if i in invoice_map},
+					dict(paid_by_reference[doc.name]),
 				)
 			)
 
@@ -649,7 +810,7 @@ class Loader:
 			and (not f.parties or a.party in f.parties)
 		)
 
-	def load_cash(self):
+	def load_cash(self, *, include_movements=True):
 		f = self.filters
 		accounts = self.parents(
 			"Account",
@@ -660,7 +821,7 @@ class Loader:
 		account_names = {a.name for a in accounts}
 		if set(f.accounts) - account_names:
 			frappe.throw(_("Not permitted"), frappe.PermissionError)
-		if not accounts:
+		if not accounts or not include_movements:
 			return
 		conditions = {
 			"company": f.company,
@@ -902,7 +1063,10 @@ class Loader:
 		return parts
 
 
-def load(filters):
-	loader = Loader(filters)
-	snapshot = loader.load()
+def load(filters, *, include_cash=True):
+	from .settings import load_policy
+
+	require_access(filters.company)
+	loader = Loader(filters, load_policy())
+	snapshot = loader.load(include_cash=include_cash)
 	return loader, snapshot

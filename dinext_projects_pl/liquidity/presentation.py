@@ -80,7 +80,7 @@ class Calendar:
 				day += timedelta(days=1)
 		self.flows = [f for f in flows if not filters.direction or f.direction == filters.direction]
 		self.visible = [f for f in self.flows if f.date is None or f.date in self.period_by_day]
-		self.nodes = {}
+		self._nodes = None
 		self.children_by_parent = defaultdict(list)
 		self.members = defaultdict(list)
 		self.values = defaultdict(lambda: defaultdict(lambda: ZERO))
@@ -91,21 +91,40 @@ class Calendar:
 			levels.remove("project")
 		self.levels = levels
 		for i, flow in enumerate(self.visible):
-			path = path_of(flow, filters.grouping)
+			self.accumulate("root", i, flow, self.period_by_day.get(flow.date, "undated"))
+		self.balances = self.build_balances()
+
+	@property
+	def nodes(self):
+		self.ensure_tree()
+		return self._nodes
+
+	def ensure_tree(self):
+		"""Build authorized analytical branches only when navigation needs them."""
+		if self._nodes is not None:
+			return
+		self._nodes = {}
+		edges = {}
+		for i, flow in enumerate(self.visible):
+			path = path_of(flow, self.filters.grouping)
 			period = self.period_by_day.get(flow.date, "undated")
 			parent = "root"
-			self.accumulate(parent, i, flow, period)
 			for depth in range(1, len(path) + 1):
-				key = node_key(path[:depth])
-				if key not in self.nodes:
+				value = path[depth - 1]
+				edge = (parent, tuple(value) if isinstance(value, list) else value)
+				key = edges.get(edge)
+				if key is None:
+					key = node_key(path[:depth])
+					edges[edge] = key
+				if key not in self._nodes:
 					value = path[depth - 1]
-					level = levels[depth - 1]
-					label = (value[-1] if isinstance(value, list) else value) or translate(
+					level = self.levels[depth - 1]
+					label = (value[-1] if isinstance(value, list) else value) or self.translate(
 						EMPTY_LABELS.get(level, "")
 					)
 					if level == "direction":
-						label = translate("Receipts" if value == "in" else "Payments")
-					self.nodes[key] = {
+						label = self.translate("Receipts" if value == "in" else "Payments")
+					self._nodes[key] = {
 						"id": key,
 						"label": label,
 						"level": level,
@@ -115,12 +134,11 @@ class Calendar:
 						"path": path[:depth],
 					}
 					self.children_by_parent[parent].append(key)
-				self.nodes[key]["hasChildren"] |= depth < len(path)
+				self._nodes[key]["hasChildren"] |= depth < len(path)
 				self.accumulate(key, i, flow, period)
 				parent = key
 		for parent in self.children_by_parent:
-			self.children_by_parent[parent].sort(key=lambda k: (self.nodes[k]["label"], k))
-		self.balances = self.build_balances()
+			self.children_by_parent[parent].sort(key=lambda k: (self._nodes[k]["label"], k))
 
 	def accumulate(self, key, index, flow, period):
 		self.members[key].append(index)
@@ -143,6 +161,7 @@ class Calendar:
 			raise ValueError("Unknown calendar node; refresh the report")
 
 	def children(self, key="root"):
+		self.ensure_tree()
 		self.validate_node(key)
 		return [self.row(k) for k in self.children_by_parent.get(key, [])]
 
@@ -163,6 +182,8 @@ class Calendar:
 		return descend("root", depth)
 
 	def all_rows(self):
+		self.ensure_tree()
+
 		def descend(key):
 			for child in self.children_by_parent.get(key, []):
 				yield self.row(child)
@@ -345,6 +366,7 @@ class Calendar:
 		)
 
 	def payload(self):
+		self.ensure_tree()
 		by_direction = {}
 		for direction in ("in", "out"):
 			key = node_key([direction])

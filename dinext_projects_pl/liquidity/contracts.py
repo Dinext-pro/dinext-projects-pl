@@ -24,11 +24,13 @@ CellMetric = Literal[
 class CalendarFormInput(TypedDict, total=False):
 	filters: FilterInput | str | None
 	depth: int | str
+	expected_settings_version: str | None
 
 
 class ChildrenFormInput(TypedDict):
 	filters: FilterInput | str
 	node_key: str
+	expected_settings_version: str | None
 
 
 class CellDetailsFormInput(ChildrenFormInput):
@@ -40,6 +42,7 @@ class CellDetailsFormInput(ChildrenFormInput):
 
 class ExportFormInput(TypedDict):
 	filters: FilterInput | str
+	expected_settings_version: str | None
 
 
 class OptionsFormInput(TypedDict):
@@ -110,7 +113,27 @@ class KpisResponse(TypedDict):
 	expected_payments: float
 
 
+class ChildrenResponse(TypedDict):
+	rows: list[CalendarRowResponse]
+	settings_version: str
+
+
+class SettingsDateOption(TypedDict):
+	value: str
+	label: str
+
+
+class SettingsSourceCatalog(TypedDict):
+	dates: list[SettingsDateOption]
+	statuses: list[str]
+
+
+class SettingsCatalogResponse(TypedDict):
+	sources: dict[str, SettingsSourceCatalog]
+
+
 class CalendarResponse(TypedDict):
+	settings_version: str
 	filters: FilterInput
 	as_of: str
 	calculated_at: str
@@ -179,9 +202,15 @@ class FlowResponse(PaymentStageFields):
 	overdue: bool
 	contract_overdue: bool
 	date_source: DocumentLinkResponse | None
+	amount_source: DocumentLinkResponse | None
+	match_basis: str
+	covered: float
+	uncovered: float
+	obligation_amount: float | None
 
 
 class CellDetailsResponse(BalanceDetailsFields):
+	settings_version: str
 	rows: list[FlowResponse]
 	total: float
 	signed: bool
@@ -190,3 +219,8 @@ class CellDetailsResponse(BalanceDetailsFields):
 	page_length: int
 	as_of: str
 	calculated_at: str
+
+
+class SettingsConflictResponse(TypedDict):
+	error: Literal["calendar_settings_changed"]
+	message: str

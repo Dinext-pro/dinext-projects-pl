@@ -89,12 +89,12 @@ def main():
 
 	reports = sorted((app / "cypress/results").glob("liquidity-*.xml"))
 	cases = [case for report in reports for case in ET.parse(report).iter("testcase")]
-	assert len(cases) == 53, f"Expected all 53 UI cases, found {len(cases)}"
-	assert len({case.attrib["name"] for case in cases}) == 53, "Duplicate UI cases"
+	assert len(cases) == 63, f"Expected all 63 UI cases, found {len(cases)}"
+	assert len({case.attrib["name"] for case in cases}) == 63, "Duplicate UI cases"
 	assert not any(case.find(tag) is not None for case in cases for tag in ("failure", "error", "skipped"))
 	with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
 		summary.write(
-			"### Liquidity UI acceptance\n\n53 passed; 0 failures/errors/skips. Real ERPNext documents and browser.\n"
+			"### Liquidity UI acceptance\n\n63 passed; 0 failures/errors/skips. Real ERPNext documents and browser.\n"
 		)
 
 

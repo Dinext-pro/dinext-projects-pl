@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import calendar
 import json
+from copy import copy
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
-from typing import Literal, TypedDict
+from typing import TYPE_CHECKING, Literal, TypedDict
+
+if TYPE_CHECKING:
+	from .fifo import Coverage
+	from .settings import Policy
 
 Metric = Literal["plan", "forecast", "actual", "adjustment", "transfer"]
 METRICS = ("plan", "forecast", "actual")
@@ -15,7 +20,7 @@ ZERO = Decimal("0")
 
 
 def decimal(value=0) -> Decimal:
-	result = Decimal(str(value or 0))
+	result = value if isinstance(value, Decimal) else Decimal(str(value or 0))
 	if not result.is_finite():
 		raise ValueError("Invalid monetary value")
 	return result
@@ -27,6 +32,8 @@ def money(value, precision=2) -> Decimal:
 
 def allocate(amount: Decimal, weights: list[Decimal], precision=2) -> list[Decimal]:
 	"""Conserve the rounded amount, assigning the remainder to the last positive weight."""
+	if len(weights) == 1 and weights[0] > 0:
+		return [money(amount, precision)]
 	if any(w < 0 for w in weights):
 		raise ValueError("Negative allocation weight")
 	result = [ZERO] * len(weights)
@@ -43,11 +50,57 @@ def allocate(amount: Decimal, weights: list[Decimal], precision=2) -> list[Decim
 	return result
 
 
+def allocate_matrix(amounts: list[Decimal], weights: list[Decimal], precision=2) -> list[list[Decimal]]:
+	"""Conserve both stage totals and document-level analytical shares in minor units."""
+	if not amounts:
+		return []
+	amounts = [money(amount, precision) for amount in amounts]
+	if any(amount < 0 for amount in amounts):
+		raise ValueError("Negative allocation amount")
+	if len(weights) == 1 and decimal(weights[0]) > ZERO:
+		return [[amount] for amount in amounts]
+	remaining = allocate(sum(amounts, ZERO), weights, precision)
+	rows = []
+	for amount in amounts:
+		proposed = allocate(amount, weights, precision)
+		row = [min(part, available) for part, available in zip(proposed, remaining, strict=True)]
+		left = amount - sum(row, ZERO)
+		for index in range(len(weights) - 1, -1, -1):
+			part = min(left, remaining[index] - row[index])
+			row[index] += part
+			left -= part
+		remaining = [available - part for available, part in zip(remaining, row, strict=True)]
+		rows.append(row)
+	return rows
+
+
+def native_total(snapshot, obligation):
+	doc = snapshot.documents.get(obligation.source, {})
+	value = (
+		doc.get("grand_total")
+		if doc.get("disable_rounded_total")
+		else doc.get("rounded_total") or doc.get("grand_total")
+	)
+	return (
+		abs(decimal(value))
+		if value is not None
+		else money(obligation.total / obligation.rate, snapshot.precision)
+	)
+
+
+def native_outstanding(snapshot, obligation):
+	return (
+		native_total(snapshot, obligation)
+		if obligation.outstanding == obligation.total
+		else money(obligation.outstanding / obligation.rate, snapshot.precision)
+	)
+
+
 def as_date(value) -> date | None:
 	if value in (None, ""):
 		return None
 	if isinstance(value, date):
-		return date.fromisoformat(value.isoformat()[:10])
+		return value if type(value) is date else date.fromisoformat(value.isoformat()[:10])
 	return date.fromisoformat(str(value))
 
 
@@ -196,6 +249,9 @@ def remaining_stages(
 	if not outstanding:
 		return []
 	stages = sorted(stages or [Stage("undated", None, total)], key=lambda s: (s.due or date.max, s.key))
+	if len(stages) == 1:
+		stage = stages[0]
+		return [Stage(stage.key, stage.due, outstanding, stage.term)]
 	weights = [max(s.amount, ZERO) for s in stages]
 	if not sum(weights, ZERO):
 		weights = [Decimal(1)] * len(stages)
@@ -243,6 +299,8 @@ class Request:
 	links: tuple[Link, ...] = ()
 	status: str = ""
 	term: str = ""
+	gross_coverage: dict[Link, Decimal] = field(default_factory=dict)
+	paid_by_invoice: dict[Link, Decimal] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -266,6 +324,21 @@ class Flow:
 	overdue: bool = False
 	contract_overdue: bool = False
 	date_source: Link | None = None
+	amount_source: Link | None = None
+	match_basis: str = ""
+	covered: Decimal = ZERO
+	uncovered: Decimal = ZERO
+	# Preserve the obligation's book basis when an expected cash source has another rate.
+	obligation_amount: Decimal | None = None
+
+	def with_changes(self, **changes):
+		"""Copy immutable financial data without repeating per-field construction."""
+		if changes.keys() - self.__dict__.keys():
+			raise TypeError("Unknown liquidity component field")
+		cloned = copy(self)
+		for name, value in changes.items():
+			object.__setattr__(cloned, name, value)
+		return cloned
 
 	@property
 	def signed(self):
@@ -288,3 +361,11 @@ class Snapshot:
 	can_balance: bool = False
 	complete: bool = True
 	warnings: list[str] = field(default_factory=list)
+	policy: Policy | None = None
+	documents: dict[Link, dict] = field(default_factory=dict)
+	instructions: list = field(default_factory=list)
+	allocations: list[dict] = field(default_factory=list)
+	timezone: str = "UTC"
+	claim_limits: dict[tuple[Link, Analytic], Decimal] = field(default_factory=dict)
+	# One-use allocations prepared by the adapter, never shared across requests.
+	coverage_parts: list[Coverage] | None = None

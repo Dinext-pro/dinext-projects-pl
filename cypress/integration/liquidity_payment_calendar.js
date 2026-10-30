@@ -9,34 +9,390 @@ describe("Liquidity Payment Calendar", () => {
 	let context;
 	beforeEach(function () {
 		const title = this.currentTest.title;
-		const scenario = title.includes("ST-01")
-			? "stages"
-			: title.includes("VF-")
-			? "visual"
-			: title.includes("UI-20")
-			? "pnl"
-			: title.includes("zero rows")
-			? "zero"
-			: title.includes("UI-10") || title.includes("UI-11")
-			? "standalone"
-			: title.includes("UI-12")
-			? "request"
-			: title.includes("UI-14") || title.includes("BG-04")
-			? "outward"
-			: title.includes("without date")
-			? "undated"
-			: title.includes("future request")
-			? "overdue_request"
-			: title.includes("overdue")
-			? "overdue"
-			: title.includes("pagination") || title.includes("UI-04")
-			? "many"
-			: "base";
+		const scenario =
+			title.includes("SC-04") || title.includes("SC-08")
+				? "fifo"
+				: title.includes("SC-05")
+				? "request"
+				: title.includes("SC-06")
+				? "standalone"
+				: title.includes("SC-09")
+				? "many"
+				: title.includes("ST-01")
+				? "stages"
+				: title.includes("VF-")
+				? "visual"
+				: title.includes("UI-20")
+				? "pnl"
+				: title.includes("zero rows")
+				? "zero"
+				: title.includes("UI-10") || title.includes("UI-11")
+				? "standalone"
+				: title.includes("UI-12")
+				? "request"
+				: title.includes("UI-14") || title.includes("BG-04")
+				? "outward"
+				: title.includes("without date")
+				? "undated"
+				: title.includes("future request")
+				? "overdue_request"
+				: title.includes("overdue")
+				? "overdue"
+				: title.includes("pagination") || title.includes("UI-04")
+				? "many"
+				: "base";
 		return cy.seedLiquidity(scenario).then((data) => {
 			context = data;
 		});
 	});
 	after(() => cy.cleanupLiquidity());
+
+	const openSource = (doctype, metric = "Forecast") => {
+		cy.get(".frappe-control[data-fieldname=sources] .grid-body .grid-row").should(
+			"have.length",
+			14
+		);
+		cy.window().should((win) =>
+			expect(win.cur_frm?.doctype).to.eq("Payment Calendar Settings")
+		);
+		cy.window().then((win) => {
+			const row = win.cur_frm.doc.sources.find(
+				(item) => item.source_doctype === doctype && item.metric === metric
+			);
+			cy.get(
+				`[data-fieldname=sources] .grid-row[data-name='${row.name}'] .btn-open-row`
+			).click();
+		});
+		cy.get("[data-fieldname=sources] .grid-row-open .grid-form-body").should("be.visible");
+	};
+	const settingsPage = () => {
+		cy.login("operator");
+		cy.visit("/app/payment-calendar-settings");
+		cy.get(".frappe-control[data-fieldname=sources] .grid-body .grid-row").should(
+			"have.length",
+			14
+		);
+	};
+	const saveSettings = () => {
+		cy.get(".grid-row-open .grid-collapse-row:visible").click();
+		cy.intercept("**/api/method/frappe.desk.form.save.savedocs*").as("settingsSaved");
+		cy.get(".page-head .primary-action:visible").click();
+		cy.wait("@settingsSaved").then(({ request, response }) => {
+			const doc = JSON.parse(new URLSearchParams(request.body).get("doc"));
+			const dates = doc.sources.map((row) => [
+				row.metric,
+				row.source_doctype,
+				row.date_field,
+				row.fallback_date_field,
+			]);
+			expect(response.statusCode, JSON.stringify(dates)).to.eq(200);
+		});
+	};
+
+	testCase("SC-01 saves and reloads Sources and Links with metadata date choices", () => {
+		settingsPage();
+		cy.window().then((win) => {
+			expect(
+				win.cur_frm.meta.fields
+					.filter((field) => field.fieldtype === "Table")
+					.map((field) => field.fieldname)
+			).to.have.members(["sources", "links"]);
+			expect(win.cur_frm.meta.fields.some((field) => /fifo/i.test(field.fieldname))).to.eq(
+				false
+			);
+		});
+		openSource("Sales Invoice");
+		cy.get(".grid-row-open .grid-form-body [data-fieldname=date_field] select:visible")
+			.find("option[value=posting_date]")
+			.should("not.be.empty");
+		cy.get(".grid-row-open .grid-form-body [data-fieldname=date_field] select:visible").select(
+			"posting_date"
+		);
+		saveSettings();
+		cy.reload();
+		openSource("Sales Invoice");
+		cy.window().should((win) =>
+			expect(
+				win.cur_frm.doc.sources.find(
+					(row) => row.source_doctype === "Sales Invoice" && row.metric === "Forecast"
+				).date_field
+			).to.eq("posting_date")
+		);
+		cy.openLiquidity(context);
+		cy.window().should((win) =>
+			expect(
+				win.frappe.query_report.__liquidityView.payload.directions.in.total__forecast
+			).to.eq(40)
+		);
+		cy.get(grid + " .ag-cell[col-id='total__combined']")
+			.first()
+			.dblclick();
+		cy.get(".liquidity-details tbody tr").should("contain", context.from_date);
+	});
+
+	testCase("SC-02 denies Settings read and write to a project report user", () => {
+		cy.openLiquidity(context, {}, "manager");
+		cy.call("frappe.client.get", { doctype: "Payment Calendar Settings" }, false)
+			.its("status")
+			.should("eq", 403);
+		cy.call(
+			"frappe.client.save",
+			{
+				doc: JSON.stringify({
+					doctype: "Payment Calendar Settings",
+					name: "Payment Calendar Settings",
+					sources: [],
+				}),
+			},
+			false
+		)
+			.its("status")
+			.should("eq", 403);
+		cy.get(grid + " .ag-root").should("be.visible");
+	});
+
+	testCase(
+		"SC-03 draft Payment Entry refines forecast then submits and cancels without duplicates",
+		() => {
+			cy.call("dinext_projects_pl.tests.liquidity_ui_helpers.draft_entry", {
+				invoice_name: context.invoice,
+			}).then(({ body }) => {
+				const entry = body.message.name;
+				cy.openLiquidity(context);
+				cy.get(grid + " .ag-cell[col-id='total__combined']")
+					.first()
+					.dblclick();
+				cy.get(".liquidity-details").should("contain", entry);
+				cy.get(".modal:visible .modal-header .btn-modal-close").click();
+				cy.login("operator");
+				cy.visit("/app");
+				cy.call("dinext_projects_pl.tests.liquidity_ui_helpers.draft_entry", {
+					invoice_name: context.invoice,
+					action: "submit",
+					entry_name: entry,
+				});
+				cy.openLiquidity(context);
+				cy.window().should((win) => {
+					const sums = win.frappe.query_report.__liquidityView.payload.directions.in;
+					expect(sums.total__forecast).to.eq(20);
+					expect(sums.total__actual).to.eq(40);
+				});
+				cy.login("operator");
+				cy.visit("/app");
+				cy.call("dinext_projects_pl.tests.liquidity_ui_helpers.draft_entry", {
+					invoice_name: context.invoice,
+					action: "cancel",
+					entry_name: entry,
+				});
+				cy.openLiquidity(context);
+				cy.window().should((win) =>
+					expect(
+						win.frappe.query_report.__liquidityView.payload.directions.in
+							.total__forecast
+					).to.eq(40)
+				);
+			});
+		}
+	);
+
+	testCase("SC-04 shows fixed FIFO request100 invoice60 payment20 as forecast80", () => {
+		cy.openLiquidity(context);
+		cy.get(grid + " [col-id='total__combined']").should("contain", "80");
+		cy.get(grid + " .ag-cell[col-id='total__combined']")
+			.first()
+			.dblclick();
+		cy.get(".liquidity-details")
+			.should("contain", "FIFO")
+			.and("contain", context.request)
+			.and("contain", context.invoice);
+		cy.get(".liquidity-details tbody tr").should("have.length", 2);
+	});
+
+	testCase(
+		"SC-05 disabling a refinement link retains debt and restores the invoice date",
+		() => {
+			settingsPage();
+			cy.window().then((win) => {
+				const row = win.cur_frm.doc.links.find(
+					(item) =>
+						item.metric === "Forecast" &&
+						item.source_doctype === "Sales Invoice" &&
+						item.target_doctype === "Payment Request"
+				);
+				cy.get(
+					`[data-fieldname=links] .grid-row[data-name='${row.name}'] .btn-open-row`
+				).click();
+			});
+			cy.get(
+				"[data-fieldname=links] .grid-row-open .grid-form-body [data-fieldname=enabled] input:visible"
+			).uncheck();
+			saveSettings();
+			cy.openLiquidity(context);
+			cy.get(grid + " [col-id='total__combined']").should("contain", "80");
+			cy.get(grid + " .ag-cell[col-id='total__combined']")
+				.first()
+				.dblclick();
+			cy.get(".liquidity-details tbody tr").should("contain", context.invoice);
+			cy.window()
+				.then((win) => {
+					const view = win.frappe.query_report.__liquidityView;
+					return win.frappe.xcall(API + "get_cell_details", {
+						filters: view.filters,
+						node_key: "root",
+						period_key: "total",
+						metric: "forecast",
+						expected_settings_version: view.payload.settings_version,
+					});
+				})
+				.then((details) =>
+					expect(
+						details.rows.every((row) => row.date_source.doctype === "Sales Invoice")
+					).to.eq(true)
+				);
+		}
+	);
+
+	testCase(
+		"SC-06 source selection recalculates projected opening before the display range",
+		() => {
+			const start = new Date(context.from_date + "T00:00:00Z");
+			start.setUTCDate(start.getUTCDate() + 30);
+			const from = start.toISOString().slice(0, 10);
+			cy.openLiquidity(context, { from_date: from });
+			cy.window().should((win) =>
+				expect(
+					win.frappe.query_report.__liquidityView.payload.balances.periods[0]
+						.projected_opening
+				).to.eq(100)
+			);
+			settingsPage();
+			openSource("Payment Request");
+			cy.get(
+				"[data-fieldname=sources] .grid-row-open .grid-form-body [data-fieldname=enabled] input:visible"
+			).uncheck();
+			saveSettings();
+			cy.openLiquidity(context, { from_date: from });
+			cy.window().should((win) => {
+				const balances = win.frappe.query_report.__liquidityView.payload.balances;
+				expect(balances.periods[0].projected_opening).to.eq(0);
+				expect(balances.current_cash).to.eq(0);
+			});
+		}
+	);
+
+	testCase("SC-07 stale settings refreshes the report before expanding the tree", () => {
+		let oldVersion;
+		cy.openLiquidity(context);
+		cy.window().then((win) => {
+			oldVersion = win.frappe.query_report.__liquidityView.payload.settings_version;
+		});
+		cy.call("frappe.client.get", { doctype: "Payment Calendar Settings" }).then(({ body }) => {
+			const doc = body.message;
+			doc.sources.find(
+				(row) => row.metric === "Forecast" && row.source_doctype === "Sales Invoice"
+			).date_field = "posting_date";
+			return cy.call("frappe.client.save", { doc: JSON.stringify(doc) });
+		});
+		cy.get("[data-testid=liquidity-depth]").select("7");
+		cy.window().should((win) =>
+			expect(win.frappe.query_report.__liquidityView.payload.settings_version).not.to.eq(
+				oldVersion
+			)
+		);
+		cy.get(grid + " .ag-root").should("be.visible");
+		cy.get("[data-fieldname=company] input").should("have.value", context.company);
+	});
+
+	testCase(
+		"SC-08 exports FIFO80 with the applied settings version from a collapsed tree",
+		() => {
+			cy.openLiquidity(context);
+			cy.get("[data-testid=liquidity-depth]").select("1");
+			cy.task("clearLiquidityWorkbook");
+			cy.get("[data-testid=liquidity-export]").click();
+			cy.readFile("cypress/downloads/liquidity-payment-calendar.xlsx", "binary").should(
+				"have.length.greaterThan",
+				1000
+			);
+			cy.task("readLiquidityWorkbook").then((book) => {
+				expect(book.rows[1].at(-1)).to.eq(80);
+				expect(book.sheets).to.be.at.least(5);
+			});
+		}
+	);
+
+	testCase(
+		"SC-09 keeps the detail header aligned while scrolling both axes in both themes",
+		() => {
+			cy.openLiquidity(context);
+			cy.get("[data-testid=liquidity-plan]").check();
+			cy.get(grid + " .ag-cell[col-id='total__plan']")
+				.first()
+				.dblclick();
+			for (const theme of ["light", "dark"]) {
+				cy.window().then((win) =>
+					win.document.documentElement.setAttribute("data-theme", theme)
+				);
+				cy.get(".liquidity-detail-scroll").scrollTo(200, 250);
+				cy.get(".liquidity-detail-scroll").should(($scroll) => {
+					const scroll = $scroll[0];
+					const header = scroll.querySelector("thead th");
+					const bounds = scroll.getBoundingClientRect();
+					expect(scroll.scrollTop).to.be.greaterThan(0);
+					expect(scroll.scrollLeft).to.be.greaterThan(0);
+					expect(header.getBoundingClientRect().top - bounds.top).to.be.within(-1, 2);
+					expect(getComputedStyle(header).backgroundColor).not.to.eq("rgba(0, 0, 0, 0)");
+				});
+				cy.get(".liquidity-detail-dialog .liquidity-toolbar").should("be.visible");
+				cy.screenshot("liquidity-settings-detail-" + theme, { capture: "viewport" });
+			}
+		}
+	);
+
+	testCase(
+		"SC-10 preserves Total scrollbar background border and row alignment in fullscreen themes",
+		() => {
+			cy.openLiquidity(context);
+			for (const theme of ["light", "dark"]) {
+				cy.window().then((win) =>
+					win.document.documentElement.setAttribute("data-theme", theme)
+				);
+				for (const fullscreen of [false, true]) {
+					if (fullscreen)
+						cy.get(grid + " .dinext-table-toolbar-group--end button")
+							.last()
+							.realClick();
+					cy.get(grid).should(($grid) => {
+						const spacer = $grid[0].querySelector(".ag-horizontal-right-spacer");
+						const root = $grid[0].querySelector(".ag-root-wrapper");
+						expect(getComputedStyle(spacer).backgroundColor).to.eq(
+							getComputedStyle(root).backgroundColor
+						);
+						expect(getComputedStyle(spacer).borderLeftWidth).to.eq("1px");
+						const pinned = $grid[0].querySelector(
+							".ag-pinned-right-cols-container .ag-row"
+						);
+						const central = [
+							...$grid[0].querySelectorAll(".ag-center-cols-container .ag-row"),
+						].find(
+							(row) => row.getAttribute("row-id") === pinned.getAttribute("row-id")
+						);
+						expect(
+							Math.abs(
+								pinned.getBoundingClientRect().top -
+									central.getBoundingClientRect().top
+							)
+						).to.be.lessThan(1);
+					});
+					if (fullscreen)
+						cy.get(grid + " .dinext-table-toolbar-group--end button")
+							.last()
+							.realClick();
+				}
+				cy.screenshot("liquidity-settings-total-" + theme, { capture: "viewport" });
+			}
+		}
+	);
 
 	testCase(
 		"TN-01 renders metadata icons and safe fallbacks in all tree groupings and themes",
@@ -212,7 +568,10 @@ describe("Liquidity Payment Calendar", () => {
 				cy.window().then((win) =>
 					win.document.documentElement.setAttribute("data-theme", theme)
 				);
-				cy.get(".liquidity-detail-scroll").scrollTo("right", { ensureScrollable: false });
+				// Keep the first stages below the sticky header while scrolling horizontally.
+				cy.get(".liquidity-detail-scroll").scrollTo("100%", 0, {
+					ensureScrollable: false,
+				});
 				cy.get(request).should("be.visible");
 				cy.screenshot("liquidity-payment-stages-" + theme, { capture: "viewport" });
 			}

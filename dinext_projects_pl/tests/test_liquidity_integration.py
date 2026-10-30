@@ -8,6 +8,7 @@ from frappe.utils import add_days, today
 from openpyxl import load_workbook
 
 from dinext_projects_pl.liquidity.api import calendar, get_calendar, get_cell_details, make_workbook
+from dinext_projects_pl.liquidity.settings import SETTINGS, initial_profile
 from dinext_projects_pl.tests import liquidity_fixtures as fixtures
 
 
@@ -17,6 +18,74 @@ def deny_test_project(doc, **kwargs):
 
 
 class TestLiquidityIntegration(FrappeTestCase):
+	def test_draft_foreign_cash_revalues_book_debt_then_becomes_gl_actual(self):
+		from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+
+		invoice = fixtures.purchase_invoice(self.context, currency="EUR", rate=4)
+		entry = get_payment_entry(
+			invoice.doctype,
+			invoice.name,
+			bank_account=self.context["bank"],
+			party_amount=100,
+			bank_amount=300,
+		)
+		entry.posting_date = today()
+		entry.reference_no, entry.reference_date = "Liquidity draft exchange test", today()
+		entry.target_exchange_rate = 3
+		entry.set_amounts()
+		entry.insert()
+		result = get_calendar(self.filters)
+		self.assertTrue(result["complete"], result["warnings"])
+		self.assertEqual(result["directions"]["out"]["total__forecast"], 300)
+		self.assertEqual(result["directions"]["out"].get("total__actual", 0), 0)
+		entry.submit()
+		result = get_calendar(self.filters)
+		self.assertEqual(result["directions"]["out"].get("total__forecast", 0), 0)
+		self.assertEqual(result["directions"]["out"]["total__actual"], 300)
+
+	def test_expected_details_keep_cash_account_permissions_and_real_balance_anchor(self):
+		order = fixtures.sales_order(self.context)
+		invoice = fixtures.sales_invoice(order, 60)
+		fixtures.pay(self.context, invoice, 20)
+		self.assertEqual(get_cell_details(self.filters, "root", "total", "forecast")["total"], 40)
+		result = get_calendar(self.filters)
+		opening = get_cell_details(self.filters, "root", result["periods"][0]["key"], "projected_opening")
+		self.assertEqual(opening["total"], 20)
+		with self.assertRaises(frappe.PermissionError):
+			get_cell_details(
+				dict(self.filters, accounts=["Unpermitted liquidity account"]), "root", "total", "forecast"
+			)
+
+	def test_zero_forecast_cell_on_plan_only_order_keeps_valid_node(self):
+		order = fixtures.sales_order(self.context)
+		result = get_calendar(self.filters, depth=7)
+
+		def flatten(rows):
+			return [node for row in rows for node in [row, *flatten(row.get("children", []))]]
+
+		row = next(
+			row for row in flatten(result["rows"]) if row.get("document", {}).get("name") == order.name
+		)
+		details = get_cell_details(self.filters, row["id"], "total", "forecast")
+		self.assertEqual((details["count"], details["total"]), (0, 0))
+
+	def test_order_for_future_submitted_entry_refines_invoice_without_default_entry_source(self):
+		from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+
+		invoice = fixtures.purchase_invoice(self.context)
+		entry = get_payment_entry(invoice.doctype, invoice.name, bank_account=self.context["bank"])
+		entry.posting_date = add_days(today(), 3)
+		entry.reference_no = "Liquidity future entry test"
+		entry.reference_date = entry.posting_date
+		entry.paid_amount = entry.received_amount = 20
+		entry.references[0].allocated_amount = 20
+		entry.insert()
+		entry.submit()
+		fixtures.payment_order(self.context, entry=entry)
+		result = get_calendar(self.filters)
+		self.assertEqual(result["directions"]["out"]["total__forecast"], 100)
+		self.assertEqual(result["directions"]["out"].get("total__actual", 0), 0)
+
 	def test_tree_navigation_targets_metadata_and_lazy_children(self):
 		from dinext_projects_pl.liquidity.api import get_children
 
@@ -53,7 +122,7 @@ class TestLiquidityIntegration(FrappeTestCase):
 					self.assertEqual(row["level"], "direction")
 			root = get_calendar(filters)["rows"][0]
 			lazy = get_children(filters, root["id"])
-			self.assertTrue(lazy[0].get("document"))
+			self.assertTrue(lazy["rows"][0].get("document"))
 
 	def test_tree_navigation_does_not_link_unreadable_counterparty(self):
 		order = fixtures.sales_order(self.context)
@@ -114,6 +183,9 @@ class TestLiquidityIntegration(FrappeTestCase):
 		frappe.set_user("Administrator")
 		frappe.db.savepoint("liquidity_case")
 		self.addCleanup(lambda: frappe.db.rollback(save_point="liquidity_case"))
+		settings = frappe.get_doc(SETTINGS)
+		settings.update(initial_profile())
+		settings.save()
 		self.filters = {"company": fixtures.COMPANY, "from_date": today(), "to_date": add_days(today(), 90)}
 
 	def totals(self):
