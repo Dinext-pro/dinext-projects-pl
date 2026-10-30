@@ -62,7 +62,7 @@ def calendar(
 		normalized = Filters.parse(filters, as_date(today()))
 	except (ValueError, TypeError, OverflowError):
 		frappe.throw(_("Invalid calendar filters"))
-	loader, snapshot = load(normalized, include_cash=include_cash)
+	loader, snapshot = load(normalized, include_cash=include_cash, expected_metrics=expected_metrics)
 	if followup or expected_settings_version is not None:
 		require_version(snapshot, expected_settings_version)
 	flows = calculate(snapshot, include_zero=normalized.show_zero, expected_metrics=expected_metrics)

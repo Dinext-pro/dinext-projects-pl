@@ -11,7 +11,7 @@ jobs:
   cypress:
     name: Cypress acceptance
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 60
     services:
       mariadb:
         image: mariadb:10.6
@@ -86,6 +86,8 @@ jobs:
         path: '${{ runner.temp }}/*-unit.xml
 
           ${{ runner.temp }}/dinext-test-bench/apps/dinext_projects_pl/cypress/results/
+
+          ${{ runner.temp }}/liquidity-benchmark.json
 
           ${{ runner.temp }}/dinext-test-bench/apps/dinext_projects_pl/cypress/screenshots/'
         if-no-files-found: error

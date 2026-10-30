@@ -2,6 +2,7 @@
 
 import json
 import os
+import platform
 import subprocess
 import time
 import urllib.error
@@ -96,6 +97,39 @@ def main():
 		summary.write(
 			"### Liquidity UI acceptance\n\n63 passed; 0 failures/errors/skips. Real ERPNext documents and browser.\n"
 		)
+	# A separate CLI run after the browser has stopped makes the 10k performance
+	# gate reproducible on the declared hosted runner, without competing tests.
+	try:
+		run("bench", "--site", site, "execute", "dinext_projects_pl.tests.liquidity_ui_helpers.bootstrap")
+		run(
+			"bench",
+			"--site",
+			site,
+			"execute",
+			"dinext_projects_pl.tests.liquidity_benchmark.run",
+			"--kwargs",
+			json.dumps({"chains": 2000, "repetitions": 5}),
+		)
+	finally:
+		credentials.unlink(missing_ok=True)
+	result = json.loads(Path("/tmp/liquidity-benchmark.json").read_text())
+	result["runner_environment"] = {
+		"platform": platform.platform(),
+		"logical_cpus": os.cpu_count(),
+		"github_sha": os.environ["GITHUB_SHA"],
+		"run_id": os.environ["GITHUB_RUN_ID"],
+	}
+	(Path(os.environ["RUNNER_TEMP"]) / "liquidity-benchmark.json").write_text(json.dumps(result, indent=2))
+	assert result["source_documents"] == 10000 and result["chains"] == 2000
+	assert result["user_mode"] == "financier" and result["settings_version"] and result["code_sha256"]
+	measurements = result["measurements"]
+	assert len(measurements) == 10
+	for operation, limit in (("summary", 5), ("details", 2)):
+		values = [record["seconds"] for record in measurements if record["operation"] == operation]
+		assert len(values) == 5
+		with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+			summary.write(f"\n10,000-source {operation}: {values}; target ≤{limit}s for every run.\n")
+		assert all(0 < value <= limit for value in values), (operation, values, limit)
 
 
 if __name__ == "__main__":

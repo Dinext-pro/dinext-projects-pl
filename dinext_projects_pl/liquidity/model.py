@@ -206,13 +206,13 @@ def periods(filters: Filters) -> list[Period]:
 	return result
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(frozen=True, order=True, slots=True)
 class Link:
 	doctype: str
 	name: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Analytic:
 	project: str = ""
 	party_type: str = ""
@@ -222,14 +222,14 @@ class Analytic:
 	invoice: Link | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Share:
 	key: str
 	weight: Decimal
 	analytic: Analytic
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Stage:
 	key: str
 	due: date | None
@@ -270,7 +270,7 @@ def remaining_stages(
 	return [Stage(s.key, s.due, a, s.term) for s, a in zip(stages, amounts, strict=True) if a]
 
 
-@dataclass
+@dataclass(slots=True)
 class Obligation:
 	source: Link
 	direction: str
@@ -283,7 +283,7 @@ class Obligation:
 	paid_by_term: dict[str, Decimal] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(slots=True)
 class Request:
 	source: Link
 	direction: str

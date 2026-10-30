@@ -40,7 +40,7 @@ FINANCE_ROLES = {
 	"Z_Dinord_Financier",
 }
 PROJECT_ROLES = {"Projects Manager", "Project Manager", "Z_Dinord_Project_Manager", "Dinext_Project_Manager"}
-FINANCIAL_FIELDS = "company project customer supplier currency conversion_rate party_account_currency base_grand_total base_rounded_total grand_total rounded_total disable_rounded_total outstanding_amount advance_paid due_date posting_date transaction_date status is_return return_against base_paid_amount base_write_off_amount".split()
+FINANCIAL_FIELDS = "company project customer supplier currency conversion_rate party_account_currency base_grand_total base_rounded_total grand_total rounded_total disable_rounded_total outstanding_amount due_date posting_date transaction_date status is_return".split()
 
 
 def chunks(values, size=500):
@@ -49,11 +49,11 @@ def chunks(values, size=500):
 		yield values[i : i + size]
 
 
-def fields_for(doctype, fields):
+def fields_for(doctype, fields, *, owner=True):
 	meta = frappe.get_meta(doctype)
 	return [
 		f
-		for f in dict.fromkeys(["name", "owner", *fields])
+		for f in dict.fromkeys(["name", *(("owner",) if owner else ()), *fields])
 		if f in ("name", "owner", "parent", "parenttype", "idx", "docstatus", "creation", "modified")
 		or meta.has_field(f)
 	]
@@ -157,7 +157,7 @@ class Loader:
 				frappe.get_all(
 					doctype,
 					filters={"parenttype": parenttype, "parent": ["in", batch]},
-					fields=fields_for(doctype, ["parent", "idx", *fields]),
+					fields=fields_for(doctype, ["parent", "idx", *fields], owner=False),
 					order_by="parent asc, idx asc",
 					limit_page_length=0,
 				)
@@ -193,7 +193,7 @@ class Loader:
 			else [1]
 		)
 
-	def load(self, *, include_cash=True):
+	def load(self, *, include_cash=True, expected_metrics=None):
 		f = self.filters
 		projects = self.parents("Project", ["custom_project_portfolio"], {"company": f.company})
 		self.allowed_projects = {p.name for p in projects}
@@ -222,10 +222,16 @@ class Loader:
 					"base_amount",
 				],
 			)
+			metrics = ("plan", "forecast") if expected_metrics is None else expected_metrics
+			order_stages_needed = (
+				dt not in ORDERS
+				or not self.policy
+				or any(self.policy.source(metric, dt).enabled for metric in metrics)
+			)
 			self.schedules[dt] = self.children(
 				"Payment Schedule",
 				dt,
-				self.docs[dt],
+				self.docs[dt] if order_stages_needed else (),
 				["payment_term", "due_date", "base_payment_amount", "payment_amount"],
 			)
 			if dt in INVOICES:
@@ -1069,10 +1075,10 @@ class Loader:
 		return parts
 
 
-def load(filters, *, include_cash=True):
+def load(filters, *, include_cash=True, expected_metrics=None):
 	from .settings import load_policy
 
 	require_access(filters.company)
 	loader = Loader(filters, load_policy())
-	snapshot = loader.load(include_cash=include_cash)
+	snapshot = loader.load(include_cash=include_cash, expected_metrics=expected_metrics)
 	return loader, snapshot
