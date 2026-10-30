@@ -1727,7 +1727,8 @@ describe("Liquidity Payment Calendar", () => {
 				.and.include(context.invoice)
 				.and.include(context.payment);
 			expect(book.sheets).to.eq(5);
-			expect(book.allocations.length).to.be.greaterThan(1);
+			expect(book.allocations[0]).to.have.length(7);
+			expect(book.sheet_names).to.include("Распределения");
 		});
 	});
 
