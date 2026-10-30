@@ -245,6 +245,8 @@ Open the **Payment Calendar Settings** Single from Desk search. Its only busines
 
 **Sources** has an independent row for each metric/DocType combination. It controls participation in Plan, Forecast or both; enabled state; priority; Draft/Submitted/Both document state; allowed business states; expected date field and fallback. Date choices come from installed Date/Datetime metadata and supported payment schedules. Empty business-state selection accepts all states allowed by the document-state rule; canceled documents are always excluded.
 
+An omitted source row does not participate in that metric; any enabled link must reference configured source rows.
+
 **Links** sets directed refinement relationships separately for Plan and Forecast. Links follow strictly increasing priorities; duplicate sources/links, unsupported fields/states and cycles are rejected. An unmatched amount remains an independent expected amount. There are **no FIFO parameters** in Settings: matching fields, gross coverage, queue dates/order and explicit-link precedence remain fixed in code.
 
 Initial profile (fourteen source rows, seven per metric; thirty-eight forward links):

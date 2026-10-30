@@ -93,6 +93,37 @@ class TestPaymentCalendarSettings(FrappeTestCase):
 		self.assertEqual(len(self.settings.sources), 14)
 		self.assertEqual(load_policy().version, expected)
 
+	def test_omitted_sources_are_disabled_in_a_valid_sparse_profile(self):
+		order = fixtures.sales_order(self.context)
+		invoice = fixtures.sales_invoice(order, 60)
+		fixtures.pay(self.context, invoice, 20)
+		baseline = get_calendar(self.filters)
+		row = self.source("Sales Invoice").as_dict()
+		self.settings.set("sources", [row])
+		self.settings.set("links", [])
+		self.settings.save()
+		self.assertIsNone(load_policy().source("plan", "Sales Order"))
+		result = get_calendar(self.filters)
+		self.assertEqual(result["directions"]["in"].get("total__plan", 0), 0)
+		self.assertEqual(result["directions"]["in"]["total__forecast"], 40)
+		self.assertEqual(
+			result["directions"]["in"]["total__actual"],
+			baseline["directions"]["in"]["total__actual"],
+		)
+		children = get_children(self.filters, expected_settings_version=result["settings_version"])
+		self.assertEqual(children["settings_version"], result["settings_version"])
+		details = get_cell_details(
+			self.filters,
+			"root",
+			"total",
+			"forecast",
+			expected_settings_version=result["settings_version"],
+		)
+		self.assertEqual(details["total"], 40)
+		self.assertEqual(details["settings_version"], result["settings_version"])
+		workbook = load_workbook(BytesIO(make_workbook(calendar(self.filters))))
+		self.assertIn("Allocations", workbook.sheetnames)
+
 	def test_invalid_metadata_duplicate_state_and_cycle_are_rejected(self):
 		for field, value in (
 			("date_field", "grand_total"),

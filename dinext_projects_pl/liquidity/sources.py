@@ -226,7 +226,10 @@ class Loader:
 			order_stages_needed = (
 				dt not in ORDERS
 				or not self.policy
-				or any(self.policy.source(metric, dt).enabled for metric in metrics)
+				or any(
+					source.enabled and source.doctype == dt and source.metric in metrics
+					for source in self.policy.sources
+				)
 			)
 			self.schedules[dt] = self.children(
 				"Payment Schedule",
