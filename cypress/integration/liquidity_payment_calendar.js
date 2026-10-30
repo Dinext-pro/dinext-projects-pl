@@ -110,6 +110,30 @@ describe("Liquidity Payment Calendar", () => {
 		);
 		saveSettings();
 		cy.reload();
+		openSource("Payment Request");
+		for (const theme of ["light", "dark"]) {
+			cy.window().then((win) => {
+				win.document.documentElement.setAttribute("data-theme", theme);
+				const source = win.cur_frm.doc.sources.find(
+					(row) => row.source_doctype === "Payment Request" && row.metric === "Forecast"
+				);
+				const states = source.statuses.split("\n").filter(Boolean);
+				expect(states.length, "seeded business states").to.be.greaterThan(0);
+				cy.get(".grid-row-open [data-fieldname=statuses] .control-value:visible").should(
+					($field) => {
+						for (const state of states) {
+							expect($field.text(), theme + " localized state").to.include(
+								win.__(state)
+							);
+						}
+					}
+				);
+			});
+		}
+		cy.get(".grid-row-open .grid-collapse-row:visible").click();
+		cy.window().then((win) =>
+			win.document.documentElement.setAttribute("data-theme", "light")
+		);
 		openSource("Sales Invoice");
 		cy.window().should((win) =>
 			expect(

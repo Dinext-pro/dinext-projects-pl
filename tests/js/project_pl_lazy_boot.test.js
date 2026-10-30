@@ -11,9 +11,15 @@ function projectRefreshHarness({ warm = false } = {}) {
 	let loads = 0;
 	let finishBundle;
 	const wrapper = {
-		addClass() { return this; },
-		empty() { return this; },
-		appendTo() { return this; },
+		addClass() {
+			return this;
+		},
+		empty() {
+			return this;
+		},
+		appendTo() {
+			return this;
+		},
 	};
 	const binder = (frm, field, mount) => bindings.push({ frm, field, mount });
 	const context = {
@@ -37,7 +43,9 @@ function projectRefreshHarness({ warm = false } = {}) {
 					};
 				});
 			},
-			call() { throw new Error("Inactive financial tabs must not fetch data"); },
+			call() {
+				throw new Error("Inactive financial tabs must not fetch data");
+			},
 			ui: { form: { on: (_doctype, events) => handlers.push(events) } },
 		},
 	};
@@ -45,7 +53,11 @@ function projectRefreshHarness({ warm = false } = {}) {
 	if (warm) context.project_workload_assignment = { bindLazyTabMount: binder };
 	vm.createContext(context);
 	// Same relative order as doctype_js; execute the actual refresh/loader chain.
-	for (const file of ["project_budget_tab.js", "project_budget_metrics.js", "project_budget_dashboard.js"]) {
+	for (const file of [
+		"project_budget_tab.js",
+		"project_budget_metrics.js",
+		"project_budget_dashboard.js",
+	]) {
 		const source = path.resolve(__dirname, "../../dinext_projects_pl/public/js", file);
 		vm.runInContext(fs.readFileSync(source, "utf8"), context, { filename: source });
 	}
@@ -78,9 +90,10 @@ test("cold Project refresh waits for its bundle before binding metrics and dashb
 	harness.finishBundle();
 	await refresh;
 	assert.deepEqual(harness.errors, []);
-	assert.deepEqual(harness.bindings.map(({ field }) => field), [
-		"custom_planning", "custom_metrics", "custom_pl_summary",
-	]);
+	assert.deepEqual(
+		harness.bindings.map(({ field }) => field),
+		["custom_planning", "custom_metrics", "custom_pl_summary"]
+	);
 	assert.ok(harness.bindings.every(({ mount }) => typeof mount === "function"));
 });
 
@@ -89,7 +102,8 @@ test("warm Project refresh binds all financial tabs without fetching the bundle 
 	await harness.refresh();
 	assert.equal(harness.loads(), 0);
 	assert.deepEqual(harness.errors, []);
-	assert.deepEqual(harness.bindings.map(({ field }) => field), [
-		"custom_planning", "custom_metrics", "custom_pl_summary",
-	]);
+	assert.deepEqual(
+		harness.bindings.map(({ field }) => field),
+		["custom_planning", "custom_metrics", "custom_pl_summary"]
+	);
 });

@@ -402,3 +402,14 @@ FIFO,FIFO
 Unreconciled payment instruction allocation,Не удалось сверить распределение платежного документа
 Payment instruction exceeds its obligation,Сумма платёжного распоряжения превышает обязательство
 Unsupported request settlement currency; forecast is incomplete,Валюта погашения заявки не поддерживается; прогноз неполон
+Duplicate liquidity component,Повторяющийся компонент денежного потока
+Invalid calendar filter,Недопустимое значение фильтра календаря
+Invalid monetary value,Недопустимая денежная сумма
+Invalid zero rows flag,Недопустимое значение флага нулевых строк
+Missing allocation weights,Не указаны веса распределения
+Negative allocation amount,Отрицательная сумма распределения
+Negative allocation weight,Отрицательный вес распределения
+Partly Paid and Discounted,Частично оплачено со скидкой
+Select a valid date range of up to three years,Выберите корректный диапазон дат не более трёх лет
+Select at least one valid metric,Выберите хотя бы один допустимый показатель
+Unknown calendar filter,Неизвестный фильтр календаря

@@ -16,6 +16,16 @@ frappe.ui.form.on("Payment Calendar Source", {
 		const row = locals[cdt][cdn];
 		const choices = frm.calendar_catalog?.[row.source_doctype]?.dates || [];
 		const gridRow = frm.fields_dict.sources.grid.grid_rows_by_docname[cdn];
+		const statesControl = gridRow?.grid_form?.fields_dict.statuses;
+		if (statesControl) {
+			statesControl.df.formatter = (value) =>
+				String(value || "")
+					.split("\n")
+					.filter(Boolean)
+					.map((state) => frappe.utils.escape_html(__(state)))
+					.join("<br>");
+			statesControl.refresh_input();
+		}
 		for (const fieldname of ["date_field", "fallback_date_field"]) {
 			const control = gridRow?.grid_form?.fields_dict[fieldname];
 			if (!control) continue;

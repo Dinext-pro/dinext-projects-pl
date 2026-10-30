@@ -1,4 +1,5 @@
 // Клиентский скрипт для Doctype "Project"
+/* global dinext_projects, dinext_projects_pl */
 frappe.provide("dinext_projects_pl");
 
 const PROJECT_BUDGET_TAB_FIELDNAME = "custom_pl";
