@@ -465,8 +465,14 @@ class Loader:
 					)
 					for share, gross, paid in zip(shares, parts, paid_parts, strict=True):
 						if share.analytic.order:
-							billed_orders[share.analytic.order] += gross
-							settled_orders[share.analytic.order] += paid
+							order = self.docs[share.analytic.order.doctype][share.analytic.order.name]
+							factor = (
+								decimal(order.conversion_rate) / rate
+								if order.currency == doc.currency
+								else Decimal(1)
+							)
+							billed_orders[share.analytic.order] += gross * factor
+							settled_orders[share.analytic.order] += paid * factor
 				else:
 					outstanding = total - settled_orders[link]
 					if doc.status == "Closed":

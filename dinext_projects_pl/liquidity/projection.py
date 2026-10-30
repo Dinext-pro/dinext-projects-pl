@@ -364,6 +364,7 @@ def apply_instructions(snapshot, metric, flows):
 	by_reference = defaultdict(set)
 	by_order = defaultdict(set)
 	next_slot = 0
+	valuations = {o.source: o for o in (*snapshot.orders, *snapshot.invoices, *snapshot.requests)}
 
 	def order_key(analytic):
 		return (analytic.order, analytic.project, analytic.party_type, analytic.party, analytic.contract)
@@ -433,6 +434,11 @@ def apply_instructions(snapshot, metric, flows):
 		)
 		cash_budget = instruction.remaining
 		original_budget = money(cash_budget / instruction.rate, snapshot.precision)
+		share_budgets = (
+			[budget]
+			if len(instruction.shares) == 1
+			else allocate(budget, [s.weight for s in instruction.shares], snapshot.precision)
+		)
 		candidates = set(by_reference[instruction.source])
 		if instruction.target:
 			candidates.update(by_reference[instruction.target])
@@ -444,15 +450,21 @@ def apply_instructions(snapshot, metric, flows):
 			if budget <= 0:
 				break
 			flow = active[slot]
-			analytical = any(
-				share.analytic == flow.analytic
+			matched_shares = [
+				index
+				for index, share in enumerate(instruction.shares)
+				if share.analytic == flow.analytic
 				or (
 					flow.source.doctype in ("Sales Order", "Purchase Order")
 					and replace(share.analytic, invoice=None) == flow.analytic
 				)
-				for share in instruction.shares
-			)
-			if not analytical or flow.direction != instruction.direction or flow.amount <= 0:
+				or (
+					instruction.target is not None
+					and instruction.target == flow.analytic.order
+					and replace(share.analytic, invoice=flow.analytic.invoice) == flow.analytic
+				)
+			]
+			if not matched_shares or flow.direction != instruction.direction or flow.amount <= 0:
 				continue
 			previous = flow.amount_source or flow.date_source or flow.source
 			previous_policy = snapshot.policy.source(metric, previous.doctype)
@@ -474,8 +486,25 @@ def apply_instructions(snapshot, metric, flows):
 			)
 			if previous_policy and previous_policy.priority > policy.priority:
 				can_refine = False
-			capacity = flow.obligation_amount if flow.obligation_amount is not None else flow.amount
-			amount = min(budget, capacity)
+			stored_capacity = flow.obligation_amount if flow.obligation_amount is not None else flow.amount
+			capacity = stored_capacity
+			target = valuations.get(instruction.target)
+			origin = valuations.get(flow.source)
+			if (
+				target
+				and target.source.doctype in ("Sales Order", "Purchase Order")
+				and origin
+				and target.currency == origin.currency
+			):
+				capacity *= target.rate / origin.rate
+			amount = min(budget, capacity, sum((share_budgets[i] for i in matched_shares), ZERO))
+			if amount <= 0:
+				continue
+			book_amount = (
+				stored_capacity
+				if amount == capacity
+				else money(stored_capacity * amount / capacity, snapshot.precision)
+			)
 			cash_amount = (
 				cash_budget if amount == budget else money(cash_budget * amount / budget, snapshot.precision)
 			)
@@ -487,6 +516,11 @@ def apply_instructions(snapshot, metric, flows):
 			budget -= amount
 			cash_budget -= cash_amount
 			original_budget -= original_amount
+			share_amount = amount
+			for index in matched_shares:
+				used = min(share_amount, share_budgets[index])
+				share_budgets[index] -= used
+				share_amount -= used
 			if not can_refine:
 				continue
 			due, own = expected_date(
@@ -497,7 +531,7 @@ def apply_instructions(snapshot, metric, flows):
 				flow.with_changes(
 					id=f"{flow.id}:{instruction.key}",
 					amount=cash_amount,
-					obligation_amount=amount,
+					obligation_amount=book_amount,
 					currency=instruction.currency,
 					original_amount=original_amount,
 					date=max(snapshot.today, due) if due else None,
@@ -523,11 +557,18 @@ def apply_instructions(snapshot, metric, flows):
 					flow.with_changes(
 						id=flow.id + ":remainder",
 						amount=money(flow.amount * (capacity - amount) / capacity, snapshot.precision),
-						obligation_amount=capacity - amount,
+						obligation_amount=stored_capacity - book_amount,
 						original_amount=flow.original_amount * (capacity - amount) / capacity,
 					)
 				)
-		if budget > 0 and not matched and instruction.shares:
+		if (
+			budget > 0
+			and instruction.shares
+			and (
+				not matched
+				or (instruction.target and instruction.target.doctype in ("Sales Order", "Purchase Order"))
+			)
+		):
 			due = expected_date(
 				policy, snapshot.documents.get(instruction.source, {}), timezone=snapshot.timezone
 			)[0]
@@ -543,7 +584,7 @@ def apply_instructions(snapshot, metric, flows):
 			)
 			for share, amount in zip(
 				instruction.shares,
-				allocate(cash_budget, [s.weight for s in instruction.shares], snapshot.precision),
+				allocate(cash_budget, share_budgets, snapshot.precision),
 				strict=True,
 			):
 				if amount > 0:

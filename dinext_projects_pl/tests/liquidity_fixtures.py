@@ -175,7 +175,7 @@ def setup_company():
 	}
 
 
-def sales_order(context, amount=100, project=True):
+def sales_order(context, amount=100, project=True, currency="USD", rate=1):
 	doc = frappe.get_doc(
 		{
 			"doctype": "Sales Order",
@@ -183,8 +183,8 @@ def sales_order(context, amount=100, project=True):
 			"customer": CUSTOMER,
 			"transaction_date": today(),
 			"delivery_date": add_days(today(), 7),
-			"currency": "USD",
-			"conversion_rate": 1,
+			"currency": currency,
+			"conversion_rate": rate,
 			"selling_price_list": "_Test Liquidity USD",
 			"price_list_currency": "USD",
 			"plc_conversion_rate": 1,

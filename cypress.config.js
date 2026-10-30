@@ -32,7 +32,7 @@ module.exports = {
 						"liquidity-payment-calendar.xlsx"
 					);
 					const script =
-						"import json,sys; from openpyxl import load_workbook; w=load_workbook(sys.argv[1]); print(json.dumps({'rows':[[c.value for c in r] for r in w.worksheets[0]],'numeric':sum(c.data_type=='n' for s in w for r in s for c in r),'sheets':len(w.worksheets)}))";
+						"import json,sys; from openpyxl import load_workbook; w=load_workbook(sys.argv[1]); a=next((s for s in w if s.title in ('Allocations','Распределения')),None); p=next((s for s in w if s.title in ('Parameters','Параметры')),None); print(json.dumps({'rows':[[c.value for c in r] for r in w.worksheets[0]],'numeric':sum(c.data_type=='n' for s in w for r in s for c in r),'sheets':len(w.worksheets),'sheet_names':w.sheetnames,'allocations':[[c.value for c in r] for r in a] if a else [],'parameters':[[c.value for c in r] for r in p] if p else []}))";
 					return JSON.parse(
 						execFileSync(
 							path.resolve(__dirname, "../../env/bin/python"),

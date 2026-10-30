@@ -18,6 +18,30 @@ def deny_test_project(doc, **kwargs):
 
 
 class TestLiquidityIntegration(FrappeTestCase):
+	def test_foreign_order_payment_and_draft_advance_keep_order_native_basis(self):
+		from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+		from erpnext.selling.doctype.sales_order.sales_order import make_sales_invoice
+
+		order = fixtures.sales_order(self.context, currency="EUR", rate=3)
+		invoice = make_sales_invoice(order.name)
+		invoice.conversion_rate = 4
+		invoice.items[0].qty = 0.6
+		invoice.set("payment_schedule", [])
+		invoice.insert()
+		invoice.submit()
+		fixtures.pay(self.context, invoice, 80, bank_amount=80)
+		before = get_calendar(self.filters)
+		self.assertEqual(before["directions"]["in"]["total__plan"], 240)
+		self.assertEqual(before["directions"]["in"]["total__forecast"], 160)
+		entry = get_payment_entry(
+			order.doctype, order.name, bank_account=self.context["bank"], party_amount=240, bank_amount=240
+		)
+		entry.insert()
+		result = get_calendar(self.filters)
+		self.assertTrue(result["complete"], result["warnings"])
+		self.assertEqual(result["directions"]["in"]["total__forecast"], 240)
+		self.assertEqual(result["directions"]["in"]["total__actual"], 80)
+
 	def test_draft_foreign_cash_revalues_book_debt_then_becomes_gl_actual(self):
 		from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 

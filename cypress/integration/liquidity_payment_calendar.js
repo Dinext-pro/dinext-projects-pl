@@ -306,7 +306,11 @@ describe("Liquidity Payment Calendar", () => {
 	testCase(
 		"SC-08 exports FIFO80 with the applied settings version from a collapsed tree",
 		() => {
+			let version;
 			cy.openLiquidity(context);
+			cy.window().then((win) => {
+				version = win.frappe.query_report.__liquidityView.payload.settings_version;
+			});
 			cy.get("[data-testid=liquidity-depth]").select("1");
 			cy.task("clearLiquidityWorkbook");
 			cy.get("[data-testid=liquidity-export]").click();
@@ -317,6 +321,8 @@ describe("Liquidity Payment Calendar", () => {
 			cy.task("readLiquidityWorkbook").then((book) => {
 				expect(book.rows[1].at(-1)).to.eq(80);
 				expect(book.sheets).to.be.at.least(5);
+				expect(book.allocations.slice(1).some((row) => row.includes("FIFO"))).to.eq(true);
+				expect(book.parameters.flat()).to.include(version);
 			});
 		}
 	);
@@ -1720,7 +1726,8 @@ describe("Liquidity Payment Calendar", () => {
 				.to.include(context.contract)
 				.and.include(context.invoice)
 				.and.include(context.payment);
-			expect(book.sheets).to.eq(4);
+			expect(book.sheets).to.eq(5);
+			expect(book.allocations.length).to.be.greaterThan(1);
 		});
 	});
 

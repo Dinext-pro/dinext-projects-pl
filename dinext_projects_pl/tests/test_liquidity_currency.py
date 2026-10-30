@@ -144,3 +144,73 @@ class TestRequestCurrency(unittest.TestCase):
 		self.assertTrue(s.complete, s.warnings)
 		self.assertEqual(sum(f.amount for f in flows), 120)
 		self.assertEqual(sum(f.amount for f in flows if f.payment == Link("Payment Entry", "PE")), 120)
+
+	def test_order_advance_refines_invoiced_and_unbilled_slices_without_duplicate(self):
+		from dataclasses import replace
+
+		from dinext_projects_pl.liquidity.calculation import calculate
+		from dinext_projects_pl.liquidity.expected_sources import load_instructions
+		from dinext_projects_pl.liquidity.model import Stage
+		from dinext_projects_pl.tests.test_liquidity_projection import invoice, snapshot
+
+		for order_rate, invoice_rate in ((D(1), D(1)), (D(3), D(4))):
+			with self.subTest(order_rate=order_rate):
+				inv = invoice(total=60 * invoice_rate, outstanding=40 * invoice_rate)
+				order = replace(
+					inv,
+					source=Link("Sales Order", "ORDER"),
+					total=100 * order_rate,
+					outstanding=80 * order_rate,
+					rate=order_rate,
+					stages=[Stage("term", inv.stages[0].due, 100 * order_rate)],
+				)
+				order.shares = [
+					replace(
+						inv.shares[0],
+						analytic=replace(inv.shares[0].analytic, order=order.source, invoice=None),
+					)
+				]
+				inv.shares = [
+					replace(inv.shares[0], analytic=replace(inv.shares[0].analytic, order=order.source))
+				]
+				inv.currency = order.currency = "EUR"
+				inv.rate = invoice_rate
+				s = snapshot(invoices=[inv], orders=[order])
+				s.documents[inv.source].update(currency="EUR", grand_total=60, party_account_currency="EUR")
+				s.documents[order.source].update(currency="EUR", grand_total=100)
+				entry = frappe._dict(
+					name="PE",
+					docstatus=0,
+					payment_type="Receive",
+					posting_date=s.today,
+					paid_from_account_currency="EUR",
+					paid_to_account_currency="USD",
+					source_exchange_rate=order_rate,
+					target_exchange_rate=1,
+					paid_amount=100,
+					received_amount=100 * order_rate,
+					base_paid_amount=100 * order_rate,
+					base_received_amount=100 * order_rate,
+				)
+				row = frappe._dict(
+					name="REF",
+					parent="PE",
+					reference_doctype=order.source.doctype,
+					reference_name=order.source.name,
+					allocated_amount=100,
+				)
+				loader = SimpleNamespace(
+					snapshot=s,
+					policy=s.policy,
+					filters=SimpleNamespace(company="Demo"),
+					docs={"Payment Entry": {}, "Payment Order": {}},
+					pe_refs=[],
+					po_rows=[],
+					expected_fields=lambda _dt, fields: fields,
+					parents=lambda dt, *_args, **_kwargs: [entry] if dt == "Payment Entry" else [],
+					children=lambda dt, *_args, **_kwargs: [row] if dt == "Payment Entry Reference" else [],
+				)
+				load_instructions(loader)
+				flows = [f for f in calculate(s) if f.metric == "forecast"]
+				self.assertEqual(sum(f.amount for f in flows), 80 * order_rate)
+				self.assertEqual(sum(f.amount for f in flows if f.analytic.invoice), 40 * order_rate)

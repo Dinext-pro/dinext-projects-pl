@@ -228,9 +228,12 @@ def load_instructions(loader):
 		if row.reference_doctype == "Payment Entry" and row.reference_name in payment_docs["Payment Entry"]:
 			po_by_entry[row.reference_name].add(Link("Payment Order", row.parent))
 
-	def reference_amount(row, target):
-		doc = snapshot.documents.get(target.source, {})
-		rate = decimal(1) if doc.get("party_account_currency") == snapshot.currency else target.rate
+	def reference_amount(row, target, entry, receive):
+		party_currency = entry.paid_from_account_currency if receive else entry.paid_to_account_currency
+		if party_currency not in (snapshot.currency, target.currency):
+			warn(snapshot, "Unsupported request settlement currency; forecast is incomplete")
+			return ZERO
+		rate = decimal(1) if party_currency == snapshot.currency else target.rate
 		return abs(decimal(row.allocated_amount)) * rate
 
 	pe_instructions = []
@@ -296,7 +299,7 @@ def load_instructions(loader):
 				if decimal(row.allocated_amount):
 					warn(snapshot, "Some financial sources are not accessible; balances are hidden")
 				continue
-			allocated = reference_amount(row, target)
+			allocated = reference_amount(row, target, doc, receive)
 			if allocated <= 0:
 				continue
 			claim_pending = min(allocated, target.outstanding)
