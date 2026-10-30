@@ -124,6 +124,7 @@ def main():
 	assert result["user_mode"] == "financier" and result["settings_version"] and result["code_sha256"]
 	measurements = result["measurements"]
 	assert len(measurements) == 10
+	assert all(record["passed"] and record["queries"] > 0 for record in measurements)
 	for operation, limit in (("summary", 5), ("details", 2)):
 		values = [record["seconds"] for record in measurements if record["operation"] == operation]
 		assert len(values) == 5

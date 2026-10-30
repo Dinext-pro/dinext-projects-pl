@@ -160,6 +160,7 @@ def run(chains=2000, repetitions=5):
 				finally:
 					frappe.db.sql = original_sql
 				if name == "summary":
+					assert result["complete"] and result["balances"] is not None
 					assert result["directions"]["in"]["total__forecast"] == chains * 80
 					assert result["directions"]["in"]["total__actual"] == chains * 20
 					assert result["directions"]["in"]["total__plan"] == chains * 80
