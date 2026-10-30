@@ -65,6 +65,15 @@ describe("Liquidity Payment Calendar", () => {
 		});
 		cy.get("[data-fieldname=sources] .grid-row-open .grid-form-body").should("be.visible");
 	};
+	const chartPaths = (token, attribute) =>
+		cy.window().then((win) => {
+			const color = win
+				.getComputedStyle(win.document.querySelector(".liquidity-calendar"))
+				.getPropertyValue(token)
+				.trim();
+			expect(color, token).not.to.eq("");
+			return cy.get(`[data-testid=liquidity-chart] svg path[${attribute}='${color}']`);
+		});
 	const settingsPage = () => {
 		cy.login("operator");
 		cy.visit("/app/payment-calendar-settings");
@@ -1496,12 +1505,30 @@ describe("Liquidity Payment Calendar", () => {
 
 	testCase("UI-09 chart modes retain a rendered interactive chart", () => {
 		cy.openLiquidity(context);
-		for (const mode of ["forecast", "actual", "combined"]) {
-			cy.liquidityMode(mode);
-			cy.get("[data-testid=liquidity-chart] svg").should("be.visible");
+		for (const theme of ["light", "dark"]) {
+			cy.window().then((win) =>
+				win.document.documentElement.setAttribute("data-theme", theme)
+			);
+			for (const mode of ["forecast", "actual", "combined"]) {
+				cy.liquidityMode(mode);
+				cy.get("[data-testid=liquidity-chart] svg").should("be.visible");
+			}
+			cy.window().then((win) => {
+				const root = win.document.querySelector(".liquidity-calendar");
+				const style = win.getComputedStyle(root);
+				const series = win.frappe.query_report.__liquidityView.chart.getOption().series;
+				for (const row of series.filter((item) => item.type === "bar")) {
+					const token = row.name.startsWith(win.__("Receipts") + " ·")
+						? "--green-600"
+						: "--red-500";
+					expect(row.itemStyle.color, theme + " series token").to.eq(
+						style.getPropertyValue(token).trim()
+					);
+				}
+			});
 		}
 		cy.liquidityMode("actual");
-		cy.get("[data-testid=liquidity-chart] svg path[fill='#37a077']").then(($paths) => {
+		chartPaths("--green-600", "fill").then(($paths) => {
 			const bar = [...$paths].find((el) => el.getBoundingClientRect().height > 20);
 			expect(bar, "actual cash bar").to.exist;
 			cy.wrap(bar).trigger("mousemove", "center");
@@ -1514,7 +1541,7 @@ describe("Liquidity Payment Calendar", () => {
 
 	testCase("UI-09 clicks a balance point and reconciles its opening anchor", () => {
 		cy.openLiquidity(context);
-		cy.get("[data-testid=liquidity-chart] svg path[stroke='#5683c4']").then(($paths) => {
+		chartPaths("--blue-500", "stroke").then(($paths) => {
 			const points = [...$paths].filter((el) => {
 				const box = el.getBoundingClientRect();
 				return box.width < 12 && box.height < 12;

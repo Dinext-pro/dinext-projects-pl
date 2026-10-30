@@ -882,14 +882,15 @@
 		drawChart() {
 			if (!this.chart || this.disposed) return;
 			const p = this.payload;
-			const color =
-				getComputedStyle(this.root[0]).getPropertyValue("--text-color").trim() || "#555";
-			const background =
-				getComputedStyle(this.root[0]).getPropertyValue("--card-bg").trim() || "#fff";
+			const style = getComputedStyle(this.root[0]);
+			const token = (name) => style.getPropertyValue(name).trim();
+			const color = token("--text-color") || style.color;
+			const background = token("--card-bg") || token("--bg-color") || style.backgroundColor;
+			const receiptsColor = token("--green-600");
+			const paymentsColor = token("--red-500");
+			const balanceColor = token("--blue-500");
 			const metrics = this.filters.metrics;
-			const gridColor =
-				getComputedStyle(this.root[0]).getPropertyValue("--liquidity-chart-grid").trim() ||
-				color;
+			const gridColor = token("--liquidity-chart-grid") || color;
 			const series = [];
 			for (const direction of ["in", "out"]) {
 				const node = p.rows.find((r) => r.path[0] === direction);
@@ -902,7 +903,7 @@
 						stack: metric === "plan" ? "plan" : "cash",
 						stackStrategy: "samesign",
 						itemStyle: {
-							color: direction === "in" ? "#37a077" : "#d16a69",
+							color: direction === "in" ? receiptsColor : paymentsColor,
 							opacity: metric === "plan" ? 0.3 : metric === "forecast" ? 0.6 : 1,
 						},
 						data: p.periods.map((period) => ({
@@ -947,7 +948,7 @@
 							metric: field,
 							node_key: "root",
 							period_key: row.key,
-							itemStyle: { color: row[field] < 0 ? "#d16a69" : "#5683c4" },
+							itemStyle: { color: row[field] < 0 ? paymentsColor : balanceColor },
 						})),
 					});
 				});
