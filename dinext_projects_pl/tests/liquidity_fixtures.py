@@ -176,11 +176,39 @@ def setup_company():
 
 
 def sales_order(context, amount=100, project=True, currency="USD", rate=1):
+	customer = CUSTOMER
+	if currency != "USD":
+		base = frappe.db.get_value("Company", COMPANY, "default_receivable_account")
+		receivable = f"Liquidity Receivable {currency} - LQC"
+		ensure(
+			{
+				"doctype": "Account",
+				"name": receivable,
+				"account_name": f"Liquidity Receivable {currency}",
+				"company": COMPANY,
+				"parent_account": frappe.db.get_value("Account", base, "parent_account"),
+				"account_type": "Receivable",
+				"account_currency": currency,
+			}
+		)
+		customer = CUSTOMER + " " + currency
+		ensure(
+			{
+				"doctype": "Customer",
+				"name": customer,
+				"customer_name": customer,
+				"customer_type": "Company",
+				"customer_group": "_Test Liquidity Customers",
+				"territory": "All Territories",
+				"default_currency": currency,
+				"accounts": [{"company": COMPANY, "account": receivable}],
+			}
+		)
 	doc = frappe.get_doc(
 		{
 			"doctype": "Sales Order",
 			"company": COMPANY,
-			"customer": CUSTOMER,
+			"customer": customer,
 			"transaction_date": today(),
 			"delivery_date": add_days(today(), 7),
 			"currency": currency,

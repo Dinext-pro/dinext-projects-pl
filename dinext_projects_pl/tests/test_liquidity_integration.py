@@ -29,13 +29,23 @@ class TestLiquidityIntegration(FrappeTestCase):
 		invoice.set("payment_schedule", [])
 		invoice.insert()
 		invoice.submit()
-		fixtures.pay(self.context, invoice, 80, bank_amount=80)
+		paid = get_payment_entry(
+			invoice.doctype, invoice.name, bank_account=self.context["bank"], party_amount=20, bank_amount=80
+		)
+		paid.source_exchange_rate = 4
+		paid.reference_no, paid.reference_date = "Liquidity prior foreign receipt", today()
+		paid.set_amounts()
+		paid.insert()
+		paid.submit()
 		before = get_calendar(self.filters)
 		self.assertEqual(before["directions"]["in"]["total__plan"], 240)
 		self.assertEqual(before["directions"]["in"]["total__forecast"], 160)
 		entry = get_payment_entry(
-			order.doctype, order.name, bank_account=self.context["bank"], party_amount=240, bank_amount=240
+			order.doctype, order.name, bank_account=self.context["bank"], party_amount=80, bank_amount=240
 		)
+		entry.source_exchange_rate = 3
+		entry.reference_no, entry.reference_date = "Liquidity draft order advance", today()
+		entry.set_amounts()
 		entry.insert()
 		result = get_calendar(self.filters)
 		self.assertTrue(result["complete"], result["warnings"])
