@@ -88,7 +88,7 @@ Open **Liquidity Payment Calendar** from **Analytics**, **Financial Control** or
 
 1. Select a company, date range and day/week/month grain. Narrow the view by project, portfolio, counterparty type/name or Bank/Cash account.
 2. Choose project-first, counterparty-first or **Only Counterparty** grouping. Contract, order, invoice and payment levels remain available below the selected grouping.
-3. Use **Forecast / actual**, **Only actual** or **Only forecast**; **Plan** is an independent toggle. In the combined view, completed periods show actuals and the current/future periods show forecast, without adding the two stages together.
+3. Use **Forecast and actual**, **Actual only** or **Forecast only**; **Plan** is an independent toggle. In the combined view, completed periods show actuals and the current/future periods show forecast, without adding the two stages together.
 4. Expand levels in batches, select amounts to see selection statistics, double-click an amount for source details or double-click a linked name to open its document.
 5. Compare balances and the cash chart; use the XLSX button immediately left of the table's Fullscreen control. Detail headers stay visible while scrolling. Both Desk themes are supported, including a runtime theme switch.
 

@@ -657,7 +657,7 @@ describe("Liquidity Payment Calendar", () => {
 			});
 			// Exclude the short legend swatch; move away before re-hovering after theme redraw.
 			cy.get("[data-testid=liquidity-kpis]").realHover({ position: "topLeft" });
-			cy.get("[data-testid=liquidity-chart] svg path[fill='#37a077']")
+			chartPaths("--green-600", "fill")
 				.filter((_i, path) => path.getBoundingClientRect().height > 20)
 				.first()
 				.realHover();
