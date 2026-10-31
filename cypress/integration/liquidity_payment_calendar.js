@@ -1705,48 +1705,60 @@ describe("Liquidity Payment Calendar", () => {
 	});
 
 	testCase("UI-04 explicitly shows zero rows outside the completed payment period", () => {
-		const zeroRows = () =>
-			cy.get(grid + " .dinext-table-toolbar [data-testid=liquidity-show-zero]");
+		const zeroRows = () => {
+			cy.get("[data-testid=liquidity-calendar]").should("have.attr", "aria-busy", "false");
+			cy.get(grid).should("have.attr", "aria-busy", "false");
+			return cy.get(grid + " .dinext-table-toolbar [data-testid=liquidity-show-zero]");
+		};
+		let changeIndex = 0;
+		const change = (action) => {
+			const alias = "zeroRowsChange" + ++changeIndex;
+			cy.intercept("**/api/method/" + API + "get_calendar*").as(alias);
+			action();
+			cy.wait("@" + alias);
+			cy.get("[data-testid=liquidity-calendar]").should("have.attr", "aria-busy", "false");
+			cy.get(grid).should("have.attr", "aria-busy", "false");
+		};
+		const grain = (value) =>
+			change(() =>
+				cy.window().then((win) => win.frappe.query_report.set_filter_value("grain", value))
+			);
 		let tomorrow;
 		cy.openLiquidity(context);
 		zeroRows().should("not.be.checked");
-		cy.liquidityFilter("grain", "month");
+		grain("month");
 		cy.get("[data-testid=liquidity-empty]").should("be.visible");
-		zeroRows().check();
-		cy.wait("@calendar");
+		change(() => zeroRows().check());
 		cy.get("[data-testid=liquidity-depth]").select("7");
 		cy.get(grid).contains(context.payment).should("be.visible");
-		zeroRows().uncheck();
-		cy.wait("@calendar");
+		change(() => zeroRows().uncheck());
 		cy.get("[data-testid=liquidity-empty]").should("be.visible");
-		cy.get("[data-testid=liquidity-display]").select("actual");
-		cy.wait("@calendar");
+		change(() => cy.get("[data-testid=liquidity-display]").select("actual"));
 		cy.get(grid).contains(context.payment).should("be.visible");
 		cy.get(grid + " .ag-cell[col-id=total__actual]")
 			.first()
 			.should("have.text", "100");
-		cy.get("[data-testid=liquidity-display]").select("combined");
-		cy.wait("@calendar");
+		change(() => cy.get("[data-testid=liquidity-display]").select("combined"));
 		cy.get("[data-testid=liquidity-empty]").should("be.visible");
-		cy.liquidityFilter("grain", "week");
-		cy.window().then((win) => {
-			tomorrow = win.moment(context.from_date).add(1, "day").format("YYYY-MM-DD");
-			return win.frappe.query_report.set_filter_value("from_date", tomorrow);
-		});
-		cy.wait("@calendar");
+		grain("week");
+		change(() =>
+			cy.window().then((win) => {
+				tomorrow = win.moment(context.from_date).add(1, "day").format("YYYY-MM-DD");
+				return win.frappe.query_report.set_filter_value("from_date", tomorrow);
+			})
+		);
 		cy.get("[data-testid=liquidity-empty]").should("be.visible");
-		zeroRows().should("be.visible").check();
-		cy.wait("@calendar");
+		zeroRows().should("be.visible");
+		change(() => zeroRows().check());
 		zeroRows().should("be.checked");
 		cy.get(grid).contains("Поступления").should("be.visible");
 		cy.get("[data-testid=liquidity-kpis]").should("contain", "0");
-		cy.liquidityFilter("grain", "month");
+		grain("month");
 		zeroRows().should("be.checked");
 		cy.get(grid + " .ag-cell[col-id=total__combined]")
 			.first()
 			.should("have.text", "0");
-		zeroRows().uncheck();
-		cy.wait("@calendar");
+		change(() => zeroRows().uncheck());
 		zeroRows().should("not.be.checked");
 		cy.get("[data-testid=liquidity-empty]").should("be.visible");
 		cy.then(() => cy.openLiquidity(context, { from_date: tomorrow, show_zero: 1 }));
@@ -1759,8 +1771,7 @@ describe("Liquidity Payment Calendar", () => {
 		cy.window().should((win) =>
 			expect(win.frappe.query_report.__liquidityView.grid.isFullscreen()).to.eq(true)
 		);
-		zeroRows().uncheck();
-		cy.wait("@calendar");
+		change(() => zeroRows().uncheck());
 		zeroRows().should("not.be.checked");
 		cy.window().should((win) =>
 			expect(win.frappe.query_report.__liquidityView.grid.isFullscreen()).to.eq(true)
