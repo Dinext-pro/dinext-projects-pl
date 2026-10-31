@@ -6,135 +6,152 @@ app_email = "info@dinext.ru"
 app_license = "GNU General Public License (v3)"
 
 fixtures = [
-    {
-        "doctype": "Accounting Dimension",
-        "filters": [
-            ["disabled", "=", 0]
-        ]
-    },
-    {
-        "doctype": "Custom Field",
-        "filters": [
-            ["module", "in", ["Dinext Projects Pl"]]
-        ]
-    },
-    {
-        "doctype": "Client Script",
-        "filters": [
-            ["module", "in", ["Dinext Projects Pl"]],
-        ]
-    },
-    {
-        "doctype": "Server Script",
-        "filters": [
-            ["module", "in", ["Dinext Projects Pl"]],
-        ]
-    },
-    {
-        "doctype": "Report",
-        "filters": [
-            ["module", "in", ["Dinext Projects Pl"]],
-            ["name", "in", [
-                "Контроль ставок по проектам",
-                "Контроль ставок по T&M проектам_V2",
-            ]],
-        ]
-    },
-    {
-        "doctype": "Number Card",
-        "filters": [
-            ["module", "in", ["Dinext Projects Pl"]]
-        ]
-    },
-    {
-        "doctype": "Role",
-        "filters": [
-            ["name", "in", [
-                "Dinext_Budget_Approver",
-                "Dinext_Financier",
-                "Dinext_Fin_Dir",
-            ]],
-            ["disabled", "=", 0],
-        ]
-    },
-    {
-        "doctype": "Workflow",
-        "filters": [
-            ["document_type", "in", [
-                "Budget",
-                "Purchase Invoice",
-                "Sales Invoice",
-                "Expense Claim",
-            ]],
-            ["is_active", "=", 1],
-        ]
-    },
-    {
-        "doctype": "Workflow State",
-        "filters": [
-            ["workflow_state_name", "in", [
-                "Draft",
-                "Pending Approval",
-                "Approved",
-                "Cancelled Draft",
-                "Cancelled Approved",
-                "Черновик",
-                "На согласовании",
-                "Согласовано",
-                "Отклонено",
-            ]],
-        ]
-    },
-    {
-        "doctype": "Workflow Action Master",
-        "filters": [
-            ["workflow_action_name", "in", [
-                "Submit for Approval",
-                "Approve",
-                "Cancel",
-                "Передать на согласование",
-                "Согласовано",
-                "Не согласовано",
-                "Согласовать",
-            ]],
-        ]
-    },
-    {
-        "doctype": "DocType Permission",
-        "filters": [
-            ["ref_doctype", "in", [
-                "Sales Invoice",
-                "Purchase Invoice",
-                "GL Entry",
-            ]],
-            ["docstatus", "!=", 2],
-        ]
-    },
-    {
-        "doctype": "Project Payment Scheme",
-        "filters": [
-            ["name", "in", [
-                "Неоплачиваемый",
-                "Фикс. стоимость",
-                "Время и затраты (T&M)",
-            ]],
-        ]
-    },
-    {
-        "doctype": "Custom DocPerm",
-        "filters": [
-            ["role", "like", "%Dinext%"],
-            ["parent", "in", [
-                "Project Payment Scheme",
-                "Cost Level",
-                "Rate Category",
-                "Business Area",
-                "Project Budget",
-                "Expense Claim",
-                "Expense Claim Type",
-            ]],
-        ]
-    },
+	{"doctype": "Accounting Dimension", "filters": [["disabled", "=", 0]]},
+	{"doctype": "Custom Field", "filters": [["module", "in", ["Dinext Projects Pl"]]]},
+	{
+		"doctype": "Client Script",
+		"filters": [
+			["module", "in", ["Dinext Projects Pl"]],
+		],
+	},
+	{
+		"doctype": "Server Script",
+		"filters": [
+			["module", "in", ["Dinext Projects Pl"]],
+		],
+	},
+	{
+		"doctype": "Report",
+		"filters": [
+			["module", "in", ["Dinext Projects Pl"]],
+			[
+				"name",
+				"in",
+				[
+					"Контроль ставок по проектам",
+					"Контроль ставок по T&M проектам_V2",
+				],
+			],
+		],
+	},
+	{"doctype": "Number Card", "filters": [["module", "in", ["Dinext Projects Pl"]]]},
+	{
+		"doctype": "Role",
+		"filters": [
+			[
+				"name",
+				"in",
+				[
+					"Dinext_Budget_Approver",
+					"Dinext_Financier",
+					"Dinext_Fin_Dir",
+				],
+			],
+			["disabled", "=", 0],
+		],
+	},
+	{
+		"doctype": "Workflow",
+		"filters": [
+			[
+				"document_type",
+				"in",
+				[
+					"Budget",
+					"Purchase Invoice",
+					"Sales Invoice",
+					"Expense Claim",
+				],
+			],
+			["is_active", "=", 1],
+		],
+	},
+	{
+		"doctype": "Workflow State",
+		"filters": [
+			[
+				"workflow_state_name",
+				"in",
+				[
+					"Draft",
+					"Pending Approval",
+					"Approved",
+					"Cancelled Draft",
+					"Cancelled Approved",
+					"Черновик",
+					"На согласовании",  # noqa: RUF001 - canonical Russian workflow label
+					"Согласовано",
+					"Отклонено",
+				],
+			],
+		],
+	},
+	{
+		"doctype": "Workflow Action Master",
+		"filters": [
+			[
+				"workflow_action_name",
+				"in",
+				[
+					"Submit for Approval",
+					"Approve",
+					"Cancel",
+					"Передать на согласование",
+					"Согласовано",
+					"Не согласовано",  # noqa: RUF001 - canonical Russian workflow label
+					"Согласовать",
+				],
+			],
+		],
+	},
+	{
+		"doctype": "DocType Permission",
+		"filters": [
+			[
+				"ref_doctype",
+				"in",
+				[
+					"Sales Invoice",
+					"Purchase Invoice",
+					"GL Entry",
+				],
+			],
+			["docstatus", "!=", 2],
+		],
+	},
+	{
+		"doctype": "Project Payment Scheme",
+		"filters": [
+			[
+				"name",
+				"in",
+				[
+					"Неоплачиваемый",
+					"Фикс. стоимость",
+					"Время и затраты (T&M)",
+				],
+			],
+		],
+	},
+	{
+		"doctype": "Custom DocPerm",
+		"filters": [
+			["role", "like", "%Dinext%"],
+			[
+				"parent",
+				"in",
+				[
+					"Project Payment Scheme",
+					"Cost Level",
+					"Rate Category",
+					"Business Area",
+					"Project Budget",
+					"Expense Claim",
+					"Expense Claim Type",
+				],
+			],
+		],
+	},
 ]
 
 # Apps
@@ -143,7 +160,12 @@ fixtures = [
 required_apps = ["dinext_common", "doctype_permission", "dinext_projects"]
 
 after_install = "dinext_projects_pl.install.after_install"
-after_migrate = "dinext_projects_pl.install.sync_accounting_dimensions"
+# Workspace references are available only after fixtures and dashboards have synced.
+after_sync = "dinext_projects_pl.liquidity.setup.after_migrate"
+after_migrate = [
+	"dinext_projects_pl.install.sync_accounting_dimensions",
+	"dinext_projects_pl.liquidity.setup.after_migrate",
+]
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -179,15 +201,15 @@ after_migrate = "dinext_projects_pl.install.sync_accounting_dimensions"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-doctype_js = {"Project":
-    [
-        "public/js/project_budget_navigation.js",
-        "public/js/project_budget/boot.js",
-        "public/js/project_budget_tab.js",
-        "public/js/project_budget_chart.js",
-        "public/js/project_budget_metrics.js",
-        "public/js/project_budget_dashboard.js",
-    ]
+doctype_js = {
+	"Project": [
+		"public/js/project_budget_navigation.js",
+		"public/js/project_budget/boot.js",
+		"public/js/project_budget_tab.js",
+		"public/js/project_budget_chart.js",
+		"public/js/project_budget_metrics.js",
+		"public/js/project_budget_dashboard.js",
+	]
 }
 
 doctype_css = {
@@ -280,19 +302,17 @@ doctype_css = {
 # ---------------
 # Override standard doctype classes
 
-override_doctype_class = {
-    "Budget": "dinext_projects_pl.dinext_projects_pl.overrides.budget.Budget"
-}
+override_doctype_class = {"Budget": "dinext_projects_pl.dinext_projects_pl.overrides.budget.Budget"}
 
 # Document Events
 # ---------------
 # Hook on document methods and events
 
 doc_events = {
-    "Budget": {
-        "on_submit": "dinext_projects_pl.dinext_projects_pl.budget_approval.service.on_budget_submit",
-        "on_cancel": "dinext_projects_pl.dinext_projects_pl.budget_approval.service.on_budget_cancel",
-    }
+	"Budget": {
+		"on_submit": "dinext_projects_pl.dinext_projects_pl.budget_approval.service.on_budget_submit",
+		"on_cancel": "dinext_projects_pl.dinext_projects_pl.budget_approval.service.on_budget_cancel",
+	}
 }
 
 # Scheduled Tasks
@@ -394,4 +414,3 @@ doc_events = {
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
-
