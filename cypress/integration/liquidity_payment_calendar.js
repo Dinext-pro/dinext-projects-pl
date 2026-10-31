@@ -1583,15 +1583,108 @@ describe("Liquidity Payment Calendar", () => {
 	});
 
 	testCase("UI-04 scrolls a large tree with a pinned name column and switches metrics", () => {
+		const assertTopScrollbar = () =>
+			cy.get(grid).should(($grid) => {
+				const header = $grid[0].querySelector(".ag-header");
+				const viewport = $grid[0].querySelector(".dinext-table-hscroll-top-viewport");
+				const bounds = viewport.getBoundingClientRect();
+				const win = viewport.ownerDocument.defaultView;
+				const nativeHeight = viewport.offsetHeight - viewport.clientHeight;
+				const overlayHeight = parseFloat(
+					win.getComputedStyle(viewport, "::-webkit-scrollbar").height
+				);
+				const trackHeight = Math.min(bounds.height, nativeHeight || overlayHeight);
+				expect(bounds.height, "top scrollbar remains accessible").to.be.greaterThan(0);
+				expect(viewport.scrollWidth, "horizontal overflow remains").to.be.greaterThan(
+					viewport.clientWidth
+				);
+				expect(
+					Math.abs(bounds.top - header.getBoundingClientRect().bottom),
+					"scroll viewport touches header"
+				).to.be.at.most(1);
+				expect(
+					Math.abs(bounds.bottom - trackHeight - header.getBoundingClientRect().bottom),
+					"visible scrollbar track touches header"
+				).to.be.at.most(1);
+			});
 		cy.openLiquidity(context);
+		cy.liquidityPlan(true);
 		cy.get("[data-testid=liquidity-depth]").select("5");
-		cy.get(grid + " .ag-body-viewport").scrollTo("bottom", { ensureScrollable: false });
-		cy.liquidityScrollRight();
-		cy.get(grid + " .ag-pinned-left-cols-container").should("be.visible");
-		cy.get(grid + " .ag-pinned-right-header [col-id='total__combined']").should("be.visible");
+		for (const theme of ["light", "dark"]) {
+			cy.window().then((win) =>
+				win.document.documentElement.setAttribute("data-theme", theme)
+			);
+			for (const fullscreen of [false, true]) {
+				if (fullscreen) {
+					cy.get(grid + " .dinext-table-toolbar-group--end button")
+						.last()
+						.focus()
+						.realPress("Enter");
+					cy.window().should((win) =>
+						expect(win.frappe.query_report.__liquidityView.grid.isFullscreen()).to.eq(
+							true
+						)
+					);
+				}
+				assertTopScrollbar();
+				cy.get(grid + " .ag-body-viewport").scrollTo("bottom", {
+					ensureScrollable: false,
+				});
+				cy.get(grid + " .dinext-table-hscroll-top-viewport").scrollTo("right");
+				cy.get(grid + " .ag-body-horizontal-scroll-viewport").should(($viewport) =>
+					expect(
+						$viewport[0].scrollLeft,
+						"top scrollbar scrolls the table"
+					).to.be.greaterThan(0)
+				);
+				cy.liquidityScrollRight();
+				cy.get(grid + " .ag-pinned-left-cols-container").should(($pinned) => {
+					const doc = $pinned[0].ownerDocument;
+					const viewport = doc.querySelector(grid + " .ag-body-viewport");
+					const bounds = viewport.getBoundingClientRect();
+					const cell = [...$pinned[0].querySelectorAll("[col-id='label']")].find(
+						(node) => {
+							const box = node.getBoundingClientRect();
+							return (
+								box.top >= Math.max(bounds.top, 0) &&
+								box.bottom <= Math.min(bounds.bottom, doc.defaultView.innerHeight)
+							);
+						}
+					);
+					expect(cell, "a pinned label remains inside the viewport").to.exist;
+					const box = cell.getBoundingClientRect();
+					expect(
+						cell.contains(
+							doc.elementFromPoint(
+								box.left + box.width / 2,
+								box.top + box.height / 2
+							)
+						),
+						"the visible pinned label is not covered"
+					).to.eq(true);
+				});
+				cy.get(grid + " .ag-pinned-right-header [col-id='total__combined']").should(
+					"be.visible"
+				);
+				assertTopScrollbar();
+				if (fullscreen) {
+					cy.get(grid + " .dinext-table-toolbar-group--end button")
+						.last()
+						.focus()
+						.realPress("Enter");
+					cy.window().should((win) =>
+						expect(win.frappe.query_report.__liquidityView.grid.isFullscreen()).to.eq(
+							false
+						)
+					);
+				}
+			}
+		}
+		cy.liquidityPlan(false);
 		cy.liquidityMode("forecast");
 		cy.get(grid + " [col-id$='__plan']").should("not.exist");
 		cy.get(grid + " [col-id$='__forecast']").should("exist");
+		assertTopScrollbar();
 	});
 
 	testCase("UI-04 explicitly shows zero rows outside the completed payment period", () => {

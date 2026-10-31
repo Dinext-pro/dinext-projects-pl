@@ -54,11 +54,14 @@
 	display: flex;
 	visibility: hidden;
 }
-.liquidity-calendar .dinext-table-hscroll-top {
-	height: 16px;
-}
+/* Fit the native track; retain a usable gutter for overlay scrollbars. */
 .liquidity-calendar .dinext-table-hscroll-top-viewport {
-	height: 16px;
+	position: relative;
+	height: auto;
+	min-height: 6px;
+}
+.liquidity-calendar .dinext-table-hscroll-top-content {
+	position: absolute;
 }
 .liquidity-calendar .liquidity-money {
 	cursor: pointer;
