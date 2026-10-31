@@ -1038,7 +1038,7 @@ describe("Liquidity Payment Calendar", () => {
 	testCase(
 		"CT-02 keeps controls and icon export in the table toolbar and explains accounts on hover",
 		() => {
-			cy.openLiquidity(context);
+			cy.openLiquidity(context, { show_zero: 1 });
 			cy.get(
 				".liquidity-meta, .liquidity-account-note, [data-testid=liquidity-mode]"
 			).should("not.exist");
@@ -1938,24 +1938,29 @@ describe("Liquidity Payment Calendar", () => {
 	}
 
 	testCase("UI-16 downloads a complete XLSX while the tree remains collapsed", () => {
-		cy.openLiquidity(context);
-		cy.get(grid).contains(context.invoice).should("not.exist");
-		cy.task("clearLiquidityWorkbook");
-		cy.get("[data-testid=liquidity-export]").click();
-		cy.readFile("cypress/downloads/liquidity-payment-calendar.xlsx", "binary").should(
-			"have.length.greaterThan",
-			1000
-		);
-		cy.task("readLiquidityWorkbook").then((book) => {
-			expect(book.numeric).to.be.greaterThan(10);
-			expect(book.rows.map((row) => row[0]))
-				.to.include(context.contract)
-				.and.include(context.invoice)
-				.and.include(context.payment);
-			expect(book.sheets).to.eq(5);
-			expect(book.allocations[0]).to.have.length(7);
-			expect(book.sheet_names).to.include("Распределения");
-		});
+		for (const [metrics, showPayment, total] of [
+			[["forecast", "actual"], false, 40],
+			[["actual"], true, 20],
+		]) {
+			cy.openLiquidity(context, { metrics });
+			cy.get(grid).contains(context.invoice).should("not.exist");
+			cy.task("clearLiquidityWorkbook");
+			cy.get("[data-testid=liquidity-export]").click();
+			cy.readFile("cypress/downloads/liquidity-payment-calendar.xlsx", "binary").should(
+				"have.length.greaterThan",
+				1000
+			);
+			cy.task("readLiquidityWorkbook").then((book) => {
+				expect(book.numeric).to.be.greaterThan(10);
+				const labels = book.rows.map((row) => row[0]);
+				expect(labels).to.include(context.contract).and.include(context.invoice);
+				expect(labels.includes(context.payment)).to.eq(showPayment);
+				expect(book.rows[1].at(-1)).to.eq(total);
+				expect(book.sheets).to.eq(5);
+				expect(book.allocations[0]).to.have.length(7);
+				expect(book.sheet_names).to.include("Распределения");
+			});
+		}
 	});
 
 	testCase("UI-17 ignores an older delayed filter response", () => {
