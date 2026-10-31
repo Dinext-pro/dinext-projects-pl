@@ -829,6 +829,23 @@ describe("Liquidity Payment Calendar", () => {
 				cy.window().then((win) =>
 					win.document.documentElement.setAttribute("data-theme", theme)
 				);
+				cy.get(grid + " .dinext-table-toolbar [data-testid=liquidity-show-zero]")
+					.should("have.length", 1)
+					.and("not.be.checked");
+				cy.get(grid + " .liquidity-zero-rows").should("have.text", "Нулевые строки");
+				cy.get(".liquidity-filters [data-fieldname=show_zero]:visible").should(
+					"not.exist"
+				);
+				cy.get(grid + " .dinext-table-toolbar-group").each(($group) => {
+					const items = [...$group[0].children]
+						.map((item) => item.getBoundingClientRect())
+						.filter((box) => box.width > 0 && box.height > 0);
+					for (let i = 1; i < items.length; i++)
+						expect(
+							items[i].left - items[i - 1].right,
+							"small toolbar spacing"
+						).to.be.within(1, 8);
+				});
 				cy.get(".liquidity-filters .page-form > .frappe-control:visible").should(
 					($fields) => {
 						const top = $fields[0].getBoundingClientRect().top;
@@ -1688,17 +1705,52 @@ describe("Liquidity Payment Calendar", () => {
 	});
 
 	testCase("UI-04 explicitly shows zero rows outside the completed payment period", () => {
+		const zeroRows = () =>
+			cy.get(grid + " .dinext-table-toolbar [data-testid=liquidity-show-zero]");
+		let tomorrow;
 		cy.openLiquidity(context);
+		zeroRows().should("not.be.checked");
 		cy.window().then((win) => {
-			const tomorrow = win.moment(context.from_date).add(1, "day").format("YYYY-MM-DD");
+			tomorrow = win.moment(context.from_date).add(1, "day").format("YYYY-MM-DD");
 			return win.frappe.query_report.set_filter_value("from_date", tomorrow);
 		});
 		cy.wait("@calendar");
 		cy.get("[data-testid=liquidity-empty]").should("be.visible");
-		cy.get("[data-fieldname=show_zero] .input-area input[type=checkbox]").check();
+		zeroRows().should("be.visible").check();
 		cy.wait("@calendar");
+		zeroRows().should("be.checked");
 		cy.get(grid).contains("Поступления").should("be.visible");
 		cy.get("[data-testid=liquidity-kpis]").should("contain", "0");
+		cy.liquidityFilter("grain", "month");
+		zeroRows().should("be.checked");
+		cy.get(grid + " .ag-cell[col-id=total__combined]")
+			.first()
+			.should("have.text", "0");
+		zeroRows().uncheck();
+		cy.wait("@calendar");
+		zeroRows().should("not.be.checked");
+		cy.get("[data-testid=liquidity-empty]").should("be.visible");
+		cy.then(() => cy.openLiquidity(context, { from_date: tomorrow, show_zero: 1 }));
+		zeroRows().should("be.checked");
+		cy.get(grid).contains("Поступления").should("be.visible");
+		cy.get(grid + " .dinext-table-toolbar-group--end button")
+			.last()
+			.focus()
+			.realPress("Enter");
+		cy.window().should((win) =>
+			expect(win.frappe.query_report.__liquidityView.grid.isFullscreen()).to.eq(true)
+		);
+		zeroRows().uncheck();
+		cy.wait("@calendar");
+		zeroRows().should("not.be.checked");
+		cy.window().should((win) =>
+			expect(win.frappe.query_report.__liquidityView.grid.isFullscreen()).to.eq(true)
+		);
+		// Restore native browser state after checking the filter keeps Fullscreen active.
+		cy.document().then((doc) => doc.exitFullscreen());
+		cy.window().should((win) =>
+			expect(win.frappe.query_report.__liquidityView.grid.isFullscreen()).to.eq(false)
+		);
 	});
 
 	testCase("UI-08 pagination keeps the exact total and source links", () => {

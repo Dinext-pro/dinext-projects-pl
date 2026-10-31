@@ -125,7 +125,8 @@
 .liquidity-calendar .liquidity-zero .ag-cell-value {
 	color: var(--liquidity-zero-color) !important;
 }
-.liquidity-calendar .liquidity-plan {
+.liquidity-calendar .liquidity-plan,
+.liquidity-calendar .liquidity-zero-rows {
 	display: flex;
 	align-items: center;
 	gap: 5px;
@@ -210,6 +211,9 @@
 .liquidity-calendar .dinext-table-toolbar {
 	padding-top: 2px;
 	padding-bottom: 2px;
+}
+.liquidity-calendar .dinext-table-toolbar-group {
+	gap: 6px;
 }
 @media (max-width: 991px) {
 	.liquidity-calendar .liquidity-filters .page-form {

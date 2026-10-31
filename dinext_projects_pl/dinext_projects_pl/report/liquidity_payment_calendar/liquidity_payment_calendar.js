@@ -134,18 +134,19 @@
 			const requested = this.report.get_filter_values();
 			const scope = JSON.stringify(
 				Object.keys(requested || {})
-					.filter((key) => key !== "metrics")
+					.filter((key) => key !== "metrics" && key !== "show_zero")
 					.sort()
 					.map((key) => [key, requested[key]])
 			);
-			const metricsChanged =
+			const displayChanged =
 				JSON.stringify([...(requested?.metrics || [])].sort()) !==
-				JSON.stringify([...(this.filters?.metrics || [])].sort());
+					JSON.stringify([...(this.filters?.metrics || [])].sort()) ||
+				Boolean(requested?.show_zero) !== Boolean(this.filters?.show_zero);
 			// Ordinary refresh retains its existing loading/error state; display changes preserve the grid.
 			if (
 				this.grid &&
 				this.filterScope === scope &&
-				(metricsChanged || document.fullscreenElement?.contains(this.grid.container))
+				(displayChanged || document.fullscreenElement?.contains(this.grid.container))
 			)
 				return this.refreshData(requested);
 			this.dataSequence = (this.dataSequence || 0) + 1;
@@ -556,6 +557,24 @@
 							(value) =>
 								this.setMetrics(value, this.filters.metrics.includes("plan"))
 						);
+					},
+				},
+				{
+					id: "liquidity-show-zero",
+					type: "custom",
+					render: ({ host }) => {
+						const label = $("<label class='liquidity-zero-rows'></label>");
+						$("<input type='checkbox' data-testid='liquidity-show-zero'>")
+							.prop("checked", this.filters.show_zero)
+							.on("change", (event) =>
+								this.report.set_filter_value(
+									"show_zero",
+									event.target.checked ? 1 : 0
+								)
+							)
+							.appendTo(label);
+						$("<span></span>").text(__("Zero rows")).appendTo(label);
+						$(host).empty().append(label);
 					},
 				},
 				{
@@ -1473,9 +1492,10 @@
 			},
 			{
 				fieldname: "show_zero",
-				label: __("Show zero rows"),
+				label: __("Zero rows"),
 				fieldtype: "Check",
 				default: 0,
+				hidden: 1,
 			},
 		],
 		onload(report) {
