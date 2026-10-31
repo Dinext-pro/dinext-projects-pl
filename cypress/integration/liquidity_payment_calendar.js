@@ -449,7 +449,7 @@ describe("Liquidity Payment Calendar", () => {
 					visit(res.body.message.rows);
 				})
 			);
-			cy.openLiquidity(context, {}, "operator");
+			cy.openLiquidity(context, { show_zero: 1 }, "operator");
 			cy.get(grid + " .liquidity-record-icon.fa-star").should("be.visible");
 			cy.get("[data-testid=liquidity-depth]").select("7");
 			cy.get(grid).contains(context.payment).should("be.visible");
@@ -506,7 +506,7 @@ describe("Liquidity Payment Calendar", () => {
 				["Payment Entry", context.payment],
 			];
 			for (const [doctype, name] of records) {
-				cy.openLiquidity(context, {}, "operator");
+				cy.openLiquidity(context, { show_zero: 1 }, "operator");
 				cy.get("[data-testid=liquidity-depth]").select("7");
 				cy.get(grid).contains(context.payment).should("be.visible");
 				cy.get(grid + " .liquidity-record-link")
@@ -889,7 +889,7 @@ describe("Liquidity Payment Calendar", () => {
 	testCase(
 		"TA-03 groups Only Counterparty without project levels and preserves totals export and restrictions",
 		() => {
-			cy.openLiquidity(context);
+			cy.openLiquidity(context, { show_zero: 1 });
 			cy.liquidityFilter("grouping", "party_only");
 			cy.get("[data-testid=liquidity-depth] option").should("have.length", 6);
 			cy.get(grid).contains("_Test Liquidity Customer").should("be.visible");
@@ -959,7 +959,7 @@ describe("Liquidity Payment Calendar", () => {
 		cy.intercept("**/api/method/" + API + "get_children*", () => {
 			childRequests++;
 		});
-		cy.openLiquidity(context);
+		cy.openLiquidity(context, { show_zero: 1 });
 		cy.intercept("**/api/method/" + API + "get_calendar*", (req) => {
 			req.on("response", (res) => res.setDelay(700));
 		}).as("depthRequest");
@@ -1408,7 +1408,7 @@ describe("Liquidity Payment Calendar", () => {
 	}
 
 	testCase("UI-02 expands seven levels and collapses without changing totals", () => {
-		cy.openLiquidity(context);
+		cy.openLiquidity(context, { show_zero: 1 });
 		cy.get("[data-testid=liquidity-depth]").select("7");
 		cy.get(grid).contains(context.payment).should("be.visible");
 		cy.get(grid).contains(context.contract).should("be.visible");
@@ -1710,6 +1710,25 @@ describe("Liquidity Payment Calendar", () => {
 		let tomorrow;
 		cy.openLiquidity(context);
 		zeroRows().should("not.be.checked");
+		cy.liquidityFilter("grain", "month");
+		cy.get("[data-testid=liquidity-empty]").should("be.visible");
+		zeroRows().check();
+		cy.wait("@calendar");
+		cy.get("[data-testid=liquidity-depth]").select("7");
+		cy.get(grid).contains(context.payment).should("be.visible");
+		zeroRows().uncheck();
+		cy.wait("@calendar");
+		cy.get("[data-testid=liquidity-empty]").should("be.visible");
+		cy.get("[data-testid=liquidity-display]").select("actual");
+		cy.wait("@calendar");
+		cy.get(grid).contains(context.payment).should("be.visible");
+		cy.get(grid + " .ag-cell[col-id=total__actual]")
+			.first()
+			.should("have.text", "100");
+		cy.get("[data-testid=liquidity-display]").select("combined");
+		cy.wait("@calendar");
+		cy.get("[data-testid=liquidity-empty]").should("be.visible");
+		cy.liquidityFilter("grain", "week");
 		cy.window().then((win) => {
 			tomorrow = win.moment(context.from_date).add(1, "day").format("YYYY-MM-DD");
 			return win.frappe.query_report.set_filter_value("from_date", tomorrow);

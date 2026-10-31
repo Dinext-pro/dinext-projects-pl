@@ -137,8 +137,31 @@ class Calendar:
 				self._nodes[key]["hasChildren"] |= depth < len(path)
 				self.accumulate(key, i, flow, period)
 				parent = key
+		if not self.filters.show_zero:
+			self._prune_zero_rows()
 		for parent in self.children_by_parent:
 			self.children_by_parent[parent].sort(key=lambda k: (self._nodes[k]["label"], k))
+
+	def _prune_zero_rows(self):
+		"""Filter navigation by displayed cells, retaining the full accounting index."""
+		combined = {"actual", "forecast"}.issubset(self.filters.metrics)
+		columns = {
+			key + "__" + metric
+			for key in ("undated", *(p.key for p in self.periods))
+			for metric in self.filters.metrics
+			if not combined or metric == "plan" or metric == self.period_metric(key)
+		}
+		keep = set()
+		# Parents precede their children in the index. Preserve zero-valued parents
+		# when a descendant has activity, including net-zero totals across periods.
+		for key in reversed(self._nodes):
+			if key in keep or any(self.values[key].get(column, ZERO) for column in columns):
+				keep.add(key)
+				keep.add(self._nodes[key]["parent"])
+		for parent, children in self.children_by_parent.items():
+			self.children_by_parent[parent] = [key for key in children if key in keep]
+		for key, node in self._nodes.items():
+			node["hasChildren"] = bool(self.children_by_parent.get(key))
 
 	def accumulate(self, key, index, flow, period):
 		self.members[key].append(index)

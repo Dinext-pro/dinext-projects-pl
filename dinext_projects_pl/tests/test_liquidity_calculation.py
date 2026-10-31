@@ -89,7 +89,13 @@ class TestLiquidityCalculation(unittest.TestCase):
 				calculate(snapshot),
 			)
 			with patch("dinext_projects_pl.liquidity.api._", lambda text: text):
-				headers = next(iter(load_workbook(BytesIO(make_workbook(result))).active.values))[2:]
+				rows = list(load_workbook(BytesIO(make_workbook(result))).active.values)
+			headers = rows[0][2:]
+			labels = [row[0] for row in rows[1:]]
+			if metrics == ("actual",):
+				self.assertIn("Without payment document", labels)
+			else:
+				self.assertNotIn("Without payment document", labels)
 			if len(metrics) == 2:
 				self.assertEqual(headers[0], "Without date / Forecast")
 				self.assertTrue(any(label.endswith(" / Actual") for label in headers))
@@ -105,7 +111,7 @@ class TestLiquidityCalculation(unittest.TestCase):
 		]
 		snapshot = Snapshot(TODAY, "USD")
 		for grouping in ("project_party", "party_project", "party_only"):
-			result = Calendar(filters(grouping=grouping), snapshot, flows)
+			result = Calendar(filters(grouping=grouping, metrics=["actual"]), snapshot, flows)
 			self.assertEqual(result.details("root", "total", "actual")["total"], 51)
 			if grouping == "party_only":
 				rows = result.all_rows()
@@ -117,12 +123,16 @@ class TestLiquidityCalculation(unittest.TestCase):
 
 	def test_tree_depth_keeps_lazy_boundaries_and_all_terminal_metrics(self):
 		flows = [
-			actual(),
+			actual(day=TODAY - timedelta(days=7)),
 			replace(actual(80), id="plan", metric="plan"),
 			replace(actual(40), id="forecast", metric="forecast"),
 		]
 		for grouping, maximum in (("project_party", 7), ("party_only", 6)):
-			result = Calendar(filters(grouping=grouping), Snapshot(TODAY, "USD"), flows)
+			result = Calendar(
+				replace(filters(grouping=grouping), from_date=TODAY - timedelta(days=7)),
+				Snapshot(TODAY, "USD"),
+				flows,
+			)
 
 			def flatten(rows):
 				return [item for row in rows for item in [row, *flatten(row.get("children", []))]]
@@ -454,6 +464,69 @@ class TestLiquidityCalculation(unittest.TestCase):
 		self.assertEqual(f.from_date.weekday(), 0)
 		self.assertEqual(f.to_date.weekday(), 6)
 		self.assertEqual(len(periods(f)), 13)
+
+	def test_zero_rows_follow_visible_metrics_without_changing_cash(self):
+		flow = replace(actual(20), payment=Link("Journal Entry", "CURRENT-FACT"))
+		snapshot = Snapshot(
+			TODAY,
+			"USD",
+			actual=[flow],
+			current_cash=D(70),
+			opening=D(50),
+			cash_daily={TODAY: D(20)},
+			can_balance=True,
+		)
+		for metrics in (("actual", "forecast"), ("forecast",), ("plan",)):
+			with self.subTest(metrics=metrics):
+				selected = replace(filters(grain="month"), metrics=metrics)
+				calendar = Calendar(selected, snapshot, [flow])
+				with_zero = Calendar(replace(selected, show_zero=True), snapshot, [flow])
+				self.assertEqual(calendar.all_rows(), [])
+				self.assertTrue(with_zero.all_rows())
+				self.assertEqual(calendar.payload()["directions"]["in"]["total__actual"], 20)
+				self.assertEqual(calendar.details("root", "total", "actual")["total"], 20)
+				self.assertEqual(calendar.balances, with_zero.balances)
+
+	def test_zero_rows_follow_completed_periods_and_explicit_actual(self):
+		flow = replace(actual(20, TODAY - timedelta(days=1)), payment=Link("Journal Entry", "FACT"))
+		selected = replace(filters(grain="month"), from_date=TODAY - timedelta(days=7))
+		snapshot = Snapshot(TODAY, "USD")
+		self.assertEqual(Calendar(selected, snapshot, [flow]).all_rows(), [])
+		for visible in (
+			replace(selected, metrics=("actual",)),
+			replace(selected, grain="day"),
+			replace(selected, to_date=TODAY - timedelta(days=1)),
+		):
+			with self.subTest(filters=visible):
+				rows = Calendar(visible, snapshot, [flow]).all_rows()
+				self.assertEqual(len(rows), 7)
+				self.assertTrue(all(row["total__actual"] == 20 for row in rows))
+
+	def test_zero_rows_preserve_nonzero_children_and_periods(self):
+		selected = replace(filters(grain="day"), from_date=TODAY - timedelta(days=2), metrics=("actual",))
+		snapshot = Snapshot(TODAY, "USD")
+		first = replace(actual(20, TODAY - timedelta(days=1)), payment=Link("Journal Entry", "FACT-1"))
+		second = replace(first, id="GL-2", amount=D(-20), payment=Link("Journal Entry", "FACT-2"))
+		rows = Calendar(selected, snapshot, [first, second]).all_rows()
+		self.assertEqual(len(rows), 8)
+		self.assertEqual(rows[0]["total__actual"], 0)
+		self.assertEqual({row["total__actual"] for row in rows if row["level"] == "payment"}, {20, -20})
+		cancelled = replace(second, payment=first.payment)
+		self.assertEqual(Calendar(selected, snapshot, [first, cancelled]).all_rows(), [])
+		other_period = replace(cancelled, date=TODAY - timedelta(days=2))
+		rows = Calendar(selected, snapshot, [first, other_period]).all_rows()
+		self.assertEqual(len(rows), 7)
+		self.assertTrue(all(row["total__actual"] == 0 for row in rows))
+
+	def test_zero_rows_remove_empty_expanders_but_keep_source_details(self):
+		flow = replace(actual(20), payment=Link("Journal Entry", "HIDDEN-FACT"))
+		forecast = replace(flow, id="forecast", metric="forecast", amount=D(40), payment=None)
+		calendar = Calendar(filters(), Snapshot(TODAY, "USD"), [flow, forecast])
+		rows = calendar.all_rows()
+		self.assertEqual(len(rows), 6)
+		self.assertEqual(rows[-1]["level"], "invoice")
+		self.assertFalse(rows[-1]["hasChildren"])
+		self.assertEqual(calendar.details(rows[-1]["id"], "total", "actual")["total"], 20)
 
 	def test_zero_rows_are_explicit_and_do_not_add_amounts(self):
 		s = Snapshot(TODAY, "USD", invoices=[invoice(outstanding=0)])
