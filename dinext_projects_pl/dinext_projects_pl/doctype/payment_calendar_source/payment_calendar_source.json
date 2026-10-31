@@ -1,0 +1,103 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "creation": "2026-10-30 01:12:12.620751",
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "metric",
+    "source_doctype",
+    "enabled",
+    "priority",
+    "date_column",
+    "document_state",
+    "date_field",
+    "fallback_date_field",
+    "statuses",
+    "edit_states"
+  ],
+  "fields": [
+    {
+      "fieldname": "metric",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Metric",
+      "options": "Plan\nForecast",
+      "reqd": 1
+    },
+    {
+      "fieldname": "source_doctype",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Source DocType",
+      "options": "Sales Order\nPurchase Order\nSales Invoice\nPurchase Invoice\nPayment Request\nPayment Order\nPayment Entry",
+      "reqd": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "enabled",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Enabled"
+    },
+    {
+      "fieldname": "priority",
+      "fieldtype": "Int",
+      "in_list_view": 1,
+      "label": "Priority",
+      "reqd": 1
+    },
+    {
+      "default": "Submitted",
+      "fieldname": "document_state",
+      "fieldtype": "Select",
+      "label": "Document state",
+      "options": "Draft\nSubmitted\nBoth",
+      "reqd": 1
+    },
+    {
+      "description": "Empty selection accepts all business states. Cancelled documents are always excluded.",
+      "fieldname": "statuses",
+      "fieldtype": "Small Text",
+      "label": "Allowed business states",
+      "read_only": 1
+    },
+    {
+      "fieldname": "edit_states",
+      "fieldtype": "Button",
+      "label": "Choose business states"
+    },
+    {
+      "fieldname": "date_field",
+      "fieldtype": "Select",
+      "label": "Date source",
+      "reqd": 1
+    },
+    {
+      "fieldname": "fallback_date_field",
+      "fieldtype": "Select",
+      "label": "Fallback date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "date_column",
+      "fieldtype": "Column Break"
+    }
+  ],
+  "grid_page_length": 50,
+  "index_web_pages_for_search": 1,
+  "istable": 1,
+  "links": [],
+  "modified": "2026-10-30 03:31:50.878466",
+  "modified_by": "Administrator",
+  "module": "Dinext Projects Pl",
+  "name": "Payment Calendar Source",
+  "owner": "Administrator",
+  "permissions": [],
+  "row_format": "Dynamic",
+  "rows_threshold_for_grid_search": 20,
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}

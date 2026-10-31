@@ -1,11 +1,15 @@
 // Клиентский скрипт для Doctype "Project"
+/* global dinext_projects, dinext_projects_pl */
 frappe.provide("dinext_projects_pl");
 
 const PROJECT_BUDGET_TAB_FIELDNAME = "custom_pl";
 const PROJECT_BUDGET_TABLE_SELECTOR = ".budget-container .budget-table";
 
 function get_project_budget_open_tab_storage_key() {
-	return dinext_projects_pl.PROJECT_BUDGET_OPEN_TAB_STORAGE_KEY || "dinext_projects_pl_open_budget_tab";
+	return (
+		dinext_projects_pl.PROJECT_BUDGET_OPEN_TAB_STORAGE_KEY ||
+		"dinext_projects_pl_open_budget_tab"
+	);
 }
 
 function should_open_project_budget_tab(frm) {
@@ -90,7 +94,9 @@ function schedule_open_project_budget_tab(frm) {
 	setTimeout(apply, 1200);
 
 	if ($wrapper) {
-		$wrapper.off("render_complete.project_pl_open").one("render_complete.project_pl_open", apply);
+		$wrapper
+			.off("render_complete.project_pl_open")
+			.one("render_complete.project_pl_open", apply);
 	}
 }
 
@@ -163,13 +169,15 @@ function scroll_to_project_budget_table(frm) {
 }
 
 frappe.ui.form.on("Project", {
-    refresh: function(frm) {
-        render_budget_table(frm);
-        schedule_open_project_budget_tab(frm);
-    },
-    onload_post_render: function(frm) {
-        schedule_open_project_budget_tab(frm);
-    }
+	refresh: function (frm) {
+		const ready = render_budget_table(frm);
+		schedule_open_project_budget_tab(frm);
+		// Later refresh handlers bind Metrics/P&L only after the lazy API exists.
+		return ready;
+	},
+	onload_post_render: function (frm) {
+		schedule_open_project_budget_tab(frm);
+	},
 });
 
 /**
@@ -186,39 +194,39 @@ frappe.provide("dinext_projects");
 frappe.provide("dinext_projects.project_budget_forecast_menu");
 frappe.provide("dinext_projects.project_pl_forecast_menu");
 if (!Array.isArray(dinext_projects.project_budget_forecast_menu)) {
-    dinext_projects.project_budget_forecast_menu = Array.isArray(
-        dinext_projects.project_pl_forecast_menu
-    )
-        ? dinext_projects.project_pl_forecast_menu
-        : [];
+	dinext_projects.project_budget_forecast_menu = Array.isArray(
+		dinext_projects.project_pl_forecast_menu
+	)
+		? dinext_projects.project_pl_forecast_menu
+		: [];
 }
 if (
-    !Array.isArray(dinext_projects.project_pl_forecast_menu) ||
-    dinext_projects.project_pl_forecast_menu !== dinext_projects.project_budget_forecast_menu
+	!Array.isArray(dinext_projects.project_pl_forecast_menu) ||
+	dinext_projects.project_pl_forecast_menu !== dinext_projects.project_budget_forecast_menu
 ) {
-    if (
-        Array.isArray(dinext_projects.project_pl_forecast_menu) &&
-        dinext_projects.project_pl_forecast_menu.length &&
-        !dinext_projects.project_budget_forecast_menu.length
-    ) {
-        dinext_projects.project_budget_forecast_menu = dinext_projects.project_pl_forecast_menu;
-    }
-    dinext_projects.project_pl_forecast_menu = dinext_projects.project_budget_forecast_menu;
+	if (
+		Array.isArray(dinext_projects.project_pl_forecast_menu) &&
+		dinext_projects.project_pl_forecast_menu.length &&
+		!dinext_projects.project_budget_forecast_menu.length
+	) {
+		dinext_projects.project_budget_forecast_menu = dinext_projects.project_pl_forecast_menu;
+	}
+	dinext_projects.project_pl_forecast_menu = dinext_projects.project_budget_forecast_menu;
 }
 
 function render_pl_chart(frm, init = true) {
-    if (
-        window.ProjectBudget?.hasPlAmountAccess &&
-        !window.ProjectBudget.hasPlAmountAccess(frm?.project_budget)
-    ) {
-        return;
-    }
-    const renderChart = globalThis.render_pl_chart_impl;
-    if (typeof renderChart !== "function") {
-        return;
-    }
+	if (
+		window.ProjectBudget?.hasPlAmountAccess &&
+		!window.ProjectBudget.hasPlAmountAccess(frm?.project_budget)
+	) {
+		return;
+	}
+	const renderChart = globalThis.render_pl_chart_impl;
+	if (typeof renderChart !== "function") {
+		return;
+	}
 
-    return renderChart(frm, init);
+	return renderChart(frm, init);
 }
 
 dinext_projects_pl.renderPlChart = render_pl_chart;
@@ -233,7 +241,8 @@ function refresh_project_budget_forecast_dropdown(frm) {
 }
 
 frappe.provide("dinext_projects");
-dinext_projects.refresh_project_budget_forecast_dropdown = refresh_project_budget_forecast_dropdown;
+dinext_projects.refresh_project_budget_forecast_dropdown =
+	refresh_project_budget_forecast_dropdown;
 dinext_projects.refresh_pl_forecast_dropdown = refresh_project_budget_forecast_dropdown;
 
 /**
@@ -277,7 +286,7 @@ function render_budget_table(frm) {
 	}
 	wrapper.addClass("budget-container").empty();
 	$('<div class="budget-table"></div>').appendTo(wrapper);
-	schedule_pl_mount(frm);
+	return schedule_pl_mount(frm);
 }
 
 /** Shell on refresh; grid only when tab P&L is visible. */
@@ -307,50 +316,52 @@ function schedule_pl_mount(frm) {
 
 	// Bundle installs bindLazyTabMount; do not call whenReady here (that mounts eagerly).
 	const bundle = frappe.assets.bundled_asset("project-budget.bundle.js");
-	frappe.require([bundle], () => {
+	return frappe.require([bundle], () => {
 		if (!tryBind()) {
-			console.error("[Project P&L] bindLazyTabMount missing after bundle — refuse eager mount");
+			console.error(
+				"[Project P&L] bindLazyTabMount missing after bundle — refuse eager mount"
+			);
 		}
 	});
 }
 
 /** Month periods for P&L / risk / WE forecast (quarter/year branches removed). */
 function get_budget_display_periods(frm, periodType) {
-    const periods = [];
-    if (!frm?.doc?.expected_start_date || !frm.doc.expected_end_date) {
-        return periods;
-    }
-    // Only month granularity is used by live callers.
-    if (periodType && periodType !== "month") {
-        periodType = "month";
-    }
+	const periods = [];
+	if (!frm?.doc?.expected_start_date || !frm.doc.expected_end_date) {
+		return periods;
+	}
+	// Only month granularity is used by live callers.
+	if (periodType && periodType !== "month") {
+		periodType = "month";
+	}
 
-    const month_start = frappe.datetime.month_start();
-    const start = frappe.datetime.str_to_obj(frm.doc.expected_start_date);
-    const end = frappe.datetime.str_to_obj(frm.doc.expected_end_date);
-    let current = new Date(start.getFullYear(), start.getMonth(), 1);
-    const last = new Date(end.getFullYear(), end.getMonth(), 1);
+	const month_start = frappe.datetime.month_start();
+	const start = frappe.datetime.str_to_obj(frm.doc.expected_start_date);
+	const end = frappe.datetime.str_to_obj(frm.doc.expected_end_date);
+	let current = new Date(start.getFullYear(), start.getMonth(), 1);
+	const last = new Date(end.getFullYear(), end.getMonth(), 1);
 
-    while (current <= last) {
-        const year = current.getFullYear();
-        const month = current.getMonth() + 1;
-        let is_past;
-        if (
-            frm.budget_view_options == __("Fact only") ||
-            frm.budget_view_options == __("Actual only")
-        ) {
-            is_past = true;
-        } else if (frm.budget_view_options == __("Forecast only")) {
-            is_past = false;
-        } else {
-            is_past = frappe.datetime.obj_to_str(current) < month_start;
-        }
-        periods.push({ year, month, is_past });
-        current = frappe.datetime.str_to_obj(
-            frappe.datetime.add_months(frappe.datetime.obj_to_str(current), 1)
-        );
-    }
-    return periods;
+	while (current <= last) {
+		const year = current.getFullYear();
+		const month = current.getMonth() + 1;
+		let is_past;
+		if (
+			frm.budget_view_options == __("Fact only") ||
+			frm.budget_view_options == __("Actual only")
+		) {
+			is_past = true;
+		} else if (frm.budget_view_options == __("Forecast only")) {
+			is_past = false;
+		} else {
+			is_past = frappe.datetime.obj_to_str(current) < month_start;
+		}
+		periods.push({ year, month, is_past });
+		current = frappe.datetime.str_to_obj(
+			frappe.datetime.add_months(frappe.datetime.obj_to_str(current), 1)
+		);
+	}
+	return periods;
 }
 
 /**
@@ -359,7 +370,10 @@ function get_budget_display_periods(frm, periodType) {
  * @param {Form} frm
  */
 function refresh_project_budget(frm) {
-	const visible = window.project_workload_assignment?.isFieldTabVisible?.(frm, "custom_planning");
+	const visible = window.project_workload_assignment?.isFieldTabVisible?.(
+		frm,
+		"custom_planning"
+	);
 	// Only mount/refresh when visibly on P&L. undefined/false → defer.
 	if (visible !== true) {
 		frm._plRefreshPending = true;

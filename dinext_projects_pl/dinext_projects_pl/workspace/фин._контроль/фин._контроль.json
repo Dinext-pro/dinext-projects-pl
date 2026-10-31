@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\": \"WBE8tN7oj_\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h3\\\">\u0424\u0438\u043d. \u041a\u043e\u043d\u0442\u0440\u043e\u043b\u044c</span>\", \"col\": 12}}, {\"id\": \"Fnol0eAkmq\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"gXzwuLZWrf\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Cost Level\", \"col\": 10}}, {\"id\": \"52X1h5FfQa\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"0Ysnd-8nUD\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b></b></span><span class=\\\"h4\\\">\u0421\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u043d\u0438\u044f</span><b></b>\", \"col\": 12}}, {\"id\": \"pFpt7wl4IT\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Cost Center Allocation\", \"col\": 3}}, {\"id\": \"Aw7YYWFbm1\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"1NmqS2vZhd\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\">\u041e\u0442\u0447\u0435\u0442\u043d\u043e\u0441\u0442\u044c</span>\", \"col\": 12}}, {\"id\": \"PUgnEd11jg\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"L9rnsRIIVn\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"\u041a\u043e\u043d\u0442\u0440\u043e\u043b\u044c \u0441\u0442\u0430\u0432\u043e\u043a \u043f\u043e T&M \u041f\u0440\u043e\u0435\u043a\u0442\u0430\u043c\", \"col\": 10}}]",
+ "content": "[{\"id\":\"WBE8tN7oj_\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h3\\\">Financial Control</span>\",\"col\":12}},{\"id\":\"Fnol0eAkmq\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"gXzwuLZWrf\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cost Level\",\"col\":10}},{\"id\":\"52X1h5FfQa\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"0Ysnd-8nUD\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b></b></span><span class=\\\"h4\\\">\u0421\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u043d\u0438\u044f</span><b></b>\",\"col\":12}},{\"id\":\"pFpt7wl4IT\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cost Center Allocation\",\"col\":3}},{\"id\":\"Aw7YYWFbm1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"1NmqS2vZhd\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">\u041e\u0442\u0447\u0435\u0442\u043d\u043e\u0441\u0442\u044c</span>\",\"col\":12}},{\"id\":\"PUgnEd11jg\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"L9rnsRIIVn\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"\u041a\u043e\u043d\u0442\u0440\u043e\u043b\u044c \u0441\u0442\u0430\u0432\u043e\u043a \u043f\u043e T&M \u041f\u0440\u043e\u0435\u043a\u0442\u0430\u043c\",\"col\":10}}]",
  "creation": "2026-02-07 13:31:04.032251",
  "custom_blocks": [],
  "docstatus": 0,
@@ -13,7 +13,7 @@
  "is_hidden": 0,
  "label": "\u0424\u0438\u043d. \u041a\u043e\u043d\u0442\u0440\u043e\u043b\u044c",
  "links": [],
- "modified": "2026-08-06 03:00:43.213522",
+ "modified": "2026-10-28 02:08:22.044341",
  "modified_by": "Administrator",
  "module": "Dinext Projects Pl",
  "name": "\u0424\u0438\u043d. \u041a\u043e\u043d\u0442\u0440\u043e\u043b\u044c",
