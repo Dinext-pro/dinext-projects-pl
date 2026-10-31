@@ -139,24 +139,27 @@ class TestLiquidityIntegration(FrappeTestCase):
 		def flatten(rows):
 			return [node for row in rows for node in [row, *flatten(row.get("children", []))]]
 
-		for grouping in ("project_party", "party_project", "party_only"):
-			filters = dict(self.filters, grouping=grouping)
-			rows = flatten(get_calendar(filters, depth=7)["rows"])
-			links = {(r["document"]["doctype"], r["document"]["name"]) for r in rows if r.get("document")}
-			self.assertEqual(
-				links,
-				expected - ({("Project", self.context["project"])} if grouping == "party_only" else set()),
-			)
-			for row in rows:
-				if row.get("document"):
-					self.assertEqual(
-						row["icon"], frappe.get_meta(row["document"]["doctype"]).get("icon") or ""
-					)
-				else:
-					self.assertEqual(row["level"], "direction")
-			root = get_calendar(filters)["rows"][0]
-			lazy = get_children(filters, root["id"])
-			self.assertTrue(lazy["rows"][0].get("document"))
+		for show_zero in (False, True):
+			for grouping in ("project_party", "party_project", "party_only"):
+				filters = dict(self.filters, grouping=grouping, show_zero=show_zero)
+				rows = flatten(get_calendar(filters, depth=7)["rows"])
+				links = {(r["document"]["doctype"], r["document"]["name"]) for r in rows if r.get("document")}
+				self.assertEqual(
+					links,
+					expected
+					- ({("Project", self.context["project"])} if grouping == "party_only" else set())
+					- ({(payment.doctype, payment.name)} if not show_zero else set()),
+				)
+				for row in rows:
+					if row.get("document"):
+						self.assertEqual(
+							row["icon"], frappe.get_meta(row["document"]["doctype"]).get("icon") or ""
+						)
+					else:
+						self.assertEqual(row["level"], "direction")
+				root = get_calendar(filters)["rows"][0]
+				lazy = get_children(filters, root["id"])
+				self.assertTrue(lazy["rows"][0].get("document"))
 
 	def test_tree_navigation_does_not_link_unreadable_counterparty(self):
 		order = fixtures.sales_order(self.context)
@@ -268,7 +271,12 @@ class TestLiquidityIntegration(FrappeTestCase):
 		self.assertEqual(payload["balances"]["current_cash"], 20)
 		self.assertEqual(payload["balances"]["periods"][-1]["projected_closing"], 60)
 		self.assertTrue(any(r["label"] == contract.name for r in result.all_rows()))
-		self.assertTrue(any(r["label"] == payment.name for r in result.all_rows()))
+		self.assertFalse(any(r["label"] == payment.name for r in result.all_rows()))
+		for selected in (dict(self.filters, metrics=["actual"]), dict(self.filters, show_zero=True)):
+			visible = calendar(selected)
+			self.assertTrue(any(r["label"] == payment.name for r in visible.all_rows()))
+			self.assertEqual(visible.details("root", "total", "actual")["total"], 20)
+			self.assertEqual(visible.payload()["balances"], payload["balances"])
 		workbook = load_workbook(BytesIO(make_workbook(result)))
 		self.assertGreater(len(workbook.worksheets[1]["A"]), 1)
 		self.assertEqual(workbook.worksheets[1]["D2"].data_type, "n")
