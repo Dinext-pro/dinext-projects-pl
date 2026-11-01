@@ -769,12 +769,13 @@ describe("Liquidity Payment Calendar", () => {
 		cy.window().then((win) => {
 			const view = win.frappe.query_report.__liquidityView;
 			const columns = view.columns();
-			view.payload.periods.forEach((period, index) =>
-				expect(columns[index + 2].children[0].headerName).to.eq(
+			view.payload.periods.forEach((period) => {
+				const group = columns.find((item) => item.children?.[0].field === period.key + "__combined");
+				expect(group.children[0].headerName).to.eq(
 					period.end < view.payload.as_of ? "Факт" : "Прогноз"
-				)
-			);
-			expect(columns[1].children[0].headerName).to.eq("Прогноз");
+				);
+			});
+			expect(columns.some((item) => item.children?.[0].field === "undated__combined")).to.eq(false);
 			expect(columns.at(-1).children[0].headerName).to.eq("Движение");
 		});
 		cy.task("clearLiquidityWorkbook");
@@ -1144,6 +1145,18 @@ describe("Liquidity Payment Calendar", () => {
 	testCase(
 		"CT-04 keeps compact totals pinned with conditional undated and muted zeros in both themes",
 		() => {
+			const changeSelection = (field, value, alias) => {
+				cy.intercept("**/api/method/" + API + "get_calendar*").as(alias);
+				const selector = field === "metrics" ? "[data-testid=liquidity-display]" : "[data-fieldname=direction] select";
+				cy.get(selector).should("be.enabled").select(value);
+				cy.wait("@" + alias).then(({ response }) => {
+					expect(response.statusCode).to.eq(200);
+					if (field === "metrics") expect(response.body.message.filters.metrics).to.have.members(["plan", value]);
+					else expect(response.body.message.filters.direction).to.eq(value);
+				});
+				cy.get("[data-testid=liquidity-calendar]").should("have.attr", "aria-busy", "false");
+				cy.get(selector).should("have.value", value).and("be.enabled");
+			};
 			for (const undated of [false, true]) {
 				if (undated) cy.seedLiquidity("undated").then((data) => (context = data));
 				cy.then(() => cy.openLiquidity(context));
@@ -1201,14 +1214,14 @@ describe("Liquidity Payment Calendar", () => {
 					"be.visible"
 				);
 			}
-			cy.liquidityMode("actual");
+			changeSelection("metrics", "actual", "undatedActual");
 			cy.get(grid + " [col-id^='undated__']").should("not.exist");
-			cy.liquidityMode("forecast");
+			changeSelection("metrics", "forecast", "undatedForecast");
 			cy.get(grid + " .ag-center-cols-viewport").scrollTo(0, 0, { ensureScrollable: false });
 			cy.get(grid + " .ag-header [col-id='undated__forecast']").should("be.visible");
-			cy.liquidityFilter("direction", "out");
+			changeSelection("direction", "out", "undatedDirectionOut");
 			cy.get(grid + " [col-id^='undated__']").should("not.exist");
-			cy.liquidityFilter("direction", "");
+			changeSelection("direction", "", "undatedDirectionReset");
 			cy.get(grid + " .ag-header [col-id='undated__forecast']").should("be.visible");
 		}
 	);
