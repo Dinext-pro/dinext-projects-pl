@@ -92,6 +92,8 @@ Open **Liquidity Payment Calendar** from **Analytics**, **Financial Control** or
 4. Expand levels in batches, select amounts to see selection statistics, double-click an amount for source details or double-click a linked name to open its document.
 5. Compare balances and the cash chart; use the XLSX button immediately left of the table's Fullscreen control. Detail headers stay visible while scrolling. Both Desk themes are supported, including a runtime theme switch.
 
+The **Without date** group appears before the periods only when the current permitted selection contains documents without an expected date in the displayed metrics. Otherwise it is omitted from both the table and XLSX. Filters and metric switches update its visibility; expanding rows does not affect it. Opposing undated amounts with a zero net total still keep the group visible.
+
 The calendar is read-only. It recalculates from authorized source documents without changing them or storing a separate allocation register. Actual cash and actual opening balances come from authorized Bank/Cash `GL Entry` movements. Plan and forecast are calculated independently using **Payment Calendar Settings**. Projected balances, including the projected opening balance before the displayed range, include the same settings-derived expected movements; incomplete or restricted company-wide cash coverage hides company balances instead of presenting a partial balance as complete.
 
 Standalone Payment Requests are covered by invoices using fixed FIFO after explicit links. Matching requires the same company, direction, party type/name, project, contract and original currency; blank analytics match blank analytics. A common order is optional, while conflicting order links prevent a match. Invoices may predate a request. Coverage uses full obligations and retains paid/out-of-range documents; repayments are deducted after allocation exactly once. For request `100`, invoice `60` and invoice payment `20`, forecast is `40` uncovered request + `40` invoice debt = **80**. FIFO queue order uses request `transaction_date` / invoice `posting_date`, then `creation` and `name`, with missing dates last; changing expected date fields does not change this fixed queue order.
@@ -106,7 +108,7 @@ Methods use the prefix `dinext_projects_pl.liquidity.api.`; filter and response 
 
 | Method | Contract |
 | --- | --- |
-| `get_calendar` | Authorized initial snapshot; returns `settings_version` with rows, periods, KPIs, warnings and available balances. |
+| `get_calendar` | Authorized initial snapshot; returns `settings_version`, `has_undated` and rows, periods, KPIs, warnings and available balances. |
 | `get_children` | Returns `{rows, settings_version}` for a node; pass the initial `expected_settings_version`. |
 | `get_cell_details` | Bounded, authorized components for a cell; pass the same expected version. |
 | `export_liquidity_calendar` | Downloads the workbook for the full permitted scope; pass the same expected version. |
