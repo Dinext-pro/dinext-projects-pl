@@ -770,12 +770,16 @@ describe("Liquidity Payment Calendar", () => {
 			const view = win.frappe.query_report.__liquidityView;
 			const columns = view.columns();
 			view.payload.periods.forEach((period) => {
-				const group = columns.find((item) => item.children?.[0].field === period.key + "__combined");
+				const group = columns.find(
+					(item) => item.children?.[0].field === period.key + "__combined"
+				);
 				expect(group.children[0].headerName).to.eq(
 					period.end < view.payload.as_of ? "Факт" : "Прогноз"
 				);
 			});
-			expect(columns.some((item) => item.children?.[0].field === "undated__combined")).to.eq(false);
+			expect(columns.some((item) => item.children?.[0].field === "undated__combined")).to.eq(
+				false
+			);
 			expect(columns.at(-1).children[0].headerName).to.eq("Движение");
 		});
 		cy.task("clearLiquidityWorkbook");
@@ -1147,14 +1151,25 @@ describe("Liquidity Payment Calendar", () => {
 		() => {
 			const changeSelection = (field, value, alias) => {
 				cy.intercept("**/api/method/" + API + "get_calendar*").as(alias);
-				const selector = field === "metrics" ? "[data-testid=liquidity-display]" : "[data-fieldname=direction] select";
+				const selector =
+					field === "metrics"
+						? "[data-testid=liquidity-display]"
+						: "[data-fieldname=direction] select";
 				cy.get(selector).should("be.enabled").select(value);
 				cy.wait("@" + alias).then(({ response }) => {
 					expect(response.statusCode).to.eq(200);
-					if (field === "metrics") expect(response.body.message.filters.metrics).to.have.members(["plan", value]);
+					if (field === "metrics")
+						expect(response.body.message.filters.metrics).to.have.members([
+							"plan",
+							value,
+						]);
 					else expect(response.body.message.filters.direction).to.eq(value);
 				});
-				cy.get("[data-testid=liquidity-calendar]").should("have.attr", "aria-busy", "false");
+				cy.get("[data-testid=liquidity-calendar]").should(
+					"have.attr",
+					"aria-busy",
+					"false"
+				);
 				cy.get(selector).should("have.value", value).and("be.enabled");
 			};
 			for (const undated of [false, true]) {
