@@ -13,7 +13,7 @@ def execute(filters=None):
 		else next((metric for metric in ("actual", "forecast") if metric in selected), None)
 	)
 	metrics = (["plan"] if "plan" in selected else []) + ([cash_metric] if cash_metric else [])
-	keys = ["undated", *(period.key for period in result.periods), "total"]
+	keys = (["undated"] if result.has_undated else []) + [period.key for period in result.periods] + ["total"]
 	metric_labels = {
 		"plan": _("Plan"),
 		"actual": _("Actual"),

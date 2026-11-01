@@ -95,6 +95,17 @@ class Calendar:
 		self.balances = self.build_balances()
 
 	@property
+	def has_undated(self):
+		"""Describe the full authorized selection, independently of lazy tree rows."""
+		metrics = set(self.filters.metrics)
+		if {"actual", "forecast"}.issubset(metrics):
+			metrics.remove("actual")  # The combined undated column displays forecast.
+		return any(
+			flow.date is None and flow.metric in metrics and (self.filters.show_zero or flow.amount != ZERO)
+			for flow in self.visible
+		)
+
+	@property
 	def nodes(self):
 		self.ensure_tree()
 		return self._nodes
@@ -403,6 +414,7 @@ class Calendar:
 				"currency": self.snapshot.currency,
 				"precision": self.snapshot.precision,
 				"periods": [asdict(p) for p in self.periods],
+				"has_undated": self.has_undated,
 				"rows": self.children(),
 				"directions": by_direction,
 				"net": net,

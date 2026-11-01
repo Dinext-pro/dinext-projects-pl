@@ -73,6 +73,86 @@ def filters(**kwargs):
 
 
 class TestLiquidityCalculation(unittest.TestCase):
+	def test_undated_presence_obeys_displayed_metrics_and_zero_rows(self):
+		snapshot = Snapshot(TODAY, "USD")
+		for source_metric in ("plan", "forecast", "actual"):
+			for selected in (
+				("actual",),
+				("forecast",),
+				("plan",),
+				("actual", "forecast"),
+				("plan", "forecast", "actual"),
+			):
+				for amount in (D(0), D(7)):
+					for show_zero in (False, True):
+						with self.subTest(
+							source=source_metric, selected=selected, amount=amount, show_zero=show_zero
+						):
+							flow = replace(actual(amount), metric=source_metric, date=None)
+							result = Calendar(
+								filters(metrics=selected, show_zero=show_zero), snapshot, [flow]
+							)
+							expected = source_metric in selected and (show_zero or bool(amount))
+							if source_metric == "actual" and "forecast" in selected:
+								expected = False
+							self.assertEqual(result.has_undated, expected)
+							self.assertEqual(result.payload()["has_undated"], expected)
+
+	def test_undated_presence_is_not_a_net_total_or_lazy_tree_heuristic(self):
+		incoming = replace(actual(7), metric="forecast", date=None)
+		outgoing = replace(incoming, id="out", direction="out")
+		snapshot = Snapshot(TODAY, "USD")
+		result = Calendar(filters(), snapshot, [incoming, outgoing])
+		self.assertTrue(result.has_undated)
+		self.assertIsNone(result._nodes)
+		for depth in (1, 2, 7):
+			result.tree(depth)
+			self.assertTrue(result.payload()["has_undated"])
+		self.assertEqual(result.payload()["net"]["undated__forecast"], 0)
+		self.assertEqual(result.details("root", "undated", "forecast")["count"], 2)
+		self.assertFalse(Calendar(filters(direction="out"), snapshot, [incoming]).has_undated)
+		for flows in (
+			[],
+			[replace(incoming, date=TODAY)],
+			[replace(incoming, date=TODAY + timedelta(days=100))],
+		):
+			self.assertFalse(Calendar(filters(), snapshot, flows).payload()["has_undated"])
+
+	def test_export_omits_empty_undated_group_and_keeps_real_undated_components(self):
+		from io import BytesIO
+		from unittest.mock import patch
+
+		from openpyxl import load_workbook
+
+		from dinext_projects_pl.liquidity.api import make_workbook
+
+		dated = replace(actual(40), metric="forecast")
+		undated = replace(dated, id="undated", date=None, amount=D(7))
+		for flows, selected, present in (
+			([dated], ("forecast",), False),
+			([dated, undated], ("actual",), False),
+			([dated, undated], ("forecast",), True),
+			([dated, undated, replace(undated, id="offset", direction="out")], ("actual", "forecast"), True),
+		):
+			with self.subTest(selected=selected, present=present):
+				result = Calendar(filters(metrics=selected), Snapshot(TODAY, "USD"), flows)
+				with patch("dinext_projects_pl.liquidity.api._", lambda text: text):
+					book = load_workbook(BytesIO(make_workbook(result)))
+				rows = list(book.active.values)
+				self.assertEqual(any("Without date" in str(header) for header in rows[0]), present)
+				self.assertTrue(rows[0][-1].startswith("Total / "))
+				self.assertTrue(
+					all(
+						cell.data_type == "n"
+						for row in book.active.iter_rows(min_row=2, min_col=3)
+						for cell in row
+					)
+				)
+				if present:
+					self.assertEqual(rows[0][2], "Without date / Forecast")
+					self.assertIn(7, [row[2] for row in rows[1:]])
+					self.assertEqual(result.details("root", "total", "forecast")["total"], 40)
+
 	def test_export_labels_follow_each_period_and_mixed_total(self):
 		from io import BytesIO
 		from unittest.mock import patch
@@ -97,7 +177,7 @@ class TestLiquidityCalculation(unittest.TestCase):
 			else:
 				self.assertNotIn("Without payment document", labels)
 			if len(metrics) == 2:
-				self.assertEqual(headers[0], "Without date / Forecast")
+				self.assertFalse(any("Without date" in label for label in headers))
 				self.assertTrue(any(label.endswith(" / Actual") for label in headers))
 				self.assertTrue(any(label.endswith(" / Forecast") for label in headers))
 				self.assertEqual(headers[-1], "Total / Cash movement")
@@ -195,7 +275,7 @@ class TestLiquidityCalculation(unittest.TestCase):
 			)
 			self.assertEqual(result.details("net", "total", metric)["total"], 30)
 
-	def test_combined_export_has_plan_then_cash_with_undated_first(self):
+	def test_combined_export_has_plan_then_cash_and_omits_empty_undated_group(self):
 		from io import BytesIO
 		from unittest.mock import patch
 
@@ -208,10 +288,10 @@ class TestLiquidityCalculation(unittest.TestCase):
 		with patch("dinext_projects_pl.liquidity.api._", side_effect=lambda text: text):
 			book = load_workbook(BytesIO(make_workbook(result)))
 		rows = list(book.worksheets[0].values)
-		self.assertEqual(rows[0][2:4], ("Without date / Plan", "Without date / Forecast"))
+		self.assertEqual(rows[0][2:4], ("44 · 2026 / Plan", "44 · 2026 / Forecast"))
 		self.assertEqual(rows[0][-2:], ("Total / Plan", "Total / Forecast"))
 		self.assertEqual(rows[1][-1], 40)
-		self.assertIn("44 · 2026", rows[0][4])
+		self.assertNotIn("Without date", str(rows[0]))
 		components = list(book.worksheets[1].values)[1:]
 		self.assertEqual({row[1] for row in components}, {"forecast"})
 		self.assertEqual(sum(row[3] for row in components), 40)

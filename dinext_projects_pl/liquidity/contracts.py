@@ -140,6 +140,7 @@ class CalendarResponse(TypedDict):
 	currency: str
 	precision: int
 	periods: list[PeriodResponse]
+	has_undated: bool
 	rows: list[CalendarRowResponse]
 	directions: dict[str, dict[str, float]]
 	net: dict[str, float]

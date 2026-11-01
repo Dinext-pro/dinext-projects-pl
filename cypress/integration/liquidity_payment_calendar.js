@@ -769,12 +769,17 @@ describe("Liquidity Payment Calendar", () => {
 		cy.window().then((win) => {
 			const view = win.frappe.query_report.__liquidityView;
 			const columns = view.columns();
-			view.payload.periods.forEach((period, index) =>
-				expect(columns[index + 2].children[0].headerName).to.eq(
+			view.payload.periods.forEach((period) => {
+				const group = columns.find(
+					(item) => item.children?.[0].field === period.key + "__combined"
+				);
+				expect(group.children[0].headerName).to.eq(
 					period.end < view.payload.as_of ? "Факт" : "Прогноз"
-				)
+				);
+			});
+			expect(columns.some((item) => item.children?.[0].field === "undated__combined")).to.eq(
+				false
 			);
-			expect(columns[1].children[0].headerName).to.eq("Прогноз");
 			expect(columns.at(-1).children[0].headerName).to.eq("Движение");
 		});
 		cy.task("clearLiquidityWorkbook");
@@ -1142,48 +1147,97 @@ describe("Liquidity Payment Calendar", () => {
 	});
 
 	testCase(
-		"CT-04 keeps compact totals pinned with undated first and muted zeros in both themes",
+		"CT-04 keeps compact totals pinned with conditional undated and muted zeros in both themes",
 		() => {
-			cy.openLiquidity(context);
-			cy.liquidityPlan(true);
-			for (const theme of ["dark", "light"]) {
-				cy.window().then((win) =>
-					win.document.documentElement.setAttribute("data-theme", theme)
-				);
-				cy.window().should((win) => {
-					const view = win.frappe.query_report.__liquidityView;
-					expect(view.chart.getOption().yAxis[0].splitLine.show).to.eq(true);
-					expect(view.chart.getOption().xAxis[0].splitLine.show).to.eq(true);
+			const changeSelection = (field, value, alias) => {
+				cy.intercept("**/api/method/" + API + "get_calendar*").as(alias);
+				const selector =
+					field === "metrics"
+						? "[data-testid=liquidity-display]"
+						: "[data-fieldname=direction] select";
+				cy.get(selector).should("be.enabled").select(value);
+				cy.wait("@" + alias).then(({ response }) => {
+					expect(response.statusCode).to.eq(200);
+					if (field === "metrics")
+						expect(response.body.message.filters.metrics).to.have.members([
+							"plan",
+							value,
+						]);
+					else expect(response.body.message.filters.direction).to.eq(value);
 				});
-				cy.get(grid + " .ag-center-cols-container [col-id='undated__combined']")
-					.first()
-					.should("have.css", "font-size", "12px");
-				cy.get(grid + " .liquidity-zero")
-					.first()
-					.should(($cell) =>
-						expect($cell.css("color")).not.to.eq(
-							$cell.closest(".liquidity-calendar").css("color")
-						)
+				cy.get("[data-testid=liquidity-calendar]").should(
+					"have.attr",
+					"aria-busy",
+					"false"
+				);
+				cy.get(selector).should("have.value", value).and("be.enabled");
+			};
+			for (const undated of [false, true]) {
+				if (undated) cy.seedLiquidity("undated").then((data) => (context = data));
+				cy.then(() => cy.openLiquidity(context));
+				cy.liquidityPlan(true);
+				for (const theme of ["dark", "light"]) {
+					cy.window().then((win) =>
+						win.document.documentElement.setAttribute("data-theme", theme)
 					);
+					cy.window().should((win) => {
+						const view = win.frappe.query_report.__liquidityView;
+						expect(view.payload.has_undated).to.eq(undated);
+						expect(view.chart.getOption().yAxis[0].splitLine.show).to.eq(true);
+						expect(view.chart.getOption().xAxis[0].splitLine.show).to.eq(true);
+						const columns = view.grid.api.getAllDisplayedColumns();
+						expect(columns.find((col) => !col.getPinned()).getColId()).to.eq(
+							(undated ? "undated" : view.payload.periods[0].key) + "__plan"
+						);
+						expect(view.grid.api.getDisplayedRowAtIndex(0).rowHeight).to.eq(26);
+					});
+					cy.get(grid + " .ag-header [col-id='undated__combined']").should(
+						undated ? "be.visible" : "not.exist"
+					);
+					cy.get(grid + " .ag-center-cols-container [col-id$='__combined']")
+						.first()
+						.should("have.css", "font-size", "12px");
+					cy.get(grid + " .liquidity-zero")
+						.first()
+						.should(($cell) =>
+							expect($cell.css("color")).not.to.eq(
+								$cell.closest(".liquidity-calendar").css("color")
+							)
+						);
+					cy.get(grid + " .ag-pinned-right-header [col-id='total__combined']").should(
+						"be.visible"
+					);
+					cy.get(grid).screenshot("liquidity-controls-" + theme + "-undated-" + undated);
+				}
+				cy.task("clearLiquidityWorkbook");
+				cy.get("[data-testid=liquidity-export]").click();
+				cy.readFile("cypress/downloads/liquidity-payment-calendar.xlsx", "binary").should(
+					"have.length.greaterThan",
+					1000
+				);
+				cy.task("readLiquidityWorkbook").then((book) =>
+					expect(book.rows[0].some((label) => String(label).includes("Без даты"))).to.eq(
+						undated
+					)
+				);
+				cy.liquidityScrollRight();
+				cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__combined']")
+					.first()
+					.should("be.visible");
+				cy.viewport(1100, 850);
 				cy.get(grid + " .ag-pinned-right-header [col-id='total__combined']").should(
 					"be.visible"
 				);
-				cy.get(grid).screenshot("liquidity-controls-" + theme);
 			}
-			cy.window().then((win) => {
-				const view = win.frappe.query_report.__liquidityView;
-				const columns = view.grid.api.getAllDisplayedColumns();
-				expect(columns.find((col) => !col.getPinned()).getColId()).to.eq("undated__plan");
-				expect(view.grid.api.getDisplayedRowAtIndex(0).rowHeight).to.eq(26);
-			});
-			cy.liquidityScrollRight();
-			cy.get(grid + " .ag-pinned-right-cols-container [col-id='total__combined']")
-				.first()
-				.should("be.visible");
-			cy.viewport(1100, 850);
-			cy.get(grid + " .ag-pinned-right-header [col-id='total__combined']").should(
-				"be.visible"
-			);
+			changeSelection("metrics", "actual", "undatedActual");
+			cy.get(grid + " [col-id^='undated__']").should("not.exist");
+			changeSelection("metrics", "forecast", "undatedForecast");
+			cy.get(grid + " .ag-center-cols-viewport").scrollTo(0, 0, { ensureScrollable: false });
+			cy.get(grid + " .ag-header [col-id='undated__forecast']").should("be.visible");
+			changeSelection("direction", "out", "undatedDirectionOut");
+			cy.get(grid + " [col-id^='undated__']").should("not.exist");
+			changeSelection("direction", "", "undatedDirectionReset");
+			cy.get(grid + " .ag-header [col-id='undated__forecast']").should("be.visible");
 		}
 	);
 
@@ -1223,16 +1277,17 @@ describe("Liquidity Payment Calendar", () => {
 		cy.get(".modal:visible").should("not.exist");
 		cy.window().then((win) => {
 			const view = win.frappe.query_report.__liquidityView;
-			const groups = view.columns();
-			expect(groups[2].children.map((col) => col.headerName)).to.deep.eq([
-				"План",
-				"Прогноз",
-			]);
-			expect(groups[2].headerName).to.match(/\d{2} · \d{4}/);
+			const group = view
+				.columns()
+				.find(
+					(item) => item.children?.[0].field === view.payload.periods[0].key + "__plan"
+				);
+			expect(group.children.map((col) => col.headerName)).to.deep.eq(["План", "Прогноз"]);
+			expect(group.headerName).to.match(/\d{2} · \d{4}/);
 		});
 		cy.liquidityFilter("grain", "month");
 		cy.window().then((win) =>
-			expect(win.frappe.query_report.__liquidityView.columns()[2].headerName).to.match(
+			expect(win.frappe.query_report.__liquidityView.columns()[1].headerName).to.match(
 				/\d{2}\.\d{4}/
 			)
 		);
@@ -1286,7 +1341,8 @@ describe("Liquidity Payment Calendar", () => {
 		cy.get(grid + " .liquidity-balance-row [col-id$='__plan']").each(($cell) =>
 			expect($cell.text()).to.eq("—")
 		);
-		for (const field of ["total__combined", "undated__combined"]) {
+		cy.get(grid + " [col-id='undated__combined']").should("not.exist");
+		for (const field of ["total__combined"]) {
 			cy.get(grid + ` .liquidity-balance-row [col-id='${field}']`)
 				.should("have.length", 2)
 				.each(($cell) => expect($cell.text()).to.eq("—"));

@@ -18,6 +18,32 @@ def deny_test_project(doc, **kwargs):
 
 
 class TestLiquidityIntegration(FrappeTestCase):
+	def test_undated_column_presence_follows_real_sources_filters_and_depth(self):
+		order = fixtures.sales_order(self.context)
+		invoice = fixtures.sales_invoice(order, 60)
+		fixtures.pay(self.context, invoice, 20)
+		self.assertFalse(get_calendar(self.filters)["has_undated"])
+		invoice.db_set("due_date", None)
+		for row in invoice.payment_schedule:
+			frappe.db.set_value("Payment Schedule", row.name, "due_date", None)
+		for depth in (1, 2, 7):
+			for overrides, present in (
+				({}, True),
+				({"metrics": ["forecast"]}, True),
+				({"metrics": ["actual"]}, False),
+				({"metrics": ["plan"]}, False),
+				({"direction": "out"}, False),
+			):
+				with self.subTest(depth=depth, overrides=overrides):
+					selection = dict(self.filters, **overrides)
+					result = get_calendar(selection, depth=depth)
+					self.assertEqual(result["has_undated"], present)
+					book = load_workbook(BytesIO(make_workbook(calendar(selection))))
+					headers = [cell.value for cell in book.active[1]]
+					self.assertEqual(any("Without date" in str(value) for value in headers), present)
+		self.assertEqual(get_cell_details(self.filters, "root", "undated", "forecast")["total"], 40)
+		self.assertEqual(get_calendar(self.filters)["directions"]["in"]["total__actual"], 20)
+
 	def test_foreign_order_payment_and_draft_advance_keep_order_native_basis(self):
 		from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 		from erpnext.selling.doctype.sales_order.sales_order import make_sales_invoice
@@ -590,6 +616,11 @@ class TestLiquidityIntegration(FrappeTestCase):
 		invoice = fixtures.sales_invoice(order, 60)
 		# A separate non-project order must not leak through the same company.
 		hidden = fixtures.sales_order(self.context, amount=47, project=False)
+		hidden_invoice = fixtures.sales_invoice(hidden, 47)
+		hidden_invoice.db_set("due_date", None)
+		for row in hidden_invoice.payment_schedule:
+			frappe.db.set_value("Payment Schedule", row.name, "due_date", None)
+		self.assertTrue(get_calendar(self.filters)["has_undated"])
 		for doc in (order, invoice):
 			add(doc.doctype, doc.name, user=self.manager, read=1)
 		frappe.set_user(self.manager)
@@ -597,12 +628,14 @@ class TestLiquidityIntegration(FrappeTestCase):
 			result = calendar(dict(self.filters, grouping="party_only"))
 			payload = get_calendar(dict(self.filters, grouping="party_only"), depth=6)
 			self.assertIsNone(payload["balances"])
+			self.assertFalse(payload["has_undated"])
 			self.assertEqual(payload["directions"]["in"]["total__forecast"], 60)
 			self.assertNotIn(hidden.name, str(result.all_rows()))
 			rows = get_cell_details(self.filters, "root", "total", "forecast")["rows"]
 			self.assertTrue(all(r["analytic"]["project"] == self.context["project"] for r in rows))
 			self.assertNotIn(hidden.name, str(get_options("party", fixtures.COMPANY, party_type="Customer")))
 			workbook = load_workbook(BytesIO(make_workbook(result)))
+			self.assertNotIn("Without date", str([cell.value for cell in workbook.active[1]]))
 			self.assertNotIn(hidden.name, str([[c.value for c in r] for s in workbook for r in s]))
 		finally:
 			frappe.set_user("Administrator")

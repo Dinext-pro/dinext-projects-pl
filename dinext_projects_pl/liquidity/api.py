@@ -205,7 +205,7 @@ def make_workbook(result: Calendar) -> bytes:
 	wb = Workbook()
 	ws = wb.active
 	ws.title = _("Calendar")[:31]
-	keys = ["undated"] + [p.key for p in result.periods] + ["total"]
+	keys = (["undated"] if result.has_undated else []) + [p.key for p in result.periods] + ["total"]
 	selected = result.filters.metrics
 	if {"actual", "forecast"}.issubset(selected):
 		cash_metric = "combined"

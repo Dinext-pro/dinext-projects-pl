@@ -84,6 +84,10 @@ class TestLiquidityReport(unittest.TestCase):
 				self.assertTrue(all(column["fieldname"].endswith("__" + metric) for column in columns[1:]))
 				self.assertEqual(chart["data"]["datasets"][1]["values"], expected)
 				self.assertEqual(rows[0]["total__" + metric], total)
+				self.assertEqual(
+					any(column["fieldname"].startswith("undated__") for column in columns),
+					metric == "forecast",
+				)
 
 	def test_plan_precedes_cash_and_never_increases_cash_series(self):
 		columns, rows, _message, chart, _summary, _skip = self.execute(("forecast", "plan", "actual"))

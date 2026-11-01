@@ -762,7 +762,7 @@
 				},
 			];
 			const periods = [
-				["undated", __("Without date")],
+				...(this.payload.has_undated === false ? [] : [["undated", __("Without date")]]),
 				...this.payload.periods.map((p) => [
 					p.key,
 					this.periodLabel(p),
