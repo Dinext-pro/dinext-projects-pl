@@ -341,7 +341,9 @@ export function applyUpdatesToTree(rows, updates) {
 		for (const pk of Object.keys(periodAmountMap)) {
 			const amount = flt(periodAmountMap[pk], 2);
 			if (amount <= 0) continue;
-			setForecast(row, pk, forecastOf(row, pk) + amount);
+			// Own only — display forecast_* may be child rollup and would double-count.
+			const own = ownForecastAmount(row, pk);
+			setForecast(row, pk, (own != null ? own : 0) + amount);
 		}
 	}
 	return root;

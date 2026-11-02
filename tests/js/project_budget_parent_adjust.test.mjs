@@ -157,6 +157,55 @@ test("risk on Task: agg task grows via rollup, own account is raised", () => {
 	assert.equal(taskRow[`own_forecast_${KEY}`], null);
 });
 
+test("WE add on task with rollup paint does not treat rollup as own base", () => {
+	// Parent task shows children rollup 80 but has no own. WE writes +50 on that task.
+	// Bug used forecastOf(rollup 80)+50 → 130 and raised account to 130.
+	const leaf = row("Acc-1TASK-child", {
+		account: "Acc-1",
+		task: "TASK-child",
+		dimensions: [{ doc: "Task", docname: "TASK-child" }],
+		own_forecast: 80,
+		forecast: 80,
+	});
+	const parentTask = row("Acc-1TASK-parent", {
+		account: "Acc-1",
+		task: "TASK-parent",
+		dimensions: [{ doc: "Task", docname: "TASK-parent" }],
+		own_forecast: null,
+		forecast: 80,
+		children: [leaf],
+	});
+	const account = row("Acc-1", {
+		own_forecast: 80,
+		forecast: 80,
+		children: [parentTask],
+	});
+	const updates = [
+		{
+			account: "Acc-1",
+			dimensions: [{ doc: "Task", docname: "TASK-parent" }],
+			period_amount_map: { [KEY]: 50 },
+		},
+	];
+
+	const simulated = applyUpdatesToTree([account], updates);
+	const simParent = simulated[0].children.find((c) => c.task === "TASK-parent");
+	assert.equal(simParent[`own_forecast_${KEY}`], 50);
+
+	const { parent_adjustments } = buildParentAdjustmentsFromUpdates(
+		{ project_budget: { rows: [account] } },
+		updates
+	);
+	const accountAdj = parent_adjustments.find(
+		(item) => item.account === "Acc-1" && !(item.dimensions || []).length
+	);
+	assert.equal(accountAdj, undefined);
+	assert.ok(
+		parent_adjustments.every((item) => flt(item.period_amount_map[KEY], 2) <= 80),
+		"must not overshoot to rollup+delta (130)"
+	);
+});
+
 test("server-shaped Task risk (no row.task, Task in dims) still raises parents", () => {
 	const risk = row("Acc-1TASK-1|risk|RISK-1", {
 		account: "Acc-1",
