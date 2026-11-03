@@ -308,7 +308,7 @@ function findUpdateLeaf(rows, account, dimensions) {
 }
 
 /**
- * Apply reserve/forecast updates onto cloned tree (add to forecast_*).
+ * Apply reserve/forecast updates onto cloned tree (add to own forecast).
  * Risk updates land on the risk child (create under account/task parent if missing).
  */
 export function applyUpdatesToTree(rows, updates) {
@@ -351,6 +351,7 @@ export function applyUpdatesToTree(rows, updates) {
 
 /**
  * After updates (reserves / WE forecast), raise parent forecasts when hierarchy breaks.
+ * Only parents with own > 0 are envelopes. null/empty own → display rollup, no write.
  * Returns { parent_adjustments, adjusted_parents } for bulk_save_reserve_budgets.
  */
 export function buildParentAdjustmentsFromUpdates(frm, updates) {

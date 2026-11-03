@@ -74,7 +74,7 @@ test("own parent too small → parent_adjustments writes raised own", () => {
 	assert.equal(adjusted_parents.length, 1);
 });
 
-test("aggregated parent (own 0) → no own write, display grows via rollup", () => {
+test("aggregated parent (own null) → no own write, display grows via rollup", () => {
 	const child = row("child-task", {
 		account: "Acc-1",
 		task: "TASK-1",
