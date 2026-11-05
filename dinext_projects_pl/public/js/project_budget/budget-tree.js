@@ -256,10 +256,6 @@ function cloneTree(rows) {
 	return JSON.parse(JSON.stringify(rows || []));
 }
 
-function ownForecastOf(row, key) {
-	return Number(row?.[`own_forecast_${key}`] || 0);
-}
-
 function rowTaskId(row) {
 	if (row?.task) return row.task;
 	return (row?.dimensions || []).find((d) => d?.doc === "Task")?.docname || "";
@@ -308,11 +304,16 @@ function findUpdateLeaf(rows, account, dimensions) {
 }
 
 /**
- * Apply reserve/forecast updates onto cloned tree (add to forecast_*).
+ * Apply reserve/forecast updates onto cloned tree.
+ * mode "add" (risk): add the delta to explicit own.
+ * mode "set" (WE forecast): first touch of a row period replaces own with the
+ * calculated sum; a later touch in the same run adds (several tasks, one row).
  * Risk updates land on the risk child (create under account/task parent if missing).
  */
-export function applyUpdatesToTree(rows, updates) {
+export function applyUpdatesToTree(rows, updates, mode = "add") {
 	const root = cloneTree(rows);
+	const replace = mode === "set";
+	const touched = new Set();
 	for (const item of updates || []) {
 		const account = (item.account || "").trim();
 		const dimensions = item.dimensions || [];
@@ -342,8 +343,15 @@ export function applyUpdatesToTree(rows, updates) {
 			const amount = flt(periodAmountMap[pk], 2);
 			if (amount <= 0) continue;
 			// Own only — display forecast_* may be child rollup and would double-count.
-			const own = ownForecastAmount(row, pk);
-			setForecast(row, pk, (own != null ? own : 0) + amount);
+			const touchKey = `${row.id}|${pk}`;
+			if (replace && !touched.has(touchKey)) {
+				setForecast(row, pk, amount);
+				touched.add(touchKey);
+			} else {
+				const own = ownForecastAmount(row, pk);
+				setForecast(row, pk, (own != null ? own : 0) + amount);
+				touched.add(touchKey);
+			}
 		}
 	}
 	return root;
@@ -351,9 +359,11 @@ export function applyUpdatesToTree(rows, updates) {
 
 /**
  * After updates (reserves / WE forecast), raise parent forecasts when hierarchy breaks.
+ * Explicit own, including 0, is an envelope. null/empty own → display rollup, no write.
+ * Raise that own when it is below the new children sum. Do not lower it.
  * Returns { parent_adjustments, adjusted_parents } for bulk_save_reserve_budgets.
  */
-export function buildParentAdjustmentsFromUpdates(frm, updates) {
+export function buildParentAdjustmentsFromUpdates(frm, updates, options) {
 	const parent_adjustments = [];
 	const adjusted_parents = [];
 	const rows = frm?.project_budget?.rows;
@@ -361,7 +371,8 @@ export function buildParentAdjustmentsFromUpdates(frm, updates) {
 		return { parent_adjustments, adjusted_parents };
 	}
 
-	const simulated = applyUpdatesToTree(rows, updates);
+	const mode = typeof options === "string" ? options : options?.mode || "add";
+	const simulated = applyUpdatesToTree(rows, updates, mode);
 	const periodKeys = new Set();
 	for (const item of updates) {
 		for (const pk of Object.keys(item.period_amount_map || {})) {
@@ -389,8 +400,8 @@ export function buildParentAdjustmentsFromUpdates(frm, updates) {
 				const parent = findParent(simulated, current.id);
 				if (!parent) break;
 
-				const own = ownForecastOf(parent, pk);
-				if (own > 0) {
+				const own = ownForecastAmount(parent, pk);
+				if (own != null) {
 					const requiredValue = flt(childForecastSum(parent, pk), 2);
 					if (own < requiredValue) {
 						setForecast(parent, pk, requiredValue);
