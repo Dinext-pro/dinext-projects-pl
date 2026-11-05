@@ -264,6 +264,59 @@ test("WE set replaces leaf and raises parent own only when children exceed it", 
 	assert.equal(raised.parent_adjustments[0].period_amount_map[KEY], 80);
 });
 
+test("explicit parent own 0 rises to the new children sum", () => {
+	const parent = row("Acc-1", {
+		own_forecast: 0,
+		forecast: 0,
+		children: [
+			row("Acc-1TASK-1", {
+				account: "Acc-1",
+				task: "TASK-1",
+				dimensions: [{ doc: "Task", docname: "TASK-1" }],
+				own_forecast: 0,
+				forecast: 0,
+			}),
+		],
+	});
+	const raised = buildParentAdjustmentsFromUpdates(
+		{ project_budget: { rows: [parent] } },
+		[
+			{
+				account: "Acc-1",
+				dimensions: [{ doc: "Task", docname: "TASK-1" }],
+				period_amount_map: { [KEY]: 12000 },
+			},
+		],
+		{ mode: "set" }
+	);
+	assert.equal(raised.parent_adjustments.length, 1);
+	assert.equal(raised.parent_adjustments[0].period_amount_map[KEY], 12000);
+
+	const empty = row("Acc-1", {
+		children: [
+			row("Acc-1TASK-1", {
+				account: "Acc-1",
+				task: "TASK-1",
+				dimensions: [{ doc: "Task", docname: "TASK-1" }],
+				own_forecast: 0,
+				forecast: 0,
+			}),
+		],
+	});
+	const untouched = buildParentAdjustmentsFromUpdates(
+		{ project_budget: { rows: [empty] } },
+		[
+			{
+				account: "Acc-1",
+				dimensions: [{ doc: "Task", docname: "TASK-1" }],
+				period_amount_map: { [KEY]: 12000 },
+			},
+		],
+		{ mode: "set" }
+	);
+	assert.equal(untouched.parent_adjustments.length, 0);
+});
+
 test("server-shaped Task risk (no row.task, Task in dims) still raises parents", () => {
 	const risk = row("Acc-1TASK-1|risk|RISK-1", {
 		account: "Acc-1",

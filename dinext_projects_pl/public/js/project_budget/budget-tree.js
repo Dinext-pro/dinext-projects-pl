@@ -256,10 +256,6 @@ function cloneTree(rows) {
 	return JSON.parse(JSON.stringify(rows || []));
 }
 
-function ownForecastOf(row, key) {
-	return Number(row?.[`own_forecast_${key}`] || 0);
-}
-
 function rowTaskId(row) {
 	if (row?.task) return row.task;
 	return (row?.dimensions || []).find((d) => d?.doc === "Task")?.docname || "";
@@ -363,7 +359,8 @@ export function applyUpdatesToTree(rows, updates, mode = "add") {
 
 /**
  * After updates (reserves / WE forecast), raise parent forecasts when hierarchy breaks.
- * Only parents with own > 0 are envelopes. null/empty own → display rollup, no write.
+ * Explicit own, including 0, is an envelope. null/empty own → display rollup, no write.
+ * Raise that own when it is below the new children sum. Do not lower it.
  * Returns { parent_adjustments, adjusted_parents } for bulk_save_reserve_budgets.
  */
 export function buildParentAdjustmentsFromUpdates(frm, updates, options) {
@@ -403,8 +400,8 @@ export function buildParentAdjustmentsFromUpdates(frm, updates, options) {
 				const parent = findParent(simulated, current.id);
 				if (!parent) break;
 
-				const own = ownForecastOf(parent, pk);
-				if (own > 0) {
+				const own = ownForecastAmount(parent, pk);
+				if (own != null) {
 					const requiredValue = flt(childForecastSum(parent, pk), 2);
 					if (own < requiredValue) {
 						setForecast(parent, pk, requiredValue);
