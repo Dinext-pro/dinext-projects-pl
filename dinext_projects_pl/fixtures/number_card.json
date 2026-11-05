@@ -222,5 +222,33 @@
   "show_percentage_stats": 1,
   "stats_time_interval": "Daily",
   "type": "Document Type"
+ },
+ {
+  "aggregate_function_based_on": null,
+  "background_color": null,
+  "color": "#ECAD4B",
+  "currency": "RUB",
+  "docstatus": 0,
+  "doctype": "Number Card",
+  "document_type": "Expense Claim",
+  "dynamic_filters_json": "[[\"Expense Claim\", \"employee\", \"in\", \"(frappe.boot.dinext_expense_claim_employees?.length ? frappe.boot.dinext_expense_claim_employees : [''])\"], [\"Expense Claim\", \"name\", \"is\", \"(frappe.boot.dinext_expense_claim_employees?.length ? 'set' : 'not set')\"]]",
+  "filters_config": null,
+  "filters_json": "[[\"Expense Claim\", \"docstatus\", \"!=\", 2]]",
+  "function": "Count",
+  "is_public": 1,
+  "is_standard": 1,
+  "label": "Всего заявок на расходы",
+  "method": null,
+  "modified": "2026-11-06 01:11:47.646520",
+  "module": "Dinext Projects Pl",
+  "name": "Всего заявок на расходы",
+  "parent_document_type": null,
+  "report_field": null,
+  "report_function": "Sum",
+  "report_name": null,
+  "show_full_number": 0,
+  "show_percentage_stats": 1,
+  "stats_time_interval": "Daily",
+  "type": "Document Type"
  }
 ]
