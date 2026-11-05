@@ -206,6 +206,64 @@ test("WE add on task with rollup paint does not treat rollup as own base", () =>
 	);
 });
 
+test("WE set replaces leaf and raises parent own only when children exceed it", () => {
+	const child = row("Acc-1TASK-1", {
+		account: "Acc-1",
+		task: "TASK-1",
+		dimensions: [{ doc: "Task", docname: "TASK-1" }],
+		own_forecast: 160,
+		forecast: 160,
+	});
+	const below = row("Acc-1", {
+		own_forecast: 100,
+		forecast: 100,
+		children: [child],
+	});
+	const updates = [
+		{
+			account: "Acc-1",
+			dimensions: [{ doc: "Task", docname: "TASK-1" }],
+			period_amount_map: { [KEY]: 80 },
+		},
+	];
+	const kept = buildParentAdjustmentsFromUpdates(
+		{ project_budget: { rows: [below] } },
+		updates,
+		{ mode: "set" }
+	);
+	assert.equal(kept.parent_adjustments.length, 0);
+	const simulated = applyUpdatesToTree([below], updates, "set");
+	const leaf = simulated[0].children.find((c) => c.task === "TASK-1");
+	assert.equal(leaf[`own_forecast_${KEY}`], 80);
+
+	const over = row("Acc-1", {
+		own_forecast: 50,
+		forecast: 50,
+		children: [
+			row("Acc-1TASK-1", {
+				account: "Acc-1",
+				task: "TASK-1",
+				dimensions: [{ doc: "Task", docname: "TASK-1" }],
+				own_forecast: 40,
+				forecast: 40,
+			}),
+		],
+	});
+	const raised = buildParentAdjustmentsFromUpdates(
+		{ project_budget: { rows: [over] } },
+		[
+			{
+				account: "Acc-1",
+				dimensions: [{ doc: "Task", docname: "TASK-1" }],
+				period_amount_map: { [KEY]: 80 },
+			},
+		],
+		{ mode: "set" }
+	);
+	assert.equal(raised.parent_adjustments.length, 1);
+	assert.equal(raised.parent_adjustments[0].period_amount_map[KEY], 80);
+});
+
 test("server-shaped Task risk (no row.task, Task in dims) still raises parents", () => {
 	const risk = row("Acc-1TASK-1|risk|RISK-1", {
 		account: "Acc-1",
