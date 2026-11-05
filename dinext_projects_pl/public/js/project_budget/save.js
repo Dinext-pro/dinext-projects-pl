@@ -21,7 +21,10 @@ function validateForecastChange(frm, change) {
 	const rows = frm.project_budget?.rows || [];
 
 	const childrenSum = childForecastSum(row, periodKey);
-	if (value > 0 && childrenSum > 0 && value < childrenSum) {
+	// Typed 0 is an explicit own and must not sit under the children sum.
+	// Empty editor is a clear, not a zero, and stays allowed.
+	const intent = forecastEditorIntent(change);
+	if (intent.kind === "set" && childrenSum > 0 && intent.value < childrenSum) {
 		return __("Value cannot be less than the sum of child items ({0})",
 			[Math.round(childrenSum).toLocaleString("ru-RU")]
 		);
