@@ -414,3 +414,6 @@ doc_events = {
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
+
+# Current-user Employee IDs for personal expense Number Cards.
+extend_bootinfo = "dinext_projects_pl.expense_claim_cards.extend_bootinfo"
