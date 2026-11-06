@@ -7,3 +7,7 @@ node_modules
 __pycache__
 public/dist/
 dist/
+cypress/screenshots/
+cypress/videos/
+cypress/downloads/
+cypress/results/

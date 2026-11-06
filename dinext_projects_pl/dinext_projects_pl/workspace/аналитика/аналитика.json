@@ -1,15 +1,15 @@
 {
  "charts": [
   {
-   "chart_name": "Доходы и расходы",
+   "chart_name": "\u0414\u043e\u0445\u043e\u0434\u044b \u0438 \u0440\u0430\u0441\u0445\u043e\u0434\u044b",
    "label": "Profit and Loss"
   },
   {
-   "chart_name": "Выручка по клиентам",
-   "label": "Выручка по клиентам"
+   "chart_name": "\u0412\u044b\u0440\u0443\u0447\u043a\u0430 \u043f\u043e \u043a\u043b\u0438\u0435\u043d\u0442\u0430\u043c",
+   "label": "\u0412\u044b\u0440\u0443\u0447\u043a\u0430 \u043f\u043e \u043a\u043b\u0438\u0435\u043d\u0442\u0430\u043c"
   }
  ],
- "content": "[{\"id\":\"eMtZ9Fy0gH\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Выручка\",\"col\":3}},{\"id\":\"N65ZHSyY7l\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Расходы\",\"col\":3}},{\"id\":\"TDPW86dFns\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Выручка по клиентам\",\"col\":6}},{\"id\":\"fbT-RKyGBj\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Profit and Loss\",\"col\":12}},{\"id\":\"xQCqDfrHL0\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Analytics\",\"col\":4}},{\"id\":\"ErwPamfJwj\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Доходы и расходы\",\"col\":4}},{\"id\":\"E-tgoZrGYl\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Profitability Analysis\",\"col\":4}},{\"id\":\"b_mFAu3HHf\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"pNeqzFQcsg\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Коммерческие проекты\",\"col\":3}},{\"id\":\"R3LSYcG11t\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Клиенты\",\"col\":3}},{\"id\":\"EDwIvlztSt\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Подрядчики\",\"col\":3}},{\"id\":\"EknIsFC-Lf\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Специалисты\",\"col\":3}}]",
+ "content": "[{\"id\":\"eMtZ9Fy0gH\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"\u0412\u044b\u0440\u0443\u0447\u043a\u0430\",\"col\":3}},{\"id\":\"N65ZHSyY7l\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"\u0420\u0430\u0441\u0445\u043e\u0434\u044b\",\"col\":3}},{\"id\":\"TDPW86dFns\",\"type\":\"chart\",\"data\":{\"chart_name\":\"\u0412\u044b\u0440\u0443\u0447\u043a\u0430 \u043f\u043e \u043a\u043b\u0438\u0435\u043d\u0442\u0430\u043c\",\"col\":6}},{\"id\":\"fbT-RKyGBj\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Profit and Loss\",\"col\":12}},{\"id\":\"xQCqDfrHL0\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Analytics\",\"col\":4}},{\"id\":\"ErwPamfJwj\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"\u0414\u043e\u0445\u043e\u0434\u044b \u0438 \u0440\u0430\u0441\u0445\u043e\u0434\u044b\",\"col\":4}},{\"id\":\"E-tgoZrGYl\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Profitability Analysis\",\"col\":4}},{\"id\":\"b_mFAu3HHf\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"pNeqzFQcsg\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"\u041a\u043e\u043c\u043c\u0435\u0440\u0447\u0435\u0441\u043a\u0438\u0435 \u043f\u0440\u043e\u0435\u043a\u0442\u044b\",\"col\":3}},{\"id\":\"R3LSYcG11t\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"\u041a\u043b\u0438\u0435\u043d\u0442\u044b\",\"col\":3}},{\"id\":\"EDwIvlztSt\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"\u041f\u043e\u0434\u0440\u044f\u0434\u0447\u0438\u043a\u0438\",\"col\":3}},{\"id\":\"EknIsFC-Lf\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"\u0421\u043f\u0435\u0446\u0438\u0430\u043b\u0438\u0441\u0442\u044b\",\"col\":3}}]",
  "creation": "2026-02-07 13:31:04.102966",
  "custom_blocks": [],
  "docstatus": 0,
@@ -20,40 +20,40 @@
  "idx": 0,
  "indicator_color": "green",
  "is_hidden": 0,
- "label": "Аналитика",
+ "label": "\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430",
  "links": [],
- "modified": "2026-08-10 02:27:26.307103",
+ "modified": "2026-10-04 18:07:05.890249",
  "modified_by": "Administrator",
  "module": "Dinext Projects Pl",
- "name": "Аналитика",
+ "name": "\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430",
  "number_cards": [
   {
-   "label": "Выручка",
-   "number_card_name": "Выручка"
+   "label": "\u0412\u044b\u0440\u0443\u0447\u043a\u0430",
+   "number_card_name": "\u0412\u044b\u0440\u0443\u0447\u043a\u0430"
   },
   {
-   "label": "Коммерческие проекты",
-   "number_card_name": "Коммерческие проекты"
+   "label": "\u041a\u043e\u043c\u043c\u0435\u0440\u0447\u0435\u0441\u043a\u0438\u0435 \u043f\u0440\u043e\u0435\u043a\u0442\u044b",
+   "number_card_name": "\u041a\u043e\u043c\u043c\u0435\u0440\u0447\u0435\u0441\u043a\u0438\u0435 \u043f\u0440\u043e\u0435\u043a\u0442\u044b"
   },
   {
-   "label": "Расходы",
-   "number_card_name": "Расходы"
+   "label": "\u0420\u0430\u0441\u0445\u043e\u0434\u044b",
+   "number_card_name": "\u0420\u0430\u0441\u0445\u043e\u0434\u044b"
   },
   {
-   "label": "Клиенты",
+   "label": "\u041a\u043b\u0438\u0435\u043d\u0442\u044b",
    "number_card_name": "Active Customers"
   },
   {
-   "label": "Специалисты",
-   "number_card_name": "Специалисты"
+   "label": "\u0421\u043f\u0435\u0446\u0438\u0430\u043b\u0438\u0441\u0442\u044b",
+   "number_card_name": "\u0421\u043f\u0435\u0446\u0438\u0430\u043b\u0438\u0441\u0442\u044b"
   },
   {
-   "label": "Подрядчики",
+   "label": "\u041f\u043e\u0434\u0440\u044f\u0434\u0447\u0438\u043a\u0438",
    "number_card_name": "Active Suppliers"
   }
  ],
  "owner": "Administrator",
- "parent_page": "Мои проекты",
+ "parent_page": "\u041c\u043e\u0438 \u043f\u0440\u043e\u0435\u043a\u0442\u044b",
  "public": 1,
  "quick_lists": [],
  "roles": [
@@ -70,7 +70,7 @@
    "role": "Dinext_Project_Manager"
   }
  ],
- "sequence_id": 23.0,
+ "sequence_id": 37.0,
  "shortcuts": [
   {
    "color": "Grey",
@@ -91,11 +91,11 @@
   {
    "color": "Grey",
    "doc_view": "List",
-   "label": "Доходы и расходы",
+   "label": "\u0414\u043e\u0445\u043e\u0434\u044b \u0438 \u0440\u0430\u0441\u0445\u043e\u0434\u044b",
    "link_to": "Profit and Loss Statement",
    "report_ref_doctype": "GL Entry",
    "type": "Report"
   }
  ],
- "title": "Аналитика"
+ "title": "\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430"
 }

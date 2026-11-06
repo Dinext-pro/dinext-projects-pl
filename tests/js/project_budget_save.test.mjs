@@ -413,6 +413,74 @@ test("onValidateCells allows write on empty cell under rolled parent", () => {
 	});
 });
 
+test("onValidateCells blocks typed 0 below the children sum", () => {
+	const child = {
+		id: "child-1",
+		account: "Child",
+		own_forecast_2026_8: 12000,
+		forecast_2026_8: 12000,
+		children: [],
+	};
+	const parent = {
+		id: "parent-1",
+		account: "Parent",
+		account_label: "Parent",
+		own_forecast_2026_8: 20000,
+		forecast_2026_8: 20000,
+		children: [child],
+	};
+	withValidateFrappe((messages) => {
+		const ok = onValidateCells(
+			{ project_budget: { rows: [parent] } },
+			{
+				changes: [
+					change({
+						oldValue: 20000,
+						newValue: 0,
+						row: parent,
+					}),
+				],
+			},
+		);
+		assert.equal(ok, false);
+		assert.match(String(messages[0]), /12[\s\u00a0]?000/);
+	});
+});
+
+test("onValidateCells allows clearing own below the children sum", () => {
+	const child = {
+		id: "child-1",
+		account: "Child",
+		own_forecast_2026_8: 12000,
+		forecast_2026_8: 12000,
+		children: [],
+	};
+	const parent = {
+		id: "parent-1",
+		account: "Parent",
+		account_label: "Parent",
+		own_forecast_2026_8: 20000,
+		forecast_2026_8: 20000,
+		children: [child],
+	};
+	withValidateFrappe((messages) => {
+		const ok = onValidateCells(
+			{ project_budget: { rows: [parent] } },
+			{
+				changes: [
+					change({
+						oldValue: 20000,
+						newValue: "",
+						row: parent,
+					}),
+				],
+			},
+		);
+		assert.equal(ok, true);
+		assert.deepEqual(messages, []);
+	});
+});
+
 test("onValidateCells still blocks increase past parent room", () => {
 	const { contractors, rows } = brokenParentTree();
 	withValidateFrappe((messages) => {
