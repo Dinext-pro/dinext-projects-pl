@@ -1,10 +1,11 @@
+/* global dinext_projects_pl */
 // Budget report modules are loaded lazily — only when this report is opened.
 // Previously these were in app_include_js which loaded them on every desk page.
 const REPORT_NAME = "Project Budget Plan vs Forecast";
 
 const _budget_report_files = [
 	"/assets/dinext_common/js/sticky-datatable.js",
-	"/assets/dinext_projects_pl/js/project_pl_navigation.js",
+	"/assets/dinext_projects_pl/js/project_budget_navigation.js",
 	"/assets/dinext_projects_pl/js/budget_report/filters.js",
 	"/assets/dinext_projects_pl/js/budget_report/presentation.js",
 	"/assets/dinext_projects_pl/js/budget_report/datatable_options.js",

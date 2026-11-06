@@ -3,8 +3,13 @@
 
 import frappe
 from collections import defaultdict
+from unittest.mock import patch
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import flt
+
+from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast import (
+	periods as report_periods,
+)
 
 from dinext_projects_pl.dinext_projects_pl.report.project_budget_plan_vs_forecast.budget_loader import (
 	get_accounts,
@@ -162,7 +167,9 @@ class TestProjectBudgetPlanVsForecastRisk(FrappeTestCase):
 			"show_zero_columns": 1,
 			"show_plan": 1,
 		}
-		_columns, data = execute(filters)
+		# This scenario needs Q3 to remain within the forecast horizon.
+		with patch.object(report_periods, "today", return_value=f"{self.YEAR}-07-01"):
+			_columns, data = execute(filters)
 		fieldnames = [col.get("fieldname") for col in _columns]
 		self.assertIn("forecast_2026_Q3", fieldnames)
 		profit_row = next(row for row in data if row.get("is_profit_row"))

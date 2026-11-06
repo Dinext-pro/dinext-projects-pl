@@ -1,0 +1,49 @@
+{
+ "add_total_row": 0,
+ "add_translate_data": 0,
+ "columns": [],
+ "creation": "2026-10-28 02:45:11.532441",
+ "disable_prepared_report_automation": 1,
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "doctype_to_sync": [],
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "letter_head": null,
+ "modified": "2026-10-28 02:45:11.532441",
+ "modified_by": "Administrator",
+ "module": "Dinext Projects Pl",
+ "name": "Liquidity Payment Calendar",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "Project",
+ "report_name": "Liquidity Payment Calendar",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "Dinext_Fin_Dir"
+  },
+  {
+   "role": "Dinext_Project_Manager"
+  },
+  {
+   "role": "Projects Manager"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Accounts User"
+  },
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Dinext_Financier"
+  }
+ ],
+ "snapshot_report": 0,
+ "timeout": 0
+}
