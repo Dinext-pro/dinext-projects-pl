@@ -8,9 +8,9 @@ import frappe
 
 def execute():
 	for name, state in {
-		"Заявок EC на согласовании": "На согласовании",
-		"Заявок EC Согласовано": "Согласовано",
-		"Заявок EC Отклонено": "Отклонено",
+		"Заявок EC на согласовании": "Pending Approval",
+		"Заявок EC Согласовано": "Approved",
+		"Заявок EC Отклонено": "Rejected",
 	}.items():
 		if not frappe.db.exists("Number Card", name):
 			continue
@@ -39,8 +39,8 @@ def execute():
 		if card.as_dict() != before:
 			card.save(ignore_permissions=True)
 	for name, state in {
-		"Заявок EC у меня на согласовании": "На согласовании",
-		"Заявок EC Согласованных мной": "Согласовано",
+		"Заявок EC у меня на согласовании": "Pending Approval",
+		"Заявок EC Согласованных мной": "Approved",
 	}.items():
 		if not frappe.db.exists("Number Card", name):
 			continue

@@ -73,9 +73,6 @@ fixtures = [
 				"workflow_state_name",
 				"in",
 				[
-					"Draft",
-					"Pending Approval",
-					"Approved",
 					"Cancelled Draft",
 					"Cancelled Approved",
 					"Черновик",
@@ -93,8 +90,6 @@ fixtures = [
 				"workflow_action_name",
 				"in",
 				[
-					"Submit for Approval",
-					"Approve",
 					"Cancel",
 					"Передать на согласование",
 					"Согласовано",

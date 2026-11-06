@@ -6,7 +6,7 @@
  "doctype": "Number Card",
  "document_type": "Workflow Task",
  "dynamic_filters_json": "[]",
- "filters_json": "{\"doc\": \"Expense Claim\", \"state\": \"\u041d\u0430 \u0441\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u043d\u0438\u0438\", \"route\": \"expense-claim\"}",
+ "filters_json": "{\"doc\": \"Expense Claim\", \"state\": \"Pending Approval\", \"route\": \"expense-claim\"}",
  "function": "Count",
  "idx": 0,
  "is_public": 1,

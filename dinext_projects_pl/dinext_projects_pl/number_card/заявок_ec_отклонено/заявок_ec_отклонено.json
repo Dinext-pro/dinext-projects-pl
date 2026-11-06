@@ -6,7 +6,7 @@
  "doctype": "Number Card",
  "document_type": "Expense Claim",
  "dynamic_filters_json": "[[\"Expense Claim\", \"employee\", \"in\", \"(frappe.boot.dinext_expense_claim_employees?.length ? frappe.boot.dinext_expense_claim_employees : [''])\"], [\"Expense Claim\", \"name\", \"is\", \"(frappe.boot.dinext_expense_claim_employees?.length ? 'set' : 'not set')\"]]",
- "filters_json": "[[\"Expense Claim\", \"workflow_state\", \"=\", \"\u041e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u043e\"], [\"Expense Claim\", \"docstatus\", \"!=\", 2]]",
+ "filters_json": "[[\"Expense Claim\", \"workflow_state\", \"=\", \"Rejected\"], [\"Expense Claim\", \"docstatus\", \"!=\", 2]]",
  "function": "Count",
  "idx": 0,
  "is_public": 1,
