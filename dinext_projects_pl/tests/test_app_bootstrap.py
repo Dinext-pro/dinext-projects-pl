@@ -1,7 +1,32 @@
+import json
 import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+import frappe
 
 
 class TestAppBootstrap(unittest.TestCase):
+	def test_cancelled_budgets_leave_approval_workflow_selection(self):
+		from dinext_common.workflow_approval.scenarios import service
+
+		fixtures = Path(__file__).resolve().parents[1] / "fixtures" / "workflow.json"
+		workflow = next(
+			frappe._dict(row) for row in json.loads(fixtures.read_text()) if row["name"] == "Dinext Budget Approval"
+		)
+		with patch.object(service, "_definitions", return_value=[workflow]):
+			for state, docstatus, eligible in (
+				(None, 0, True),
+				("Draft", 0, True),
+				("Pending Approval", 0, True),
+				("Approved", 1, True),
+				("Cancelled Draft", 0, False),
+				("Cancelled Approved", 2, False),
+			):
+				with self.subTest(state=state):
+					source = frappe._dict(doctype="Budget", workflow_state=state, docstatus=docstatus)
+					self.assertIs(service.select_workflow(source), workflow if eligible else None)
+
 	def test_hooks_register_budget_approval_contract(self):
 		from dinext_projects_pl import hooks
 
