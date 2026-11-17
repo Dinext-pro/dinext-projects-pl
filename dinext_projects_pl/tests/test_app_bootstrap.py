@@ -34,14 +34,9 @@ class TestAppBootstrap(unittest.TestCase):
 			hooks.after_install,
 			"dinext_projects_pl.install.after_install",
 		)
-		self.assertEqual(hooks.after_sync, "dinext_projects_pl.liquidity.setup.after_migrate")
-		self.assertEqual(
-			hooks.after_migrate,
-			[
-				"dinext_projects_pl.install.sync_accounting_dimensions",
-				"dinext_projects_pl.liquidity.setup.after_migrate",
-			],
-		)
+		self.assertIn("dinext_projects_pl.liquidity.setup.after_migrate", hooks.after_sync)
+		self.assertIn("dinext_projects_pl.install.sync_accounting_dimensions", hooks.after_migrate)
+		self.assertIn("dinext_projects_pl.liquidity.setup.after_migrate", hooks.after_migrate)
 		fixture_doctypes = {entry.get("doctype") for entry in hooks.fixtures if isinstance(entry, dict)}
 		self.assertIn("Role", fixture_doctypes)
 		self.assertIn("Workflow", fixture_doctypes)
@@ -65,6 +60,13 @@ class TestAppBootstrap(unittest.TestCase):
 			hooks.doc_events["Budget"]["on_cancel"],
 			"dinext_projects_pl.dinext_projects_pl.budget_approval.service.on_budget_cancel",
 		)
+
+	def test_invoice_permissions_sync_after_install_and_migrate(self):
+		from dinext_projects_pl import hooks
+
+		path = "dinext_projects_pl.invoice_approval_permissions.sync_invoice_approval_permissions"
+		self.assertIn(path, hooks.after_sync)
+		self.assertIn(path, hooks.after_migrate)
 
 	def test_patch_list_does_not_register_budget_workflow_bootstrap(self):
 		from pathlib import Path

@@ -156,9 +156,13 @@ required_apps = ["dinext_common", "doctype_permission", "dinext_projects"]
 
 after_install = "dinext_projects_pl.install.after_install"
 # Workspace references are available only after fixtures and dashboards have synced.
-after_sync = "dinext_projects_pl.liquidity.setup.after_migrate"
+after_sync = [
+	"dinext_projects_pl.invoice_approval_permissions.sync_invoice_approval_permissions",
+	"dinext_projects_pl.liquidity.setup.after_migrate",
+]
 after_migrate = [
 	"dinext_projects_pl.install.sync_accounting_dimensions",
+	"dinext_projects_pl.invoice_approval_permissions.sync_invoice_approval_permissions",
 	"dinext_projects_pl.liquidity.setup.after_migrate",
 ]
 
@@ -304,6 +308,9 @@ override_doctype_class = {"Budget": "dinext_projects_pl.dinext_projects_pl.overr
 # Hook on document methods and events
 
 doc_events = {
+	"Expense Claim": {
+		"validate": "dinext_projects_pl.expense_claim_approval.restore_draft_status",
+	},
 	"Budget": {
 		"on_submit": "dinext_projects_pl.dinext_projects_pl.budget_approval.service.on_budget_submit",
 		"on_cancel": "dinext_projects_pl.dinext_projects_pl.budget_approval.service.on_budget_cancel",
