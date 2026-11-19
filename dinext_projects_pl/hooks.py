@@ -5,6 +5,8 @@ app_description = "Dinext Projects P&L"
 app_email = "info@dinext.ru"
 app_license = "GNU General Public License (v3)"
 
+workflow_approval_lock_dependencies = ["dinext_projects_pl.invoice_projects.lock_dependencies"]
+
 fixtures = [
 	{"doctype": "Accounting Dimension", "filters": [["disabled", "=", 0]]},
 	{"doctype": "Custom Field", "filters": [["module", "in", ["Dinext Projects Pl"]]]},
