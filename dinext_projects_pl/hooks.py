@@ -421,3 +421,12 @@ doc_events = {
 
 # Current-user Employee IDs for personal expense Number Cards.
 extend_bootinfo = "dinext_projects_pl.expense_claim_cards.extend_bootinfo"
+
+workflow_approval_email_profile_providers = ["dinext_projects_pl.workflow_settings.email_profiles"]
+
+workflow_approval_localization = {
+	"Expense_Claim_Workflow": "dinext_projects_pl.workflow_settings.expense_label_rules",
+	"Маршрут заявки на закупку": "dinext_projects_pl.workflow_settings.purchase_request_label_rules",
+}
+
+workflow_approval_preserve_fixture_transition_ids = ['Dinext Budget Approval', 'Purchase_Invoice_Workflow', 'Sales_Invoice_Workflow']
