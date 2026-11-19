@@ -42,4 +42,4 @@ def expense_label_rules():
 
 
 def purchase_request_label_rules():
-	return {"optional_states": ("Черновик",)}
+	return {"states": {}, "optional_states": ("Черновик",)}
