@@ -47,7 +47,7 @@ def save_budget_plan_for_approval(project: str, data) -> dict:
     if not rows:
         frappe.throw(_("No plan rows selected for approval"))
 
-    project_doc = frappe.get_doc("Project", project)
+    project_doc = frappe.get_doc("Project", project, for_update=True)
     validate_project_plan_writes(project, rows)
     grouped = _prepare_grouped_entries(project_doc, rows)
 
@@ -70,15 +70,12 @@ def _save_budget_plan_with_approval(project_doc, grouped: dict) -> dict:
 
     for entry in grouped.values():
         cancelled_pending += _cancel_pending_budgets(entry)
-    if cancelled_pending:
-        frappe.db.commit()
 
     for entry in grouped.values():
         try:
             budget = _create_budget_from_entry(project_doc, entry)
         except DuplicateBudgetError:
             _force_cancel_conflicting_draft_budgets(entry)
-            frappe.db.commit()
             budget = _create_budget_from_entry(project_doc, entry)
         budget = apply_workflow(budget, ACTION_SUBMIT_FOR_APPROVAL)
         created.append(
@@ -89,7 +86,6 @@ def _save_budget_plan_with_approval(project_doc, grouped: dict) -> dict:
             }
         )
 
-    frappe.db.commit()
     return {
         "mode": "approval",
         "budgets": created,
@@ -109,7 +105,6 @@ def _save_budget_plan_directly(grouped: dict) -> dict:
         )
         updated += 1
 
-    frappe.db.commit()
     return {
         "mode": "direct",
         "budgets": [],
