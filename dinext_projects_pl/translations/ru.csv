@@ -414,3 +414,5 @@ Partly Paid and Discounted,Частично оплачено со скидкой
 Select a valid date range of up to three years,Выберите корректный диапазон дат не более трёх лет
 Select at least one valid metric,Выберите хотя бы один допустимый показатель
 Unknown calendar filter,Неизвестный фильтр календаря
+"{0}: value cannot be less than the sum of child items ({1})","{0}: сумма дочерних статей ({1}) превышает заданное значение",""
+"Account or dimensions are not available in this project budget: {0}","Статья или аналитика недоступны в бюджете этого проекта: {0}",""

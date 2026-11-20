@@ -643,7 +643,9 @@ def _filter_zero_value_rows(
 	return kept
 
 
-def run_get_project_budget_grid(form_input: ProjectBudgetGridFormInput) -> ProjectBudgetGridResponse:
+def run_get_project_budget_grid(
+	form_input: ProjectBudgetGridFormInput, *, periods: list[ProjectBudgetDisplayPeriod] | None = None,
+) -> ProjectBudgetGridResponse:
 	project = form_input.get("project")
 	if not project:
 		frappe.throw(_("Project is required"))
@@ -678,7 +680,8 @@ def run_get_project_budget_grid(form_input: ProjectBudgetGridFormInput) -> Proje
 			"can_read_gl_entry": False,
 		}
 
-	periods = get_display_periods(project, period_type, view_mode)
+	if periods is None:
+		periods = get_display_periods(project, period_type, view_mode)
 	accounts = _load_pl_accounts(company)
 	root_types = {a["name"]: a.get("root_type") or "" for a in accounts}
 

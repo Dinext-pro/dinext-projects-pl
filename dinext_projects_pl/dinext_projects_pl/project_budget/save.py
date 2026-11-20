@@ -166,6 +166,34 @@ def run_save_project_budget_forecast(form_dict: ProjectBudgetSaveForecastFormInp
 	if not changes:
 		return {"saved": 0}
 
+	# Serialize plan and forecast envelope checks for the same project.
+	frappe.get_doc("Project", project, for_update=True)
+	from dinext_projects_pl.dinext_projects_pl.project_budget.forecast_limits import (
+		forecast_envelope_error, missing_forecast_row,
+	)
+	from dinext_projects_pl.dinext_projects_pl.project_budget.grid_data import run_get_project_budget_grid
+
+	parsed_changes = []
+	for change in changes:
+		account, year, month, value, dimensions = _parse_change(change)
+		parsed_changes.append({"account": account, "year": year, "month": month, "value": value, "dimensions": dimensions})
+	# Historical cells can outlive the currently displayed project schedule.
+	periods = []
+	for year, month in sorted({(cell["year"], cell["month"]) for cell in parsed_changes}):
+		if not (1 <= year <= 9999 and 1 <= month <= 12):
+			frappe.throw(_("Period year/month is required"))
+		key = f"{year}_{month}"
+		periods.append({"year": year, "month": month, "key": key, "monthly_keys": [key], "is_past": False})
+	grid = run_get_project_budget_grid(
+		{"project": project, "period_type": "month", "show_zero_rows": 1}, periods=periods,
+	)
+	account = missing_forecast_row(grid["rows"], parsed_changes)
+	if account:
+		frappe.throw(_("Account or dimensions are not available in this project budget: {0}").format(account))
+	error = forecast_envelope_error(grid["rows"], parsed_changes)
+	if error:
+		frappe.throw(_("{0}: value cannot be less than the sum of child items ({1})").format(*error))
+
 	docs_by_identity: dict = {}
 	frappe.db.savepoint(SAVEPOINT_NAME)
 	try:
