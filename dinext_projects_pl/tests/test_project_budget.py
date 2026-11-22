@@ -2,6 +2,7 @@
 # See license.txt
 
 import json
+from unittest.mock import patch
 
 import frappe
 from frappe.model.workflow import apply_workflow
@@ -67,6 +68,11 @@ class TestProjectBudget(FrappeTestCase):
             raise AssertionError("Budget.task column missing after accounting dimension sync")
 
     def setUp(self):
+        # Native Workflow renders its email attachment even when delivery is muted.
+        attach_print = patch("frappe.attach_print", return_value={})
+        attach_print.start()
+        self.addCleanup(attach_print.stop)
+
         self.project = self._make_project()
         self.task = self._make_task(self.project.name)
         self._old_plan_approval_config = getattr(frappe.conf, self.PLAN_APPROVAL_SITE_CONFIG_KEY, None)
