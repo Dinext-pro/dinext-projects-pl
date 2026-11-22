@@ -2,6 +2,7 @@
 # See license.txt
 
 import json
+from unittest import TestCase
 from unittest.mock import patch
 
 import frappe
@@ -9,6 +10,7 @@ from frappe.model.workflow import apply_workflow
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import getdate
 
+from dinext_projects_pl.dinext_projects_pl.budget_approval import service
 from dinext_projects_pl.dinext_projects_pl.budget_approval.bootstrap import (
     ACTION_APPROVE,
     BUDGET_MONTHLY_AMOUNTS_FIELD,
@@ -21,6 +23,26 @@ from dinext_projects_pl.dinext_projects_pl.budget_approval.service import (
     find_approved_budget_for_period,
     save_budget_plan_for_approval,
 )
+
+
+class TestBudgetApprovalTransaction(TestCase):
+    def test_failed_submission_does_not_commit_cancelled_pending_budgets(self):
+        project = frappe._dict(name="_Test Project Budget Transaction")
+        grouped = {"entry": {"fiscal_year": "2026"}}
+        with (
+            patch.object(service.frappe, "get_doc", return_value=project) as load_project,
+            patch.object(service.frappe.db, "commit") as commit,
+            patch.object(service, "validate_project_plan_writes"),
+            patch.object(service, "_prepare_grouped_entries", return_value=grouped),
+            patch.object(service, "is_plan_approval_enabled", return_value=True),
+            patch.object(service, "_cancel_pending_budgets", return_value=1),
+            patch.object(service, "_create_budget_from_entry"),
+            patch.object(service, "apply_workflow", side_effect=frappe.ValidationError("Submission failed")),
+        ):
+            with self.assertRaisesRegex(frappe.ValidationError, "Submission failed"):
+                service.save_budget_plan_for_approval(project.name, [{}])
+            commit.assert_not_called()
+            load_project.assert_called_once_with("Project", project.name, for_update=True)
 
 
 class TestProjectBudget(FrappeTestCase):
