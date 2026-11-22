@@ -54,3 +54,37 @@ test("releasing the P&L table cancels its queued resize", async () => {
 	assert.equal(budgetReport._budget_datatable, null);
 	assert.equal(queryReport.datatable, null);
 });
+
+test("P&L releases the owned table before native replacement, without touching option probes", () => {
+	const optionsModule = fs.readFileSync(
+		path.resolve(__dirname, "../../dinext_projects_pl/public/js/budget_report/datatable_options.js"),
+		"utf8"
+	);
+	let destroyed = false;
+	const oldTable = { destroy() { destroyed = true; } };
+	const budgetReport = { _budget_datatable: oldTable };
+	const queryReport = { datatable: oldTable };
+	const context = vm.createContext({
+		frappe: { provide() {}, query_report: queryReport },
+		dinext_projects_pl: { budget_plan_vs_forecast: budgetReport },
+		$: () => ({ removeClass() {} }),
+	});
+	vm.runInContext(lifecycle, context);
+	vm.runInContext(optionsModule, context);
+
+	budgetReport.get_datatable_options({});
+	assert.equal(destroyed, false);
+	assert.equal(queryReport.datatable, oldTable);
+
+	const foreignTable = {};
+	queryReport.datatable = foreignTable;
+	budgetReport.get_datatable_options({ data: [], columns: [] });
+	assert.equal(destroyed, false);
+	assert.equal(queryReport.datatable, foreignTable);
+
+	queryReport.datatable = oldTable;
+	const options = budgetReport.get_datatable_options({ data: [], columns: [] });
+	assert.equal(destroyed, true);
+	assert.equal(queryReport.datatable, null);
+	assert.equal(options.showTotalRow, true);
+});
