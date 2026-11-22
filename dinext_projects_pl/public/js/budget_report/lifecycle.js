@@ -7,6 +7,8 @@ br.destroy_budget_datatable = function () {
 	var table = br._budget_datatable;
 	br._budget_datatable = null;
 	if (!table) return;
+	// DataTable unregisters resize but leaves the trailing throttled call queued.
+	table.style?.onWindowResize?.cancel?.();
 	table.destroy();
 	$(table.wrapper).removeClass("dt-sticky-table");
 	if (frappe.query_report && frappe.query_report.datatable === table) {

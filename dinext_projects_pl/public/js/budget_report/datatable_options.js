@@ -111,6 +111,15 @@ br.prepare_sticky_summary_rows = function (report) {
 };
 
 br.get_datatable_options = function (options) {
+	// QueryReport reuses this hook for header formatting without construction data.
+	if (
+		Array.isArray(options.data) &&
+		br._budget_datatable &&
+		frappe.query_report?.datatable === br._budget_datatable
+	) {
+		br.destroy_budget_datatable();
+	}
+
 	if (options.columns) {
 		options.columns = options.columns.filter(function (col) {
 			var fieldname = col && (col.fieldname || col.id);

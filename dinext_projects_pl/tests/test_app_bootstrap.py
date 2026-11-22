@@ -1,7 +1,32 @@
+import json
 import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+import frappe
 
 
 class TestAppBootstrap(unittest.TestCase):
+	def test_cancelled_budgets_leave_approval_workflow_selection(self):
+		from dinext_common.workflow_approval.scenarios import service
+
+		fixtures = Path(__file__).resolve().parents[1] / "fixtures" / "workflow.json"
+		workflow = next(
+			frappe._dict(row) for row in json.loads(fixtures.read_text()) if row["name"] == "Dinext Budget Approval"
+		)
+		with patch.object(service, "_definitions", return_value=[workflow]):
+			for state, docstatus, eligible in (
+				(None, 0, True),
+				("Draft", 0, True),
+				("Pending Approval", 0, True),
+				("Approved", 1, True),
+				("Cancelled Draft", 0, False),
+				("Cancelled Approved", 2, False),
+			):
+				with self.subTest(state=state):
+					source = frappe._dict(doctype="Budget", workflow_state=state, docstatus=docstatus)
+					self.assertIs(service.select_workflow(source), workflow if eligible else None)
+
 	def test_hooks_register_budget_approval_contract(self):
 		from dinext_projects_pl import hooks
 
@@ -9,14 +34,9 @@ class TestAppBootstrap(unittest.TestCase):
 			hooks.after_install,
 			"dinext_projects_pl.install.after_install",
 		)
-		self.assertEqual(hooks.after_sync, "dinext_projects_pl.liquidity.setup.after_migrate")
-		self.assertEqual(
-			hooks.after_migrate,
-			[
-				"dinext_projects_pl.install.sync_accounting_dimensions",
-				"dinext_projects_pl.liquidity.setup.after_migrate",
-			],
-		)
+		self.assertIn("dinext_projects_pl.liquidity.setup.after_migrate", hooks.after_sync)
+		self.assertIn("dinext_projects_pl.install.sync_accounting_dimensions", hooks.after_migrate)
+		self.assertIn("dinext_projects_pl.liquidity.setup.after_migrate", hooks.after_migrate)
 		fixture_doctypes = {entry.get("doctype") for entry in hooks.fixtures if isinstance(entry, dict)}
 		self.assertIn("Role", fixture_doctypes)
 		self.assertIn("Workflow", fixture_doctypes)
@@ -40,6 +60,13 @@ class TestAppBootstrap(unittest.TestCase):
 			hooks.doc_events["Budget"]["on_cancel"],
 			"dinext_projects_pl.dinext_projects_pl.budget_approval.service.on_budget_cancel",
 		)
+
+	def test_invoice_permissions_sync_after_install_and_migrate(self):
+		from dinext_projects_pl import hooks
+
+		path = "dinext_projects_pl.invoice_approval_permissions.sync_invoice_approval_permissions"
+		self.assertIn(path, hooks.after_sync)
+		self.assertIn(path, hooks.after_migrate)
 
 	def test_patch_list_does_not_register_budget_workflow_bootstrap(self):
 		from pathlib import Path

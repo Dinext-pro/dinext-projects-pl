@@ -5,6 +5,8 @@ app_description = "Dinext Projects P&L"
 app_email = "info@dinext.ru"
 app_license = "GNU General Public License (v3)"
 
+workflow_approval_lock_dependencies = ["dinext_projects_pl.invoice_projects.lock_dependencies"]
+
 fixtures = [
 	{"doctype": "Accounting Dimension", "filters": [["disabled", "=", 0]]},
 	{"doctype": "Custom Field", "filters": [["module", "in", ["Dinext Projects Pl"]]]},
@@ -73,9 +75,6 @@ fixtures = [
 				"workflow_state_name",
 				"in",
 				[
-					"Draft",
-					"Pending Approval",
-					"Approved",
 					"Cancelled Draft",
 					"Cancelled Approved",
 					"Черновик",
@@ -93,8 +92,6 @@ fixtures = [
 				"workflow_action_name",
 				"in",
 				[
-					"Submit for Approval",
-					"Approve",
 					"Cancel",
 					"Передать на согласование",
 					"Согласовано",
@@ -161,9 +158,13 @@ required_apps = ["dinext_common", "doctype_permission", "dinext_projects"]
 
 after_install = "dinext_projects_pl.install.after_install"
 # Workspace references are available only after fixtures and dashboards have synced.
-after_sync = "dinext_projects_pl.liquidity.setup.after_migrate"
+after_sync = [
+	"dinext_projects_pl.invoice_approval_permissions.sync_invoice_approval_permissions",
+	"dinext_projects_pl.liquidity.setup.after_migrate",
+]
 after_migrate = [
 	"dinext_projects_pl.install.sync_accounting_dimensions",
+	"dinext_projects_pl.invoice_approval_permissions.sync_invoice_approval_permissions",
 	"dinext_projects_pl.liquidity.setup.after_migrate",
 ]
 
@@ -309,6 +310,9 @@ override_doctype_class = {"Budget": "dinext_projects_pl.dinext_projects_pl.overr
 # Hook on document methods and events
 
 doc_events = {
+	"Expense Claim": {
+		"validate": "dinext_projects_pl.expense_claim_approval.restore_draft_status",
+	},
 	"Budget": {
 		"on_submit": "dinext_projects_pl.dinext_projects_pl.budget_approval.service.on_budget_submit",
 		"on_cancel": "dinext_projects_pl.dinext_projects_pl.budget_approval.service.on_budget_cancel",
@@ -414,3 +418,15 @@ doc_events = {
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
+
+# Current-user Employee IDs for personal expense Number Cards.
+extend_bootinfo = "dinext_projects_pl.expense_claim_cards.extend_bootinfo"
+
+workflow_approval_email_profile_providers = ["dinext_projects_pl.workflow_settings.email_profiles"]
+
+workflow_approval_localization = {
+	"Expense_Claim_Workflow": "dinext_projects_pl.workflow_settings.expense_label_rules",
+	"Маршрут заявки на закупку": "dinext_projects_pl.workflow_settings.purchase_request_label_rules",
+}
+
+workflow_approval_preserve_fixture_transition_ids = ['Dinext Budget Approval', 'Purchase_Invoice_Workflow', 'Sales_Invoice_Workflow']
