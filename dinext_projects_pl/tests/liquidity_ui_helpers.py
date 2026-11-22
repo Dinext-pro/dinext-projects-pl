@@ -16,6 +16,7 @@ OPERATOR = "liquidity-operator@example.invalid"
 FINANCIER = "liquidity-financier@example.invalid"
 MANAGER = "liquidity-manager@example.invalid"
 DENIED = "liquidity-denied@example.invalid"
+TEST_USERS = (FINANCIER, MANAGER, DENIED, OPERATOR)
 PNL_TEST_ROLE = "_Test Liquidity P&L Reader"
 
 
@@ -79,6 +80,8 @@ def settings_values(settings):
 
 def bootstrap():
 	guard()
+	from frappe.desk.doctype.dashboard_settings.dashboard_settings import create_dashboard_settings
+
 	from dinext_projects_pl.liquidity.settings import SETTINGS, install_settings
 
 	install_settings()
@@ -198,6 +201,9 @@ def bootstrap():
 
 	install_report()
 	install_workspace_links()
+	# Workspace charts can request settings concurrently on the first Desk visit.
+	for user in TEST_USERS:
+		create_dashboard_settings(user)
 	path = Path("/tmp/liquidity-ui-context.json")
 	path.write_text(
 		json.dumps(
@@ -515,7 +521,8 @@ def cleanup():
 	):
 		for name in frappe.get_all(dt, filters={"company": fixtures.COMPANY}, pluck="name"):
 			frappe.delete_doc(dt, name, force=True)
-	for user in (FINANCIER, MANAGER, DENIED, OPERATOR):
+	for user in TEST_USERS:
+		frappe.delete_doc_if_exists("Dashboard Settings", user, force=True)
 		if frappe.db.exists("User", user):
 			frappe.delete_doc("User", user, force=True)
 	for name in frappe.get_all("Custom DocPerm", filters={"role": PNL_TEST_ROLE}, pluck="name"):
